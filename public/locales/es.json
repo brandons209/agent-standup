@@ -162,8 +162,9 @@
  "your turn": "tu turno",
  "Characters": "Personajes",
  "Reload": "Recargar",
+ "Rotate characters, no repeats": "Personajes en rotación, sin repetir",
  "Open folder": "Abrir carpeta",
  "custom character(s) loaded": "personaje(s) propio(s) cargado(s)",
- "Drop your pixel art (PNG) in this folder to replace the characters:": "Suelta tu pixel art (PNG) en esta carpeta para reemplazar los personajes:",
+ "Drop your pixel art (PNG or SVG) in this folder to replace the characters:": "Suelta tu pixel art (PNG o SVG) en esta carpeta para reemplazar los personajes:",
  "lead.png = the lead · you.png = you · others = the sub-agents · name-talk.png = open mouth": "lead.png = el agente principal · you.png = tú · el resto = los subagentes · name-talk.png = boca abierta"
 }

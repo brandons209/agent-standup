@@ -253,6 +253,7 @@
     <select id="sessions" style="display:none"></select></div>
   <h4 data-fr="Personnages" data-en="Characters">Personnages</h4>
   <div class="box"><div id="charInfo" class="dim" style="font-size:11.5px;line-height:1.5"></div><div style="display:flex;gap:6px;margin-top:6px"><button class="btn" id="charReload" data-fr="Recharger" data-en="Reload">Recharger</button><button class="btn" id="charOpen" style="display:none" data-fr="Ouvrir le dossier" data-en="Open folder">Ouvrir le dossier</button></div></div>
+  <button class="mi" data-t="charRotate"><span data-fr="Personnages en rotation, sans doublon" data-en="Rotate characters, no repeats">Personnages en rotation, sans doublon</span><i class="sw"></i></button>
   <h4 data-fr="Outils" data-en="Tools">Outils</h4>
   <button class="mi" id="mCoffee" style="display:none"><span id="mCoffeeT"></span></button>
   <button class="mi" id="mRecap"><span data-fr="📋 Récapitulatif" data-en="📋 Recap">📋 Récapitulatif</span></button>
@@ -339,10 +340,22 @@ async function loadChars() {
   } catch {}
   CHARS = next;
 }
-const customFor = (id) => (id === 'main' ? CHARS.lead : id === 'user' ? CHARS.you : CHARS.pool.length ? CHARS.pool.reduce((b, c) => (hash(id + '|' + (c.idle || '')) > hash(id + '|' + (b.idle || '')) ? c : b)) : null);
+const charSeat = new Map();   // sub-agent id → its turn in the session, so rotation gives the next N agents N different images
+function customFor(id) {
+  if (id === 'main') return CHARS.lead; if (id === 'user') return CHARS.you; if (!CHARS.pool.length) return null;
+  if (!charSeat.has(id)) charSeat.set(id, charSeat.size);
+  if (prefs.charRotate) return CHARS.pool[charSeat.get(id) % CHARS.pool.length];
+  return CHARS.pool.reduce((b, c) => (hash(id + '|' + (c.idle || '')) > hash(id + '|' + (b.idle || '')) ? c : b));
+}
+function reassignChars() {   // swap only the drawn avatar, so spotlight, bubbles and badges stay
+  for (const k in imgCache) delete imgCache[k];
+  for (const id in S.agents) { const p = S.agents[id]; p.custom = customFor(id); const t = $('#t-' + id), old = t && t.querySelector(':scope > svg');
+    if (old) { old.outerHTML = avatarSVG(p, undefined, 't' + p.gid + '_'); if (S.speakers.has(id)) { const ct = t.querySelector('.cimg-talk'); if (ct) ct.style.display = 'none'; } } }
+  S.camFor = null; if (S.present) renderPresent(); paintStatus();
+}
 function renderCharInfo() {
   const el = $('#charInfo'); if (!el) return;
-  el.innerHTML = CHARS.n ? `✓ ${CHARS.n} ${esc(L('personnage(s) personnalisé(s) chargé(s)', 'custom character(s) loaded'))}` : `${esc(L('Déposez vos images (PNG) dans ce dossier pour remplacer les personnages :', 'Drop your pixel art (PNG) in this folder to replace the characters:'))}<br><code style="word-break:break-all">${esc(CHARS.dir)}</code><br>${esc(L('lead.png = le chef · you.png = vous · les autres = les sous-agents · nom-talk.png = bouche ouverte', 'lead.png = the lead · you.png = you · others = the sub-agents · name-talk.png = open mouth'))}`;
+  el.innerHTML = CHARS.n ? `✓ ${CHARS.n} ${esc(L('personnage(s) personnalisé(s) chargé(s)', 'custom character(s) loaded'))}` : `${esc(L('Déposez vos images (PNG ou SVG) dans ce dossier pour remplacer les personnages :', 'Drop your pixel art (PNG or SVG) in this folder to replace the characters:'))}<br><code style="word-break:break-all">${esc(CHARS.dir)}</code><br>${esc(L('lead.png = le chef · you.png = vous · les autres = les sous-agents · nom-talk.png = bouche ouverte', 'lead.png = the lead · you.png = you · others = the sub-agents · name-talk.png = open mouth'))}`;
   $('#charOpen').style.display = EMBED ? '' : 'none';
 }
 function persona(a) { const p = persona0(a); p.custom = customFor(a.id); return p; }
@@ -437,8 +450,8 @@ function avatarSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance:
   const lap = `<rect x="33" y="46" width="34" height="18" rx="2.8" fill="#d3d8e6"/><rect x="33" y="46" width="34" height="18" rx="2.8" fill="url(#${uid}lg)" opacity=".5"/><circle cx="50" cy="55" r="2.3" fill="${c1}"/><rect x="29.5" y="63.4" width="41" height="3" rx="1.5" fill="#aab1c2"/>`;
   const hands = `<circle class="hand l" cx="38" cy="65.6" r="3.1" fill="${c2}"/><circle class="hand r" cx="62" cy="65.6" r="3.1" fill="${c2}"/>`;
   const sparks = star(22, 28, 3) + star(78, 22, 2.6, '#ff9bb8') + star(70, 40, 1.9, '#9be7ff') + star(30, 46, 1.6, '#ffe58a');
-  const custFig = (c, talking) => { const base = 'x="20" y="6" width="60" height="58" preserveAspectRatio="xMidYMax meet"', px = 'image-rendering:pixelated;';
-    return `<image class="cimg" href="${c.idle}" ${base} style="${px}${talking && c.talk ? 'display:none' : ''}"/>` + (c.talk ? `<image class="cimg cimg-talk" href="${c.talk}" ${base} style="${px}${talking ? '' : 'display:none'}"/>` : ''); };
+  const custFig = (c, talking) => { const base = 'x="20" y="6" width="60" height="58" preserveAspectRatio="xMidYMax meet"', px = (u) => (u.startsWith('data:image/svg+xml') ? '' : 'image-rendering:pixelated;');
+    return `<image class="cimg" href="${c.idle}" ${base} style="${px(c.idle)}${talking && c.talk ? 'display:none' : ''}"/>` + (c.talk ? `<image class="cimg cimg-talk" href="${c.talk}" ${base} style="${px(c.talk)}${talking ? '' : 'display:none'}"/>` : ''); };
   const fig = p.custom ? custFig(p.custom, st && o.m === 2) : `${arm('l')}${bodyShape(p.shape, `url(#${gid})`, c2)}${arm('r')}${face}${acc}`;
   return `<svg viewBox="0 0 100 75" preserveAspectRatio="xMidYMid slice"${st ? ' xmlns="http://www.w3.org/2000/svg" width="400" height="300"' : ''}>
     <defs><linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="0" y1="12" x2="0" y2="72"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c}"/></linearGradient>
@@ -1436,7 +1449,9 @@ async function loadSession(proj, id) {
   pause(); const mine = (S.loadN = (S.loadN || 0) + 1);
   const data = await (await fetch(`/api/session?proj=${encodeURIComponent(proj)}&id=${id}`)).json();
   if (mine !== S.loadN || data.error) return false;
-  S.term = {}; S.camFor = null; S.focus = null; S.agents = {}; for (const k in nameBook) delete nameBook[k]; [{ id: 'user' }, ...data.agents].forEach((a) => (S.agents[a.id] = persona(a)));
+  S.term = {}; S.camFor = null; S.focus = null; S.agents = {}; charSeat.clear(); for (const k in nameBook) delete nameBook[k]; const firstAt = {}; data.events.forEach((e, i) => { if (!(e.agent in firstAt)) firstAt[e.agent] = i; });
+  [...data.agents].sort((a, b) => (firstAt[a.id] ?? 1e9) - (firstAt[b.id] ?? 1e9)).forEach((a) => customFor(a.id));   // rotation seats in order of appearance
+  [{ id: 'user' }, ...data.agents].forEach((a) => (S.agents[a.id] = persona(a)));
   S.events = data.events; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
   const opt = $('#sessions').selectedOptions[0]; S.title = (S.live ? niceProj(proj) : opt && opt.dataset.title) || '';
   if (proj === '_demo') S.events.forEach((e) => { if (e.fr) trMem.set(baseText(e), e.fr); });   // the demo ships its own French
@@ -1630,10 +1645,10 @@ function setView(v) { prefs.view = v; savePrefs(); document.body.classList.toggl
 
 $('#viewSeg').onclick = (e) => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); };
 $('#langSel').onchange = () => setLang($('#langSel').value, true);
-$('#charReload').onclick = async () => { await loadChars(); for (const k in imgCache) delete imgCache[k]; for (const id in S.agents) S.agents[id].custom = customFor(id); buildStage(); paintStatus(); renderCharInfo(); };
+$('#charReload').onclick = async () => { await loadChars(); reassignChars(); renderCharInfo(); };
 $('#charOpen').onclick = () => window.parent.postMessage({ agentStandup: 'openCharacters' }, '*');
 $('#modeSeg').onclick = (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m); };
-$('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b) return; prefs[b.dataset.t] = !prefs[b.dataset.t]; savePrefs(); if (prefs[b.dataset.t] && ['voice', 'office', 'music', 'notify'].includes(b.dataset.t)) claimAudio(); b.querySelector('.sw').classList.toggle('on', prefs[b.dataset.t]); AUD.apply(); if (b.dataset.t === 'office') $('#officeBox').style.display = prefs.office ? '' : 'none'; if (b.dataset.t === 'reactions') document.body.classList.toggle('react', prefs.reactions); if (b.dataset.t === 'roster') { document.body.classList.toggle('rost', prefs.roster); paintStates(); } if (b.dataset.t === 'notify' && prefs.notify) askNotify(); if (b.dataset.t === 'vanish' && !prefs.vanish) { S.gone.clear(); paintStatus(); }
+$('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b) return; prefs[b.dataset.t] = !prefs[b.dataset.t]; savePrefs(); if (prefs[b.dataset.t] && ['voice', 'office', 'music', 'notify'].includes(b.dataset.t)) claimAudio(); b.querySelector('.sw').classList.toggle('on', prefs[b.dataset.t]); AUD.apply(); if (b.dataset.t === 'office') $('#officeBox').style.display = prefs.office ? '' : 'none'; if (b.dataset.t === 'reactions') document.body.classList.toggle('react', prefs.reactions); if (b.dataset.t === 'roster') { document.body.classList.toggle('rost', prefs.roster); paintStates(); } if (b.dataset.t === 'notify' && prefs.notify) askNotify(); if (b.dataset.t === 'vanish' && !prefs.vanish) { S.gone.clear(); paintStatus(); } if (b.dataset.t === 'charRotate') reassignChars();
   if (b.dataset.t === 'music') { $('#musicBox').style.display = prefs.music ? '' : 'none'; if (prefs.music) { AUD.init(); AUD.apply(); } } };
 $('#station').innerHTML = STATIONS.map((s) => `<option value="${s.id}">📻 ${s.name}</option>`).join('');
 $('#station').value = prefs.station; $('#musicVol').value = prefs.musicVol; $('#musicBox').style.display = prefs.music ? '' : 'none';

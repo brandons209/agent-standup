@@ -162,8 +162,9 @@
  "your turn": "du bist dran",
  "Characters": "Figuren",
  "Reload": "Neu laden",
+ "Rotate characters, no repeats": "Figuren rotieren, keine Doppelten",
  "Open folder": "Ordner öffnen",
  "custom character(s) loaded": "eigene Figur(en) geladen",
- "Drop your pixel art (PNG) in this folder to replace the characters:": "Leg deine Pixel-Art (PNG) in diesen Ordner, um die Figuren zu ersetzen:",
+ "Drop your pixel art (PNG or SVG) in this folder to replace the characters:": "Leg deine Pixel-Art (PNG oder SVG) in diesen Ordner, um die Figuren zu ersetzen:",
  "lead.png = the lead · you.png = you · others = the sub-agents · name-talk.png = open mouth": "lead.png = Hauptagent · you.png = du · andere = Subagenten · name-talk.png = offener Mund"
 }

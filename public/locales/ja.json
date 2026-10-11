@@ -162,8 +162,9 @@
  "your turn": "あなたの番",
  "Characters": "キャラクター",
  "Reload": "再読み込み",
+ "Rotate characters, no repeats": "キャラクターを順番に（重複なし）",
  "Open folder": "フォルダを開く",
  "custom character(s) loaded": "件のカスタムキャラクターを読み込みました",
- "Drop your pixel art (PNG) in this folder to replace the characters:": "このフォルダにドット絵（PNG）を入れると、キャラクターを差し替えられます:",
+ "Drop your pixel art (PNG or SVG) in this folder to replace the characters:": "このフォルダにドット絵（PNG または SVG）を入れると、キャラクターを差し替えられます:",
  "lead.png = the lead · you.png = you · others = the sub-agents · name-talk.png = open mouth": "lead.png = メインエージェント · you.png = あなた · それ以外 = サブエージェント · name-talk.png = 口を開けた状態"
 }

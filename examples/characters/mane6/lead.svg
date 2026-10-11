@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 116">
+  <!-- Twilight Sparkle -->
+  <style>
+    .blink { transform-box:fill-box; transform-origin:center; animation:blink 4.3s infinite }
+    @keyframes blink { 0%, 92%, 100% { transform:scaleY(1) } 95% { transform:scaleY(.1) } }
+    .mane { transform-box:fill-box; transform-origin:20% 0%; animation:sway 3.6s ease-in-out infinite }
+    .tail { transform-box:fill-box; transform-origin:0% 0%; animation:sway 3.1s ease-in-out infinite }
+    @keyframes sway { 0%, 100% { transform:rotate(0) } 25% { transform:rotate(3deg) } 75% { transform:rotate(-3deg) } }
+    .glow { animation:glow 1.8s ease-in-out infinite }
+    @keyframes glow { 0%, 100% { opacity:.35 } 50% { opacity:.95 } }
+    .spark { transform-box:fill-box; transform-origin:center; transform:scale(0); animation:twinkle 1.8s ease-in-out infinite }
+    .spark.b { animation-delay:.6s } .spark.c { animation-delay:1.2s }
+    @keyframes twinkle { 0%, 100% { transform:scale(0) } 50% { transform:scale(1) } }
+  </style>
+  <defs>
+    <g id="coat">
+      <ellipse cx="72" cy="82" rx="25" ry="16"/>
+      <path d="M52 62 L66 60 L70 76 L54 80 Z"/>
+      <circle cx="44" cy="46" r="22"/>
+      <ellipse cx="28" cy="56" rx="13" ry="10"/>
+      <rect x="50" y="86" width="9" height="27" rx="3.5"/>
+      <rect x="82" y="86" width="9" height="27" rx="3.5"/>
+    </g>
+    <path id="farlegs" d="M61 88 h8 v23 a3.5 3.5 0 0 1 -3.5 3.5 h-1 a3.5 3.5 0 0 1 -3.5 -3.5 Z M92 86 h8 v25 a3.5 3.5 0 0 1 -3.5 3.5 h-1 a3.5 3.5 0 0 1 -3.5 -3.5 Z"/>
+    <radialGradient id="aura"><stop offset="0" stop-color="#ff9be0"/><stop offset=".55" stop-color="#e44fc0" stop-opacity=".55"/><stop offset="1" stop-color="#e44fc0" stop-opacity="0"/></radialGradient>
+    <path id="sp" d="M0 -4 L1 -1 L4 0 L1 1 L0 4 L-1 1 L-4 0 L-1 -1 Z"/>
+  </defs>
+
+  <g class="tail" stroke="#132048" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M93 74 C108 70 116 84 114 98 C113 106 108 112 101 113 C105 104 104 94 98 88 C95 84 93 80 93 74 Z" fill="#273771"/>
+    <path d="M100 76 C109 80 111 92 108 104 C107 98 104 90 99 85 Z" fill="#6c3fa0" stroke="none"/>
+    <path d="M105 79 C111 86 111 96 110 102 C109 94 107 87 103 82 Z" fill="#ed438a" stroke="none"/>
+  </g>
+
+  <use href="#farlegs" fill="#b886ce" stroke="#9a64b4" stroke-width="1.6"/>
+  <use href="#coat" fill="none" stroke="#9a64b4" stroke-width="3.2" stroke-linejoin="round"/>
+  <use href="#coat" fill="#cc9cdf"/>
+  <ellipse cx="40" cy="38" rx="9" ry="6" fill="#dcb6ec" opacity=".8"/>
+
+  <g transform="translate(80 79)">
+    <path d="M0 -6 L1.7 -2.9 L5.2 -3 L3.4 0 L5.2 3 L1.7 2.9 L0 6 L-1.7 2.9 L-5.2 3 L-3.4 0 L-5.2 -3 L-1.7 -2.9 Z" fill="#ed438a" stroke="#b02a6a" stroke-width=".6"/>
+    <g fill="#fff"><use href="#sp" transform="translate(-8 -6) scale(.5)"/><use href="#sp" transform="translate(8 -6) scale(.5)"/><use href="#sp" transform="translate(9 5) scale(.45)"/><use href="#sp" transform="translate(-9 5) scale(.45)"/><use href="#sp" transform="translate(0 10) scale(.45)"/></g>
+  </g>
+
+  <g class="mane" stroke="#132048" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M42 22 C58 16 71 24 71 40 C72 52 75 62 71 73 C66 67 62 60 61 52 C60 40 55 31 42 22 Z" fill="#273771"/>
+    <path d="M64 30 C69 40 69 56 71 66 C67 58 65 48 63 40 Z" fill="#6c3fa0" stroke="none"/>
+    <path d="M67 34 C71 44 71 54 72 62 C70 54 68 46 66 40 Z" fill="#ed438a" stroke="none"/>
+  </g>
+
+  <g stroke="#9a64b4" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M51 30 L58 11 L64 31 Z" fill="#cc9cdf"/>
+    <path d="M55 28 L58 17 L61 29 Z" fill="#b886ce" stroke="none"/>
+  </g>
+
+  <g class="blink">
+    <ellipse cx="32" cy="45" rx="4.6" ry="8" fill="#fff" stroke="#3a1d4c" stroke-width="1.2"/>
+    <ellipse cx="31" cy="47" rx="3.4" ry="5.6" fill="#6b3895"/>
+    <ellipse cx="31" cy="48" rx="1.8" ry="3.2" fill="#2a0f3b"/>
+    <circle cx="32.4" cy="44" r="1.3" fill="#fff"/>
+    <ellipse cx="48" cy="46" rx="7" ry="9.5" fill="#fff" stroke="#3a1d4c" stroke-width="1.2"/>
+    <ellipse cx="46.5" cy="48" rx="5.4" ry="7.2" fill="#6b3895"/>
+    <ellipse cx="46.5" cy="51" rx="4.4" ry="3.6" fill="#a779c8"/>
+    <ellipse cx="46.5" cy="48.5" rx="2.8" ry="4.2" fill="#2a0f3b"/>
+    <circle cx="49" cy="44" r="2" fill="#fff"/><circle cx="44.6" cy="52" r=".9" fill="#fff"/>
+    <path d="M40.5 40 Q48 33.5 55.5 40 L57.5 37.5" fill="none" stroke="#3a1d4c" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+  <circle cx="18.5" cy="53" r=".9" fill="#7a4a94"/>
+  <g id="mouth"><path d="M22 60.5 Q27 64.5 32.5 60" fill="none" stroke="#3a1d4c" stroke-width="1.3" stroke-linecap="round"/></g>
+
+  <g stroke="#132048" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M25 38 C24 24 37 16 51 17 C59 18 64 23 64 30 C54 29 40 31 25 38 Z" fill="#273771"/>
+    <path d="M29 33.5 C40 28 52 26.5 63 26.5 L63.6 28.6 C52 28.4 40 30.5 27.5 36 Z" fill="#6c3fa0" stroke="none"/>
+    <path d="M30.5 31 C41 26 52 24.6 62 24.6 L62.8 26.4 C52 26.4 41 28 29.6 33.2 Z" fill="#ed438a" stroke="none"/>
+  </g>
+
+  <ellipse class="glow" cx="40" cy="12" rx="12" ry="15" fill="url(#aura)"/>
+  <g stroke="#9a64b4" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M35 24 L39 0 L45 22 Z" fill="#cc9cdf"/>
+    <path d="M36.4 17 L42.6 14.6 M37.6 10.4 L41.6 8.8 M38.6 4.6 L40.4 4" fill="none" stroke-linecap="round"/>
+  </g>
+  <g fill="#fff">
+    <g transform="translate(31 7)"><use class="spark" href="#sp"/></g>
+    <g transform="translate(49 5) scale(.8)"><use class="spark b" href="#sp"/></g>
+    <g transform="translate(32 19) scale(.7)"><use class="spark c" href="#sp"/></g>
+  </g>
+</svg>

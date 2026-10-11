@@ -75,7 +75,7 @@ const sidebar = {
 async function openCharacters() {
   try {
     const dir = require('./server.js').charactersDir(); const fresh = !fs.existsSync(dir); fs.mkdirSync(dir, { recursive: true });
-    if (fresh) fs.writeFileSync(require('path').join(dir, 'README.txt'), 'Put your pixel art here (PNG, GIF, WebP, up to 300 KB each).\nlead.png = the lead (Claude) · you.png = you · any other image = a sub-agent\nname-talk.png = optional open-mouth frame of name.png\nThen press Reload in the Agent Standup settings menu.\n');
+    if (fresh) fs.writeFileSync(require('path').join(dir, 'README.txt'), 'Put your pixel art here (PNG, GIF, WebP or SVG, up to 300 KB each).\nlead.png = the lead (Claude) · you.png = you · any other image = a sub-agent\nname-talk.png = optional open-mouth frame of name.png\nThen press Reload in the Agent Standup settings menu.\n');
     vscode.env.openExternal(vscode.Uri.file(dir));
   } catch (e) { vscode.window.showErrorMessage(e.message); }
 }
