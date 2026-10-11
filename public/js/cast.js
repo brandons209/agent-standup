@@ -3,7 +3,7 @@
 // =====================================================================
 const NAMES = ['Ada','Linus','Grace','Alan','Margaret','Dennis','Barbara','Ken','Radia','Tim','Hedy','Guido','Frances','Bjarne','Katherine','Brian','Sophie','Niklaus','Annie','Donald','Joan','Edsger','Lynn','Vint','Mae','Rob','Zoe','Ivan','Nina','Otto','Lena','Hugo','Ines','Théo','Maya','Jules','Alma','Remy','Cleo','Noah','Iris','Leo','Mira','Axel','Nora','Eli','Lou','Gaby'];
 const nameBook = {};   // agent id → unique first name within the session
-const namePool = () => { const own = String(prefs.names || '').split('\n').map((x) => x.trim()).filter(Boolean); return own.length ? own : NAMES; };   // ⚙ your own list, one name per line
+const namePool = () => { const own = String((typeof prefs !== 'undefined' && prefs.names) || '').split('\n').map((x) => x.trim()).filter(Boolean); return own.length ? own : NAMES; };   // ⚙ your own list, one name per line (the landing page shares this file and has no prefs)
 const charName = (stem) => stem.replace(/[-_]+/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());   // rainbow-dash → Rainbow Dash
 function uniqueName(id, h, want) {   // want: the name of the agent's character; else one from the pool. Never two agents with the same name in a session
   if (nameBook[id]) return nameBook[id]; const taken = new Set(Object.values(nameBook));
