@@ -185,7 +185,7 @@ const FR = () => LANG === 'fr';   // the art block shared with the app expects t
 const NAMES = ['Ada','Linus','Grace','Alan','Margaret','Dennis','Barbara','Ken','Radia','Tim','Hedy','Guido','Frances','Bjarne','Katherine','Brian','Sophie','Niklaus','Annie','Donald','Joan','Edsger','Lynn','Vint','Mae','Rob','Zoe','Ivan','Nina','Otto','Lena','Hugo','Ines','Théo','Maya','Jules','Alma','Remy','Cleo','Noah','Iris','Leo','Mira','Axel','Nora','Eli','Lou','Gaby'];
 const nameBook = {};   // agent id → unique first name within the session
 const namePool = () => { const own = String((typeof prefs !== 'undefined' && prefs.names) || '').split('\n').map((x) => x.trim()).filter(Boolean); return own.length ? own : NAMES; };   // ⚙ your own list, one name per line (the landing page shares this file and has no prefs)
-const charName = (stem) => stem.replace(/[-_]+/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());   // rainbow-dash → Rainbow Dash
+const charName = (stem) => stem.replace(/[-_]+/g, ' ').replace(/(^|\s)\p{L}/gu, (c) => c.toUpperCase());   // rainbow-dash → Rainbow Dash
 function uniqueName(id, h, want) {   // want: the name of the agent's character; else one from the pool. Never two agents with the same name in a session
   if (nameBook[id]) return nameBook[id]; const taken = new Set(Object.entries(nameBook).filter(([k]) => !(typeof S !== 'undefined' && S.gone.has(k))).map(([, n]) => n));   // an agent that left the call frees its name
   if (want) { for (let k = 1; ; k++) { const n = k === 1 ? want : `${want} ${k}`; if (!taken.has(n)) return (nameBook[id] = n); } }

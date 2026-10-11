@@ -6,7 +6,7 @@ async function loadSession(proj, id) {
   const r = await fetch(`/api/session?proj=${encodeURIComponent(proj)}&id=${id}`), data = await r.json();
   if (mine !== S.loadN || data.error) return false; S.saidSrv = +r.headers.get('x-said') || 0;
   closeAllShares(); S.term = {}; S.focus = null; S.agents = {}; S.castN = 0; for (const k in nameBook) delete nameBook[k]; [{ id: 'user' }, ...data.agents].forEach((a) => (S.agents[a.id] = persona(a)));
-  clearThoughts(); Object.assign(TH, { since: {}, next: {}, said: {}, last: 0 }); S.events = data.events; stampT(0); S.byK = new Map(data.events.map((e) => [e.k, e])); S.seq = data.seq || 0; S.pollFails = 0; S.ep = data.ep || ''; S.sawEnd = data.events.some((e) => e.end); S.late = []; S.pos = 0; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
+  clearThoughts(); Object.assign(TH, { since: {}, next: {}, said: {}, last: 0 }); S.events = data.events; stampT(0); S.byK = new Map(data.events.map((e) => [e.k, e])); S.seq = data.seq || 0; S.pollFails = 0; S.narrAt = 0; S.narrBy = {}; S.galN = 0; S.ep = data.ep || ''; S.sawEnd = data.events.some((e) => e.end); S.late = []; S.pos = 0; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
   const opt = $('#sessions').selectedOptions[0]; S.title = (S.live ? niceProj(proj) : opt && opt.dataset.title) || '';
   if (proj === '_demo') S.events.forEach((e) => { if (e.fr) trMem.set(baseText(e), e.fr); });   // the demo ships its own French
   $('#subtitle').textContent = S.title; recomputeStatus(0); buildStage(); renderHighlights(); setFocus('main'); renderLog(true); computeGantt(); layout(); paintStatus(); prefetchTr(0); return true;
@@ -21,7 +21,7 @@ $('#liveProj').onchange = () => { Q.delete('proj'); prefs.proj = $('#liveProj').
 async function followCurrent() {
   const proj = S.pin ? S.pin.proj : Q.has('proj') ? Q.get('proj') : prefs.proj || '';   // an empty ?proj= means all projects
   const cur = await (await fetch('/api/current?proj=' + encodeURIComponent(proj) + (S.pin ? '&id=' + encodeURIComponent(S.pin.id) : S.stick ? '&sproj=' + encodeURIComponent(S.stick.proj) + '&sid=' + encodeURIComponent(S.stick.id) : ''))).json();
-  if (cur.missing) { if (S.cur) { pause(); S.cur = null; } $('#eT').textContent = L('Cette session est terminée.', 'This session has ended.'); $('#eP').textContent = ''; $('#empty').classList.add('on'); return false; }
+  S.ended = !!cur.missing; if (cur.missing) { if (S.cur) { pause(); S.cur = null; } $('#eT').textContent = L('Cette session est terminée.', 'This session has ended.'); $('#eP').textContent = ''; $('#empty').classList.add('on'); return false; }
   if (!cur.id) { $('#empty').classList.add('on'); return false; } $('#empty').classList.remove('on');
   if (S.cur && S.cur.id === cur.id && S.cur.proj === cur.proj) return false;
   S.keep = S.stick && S.stick.id === cur.id && S.stick.proj === cur.proj ? S.since : 0;   // the same session again (the server lost our place): what this page already said stays said, even if the server forgot it

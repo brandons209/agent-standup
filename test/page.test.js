@@ -2,7 +2,7 @@
 const test = require('node:test'), assert = require('node:assert'), fs = require('fs'), path = require('path'), vm = require('vm');
 const PUB = process.env.PUB || path.join(__dirname, '..', 'public');
 function El(tag = 'div') {
-  const cls = new Set(), kids = [], el = { tag, dataset: {}, style: { setProperty(k, v) { el._props[k] = v; } }, _props: {}, children: kids, parentNode: null, textContent: '', _html: '', clientWidth: 0, clientHeight: 0, offsetWidth: 0, id: '',
+  const cls = new Set(), kids = [], el = { tag, dataset: {}, style: { setProperty(k, v) { el._props[k] = v; } }, _props: {}, offsetParent: {}, children: kids, parentNode: null, textContent: '', _html: '', clientWidth: 0, clientHeight: 0, offsetWidth: 0, id: '',
     classList: { add: (...c) => c.forEach((x) => cls.add(x)), remove: (...c) => c.forEach((x) => cls.delete(x)), contains: (c) => cls.has(c), toggle: (c, on) => { const v = on === undefined ? !cls.has(c) : !!on; v ? cls.add(c) : cls.delete(c); return v; } },
     get className() { return [...cls].join(' '); }, set className(v) { cls.clear(); String(v).split(/\s+/).filter(Boolean).forEach((x) => cls.add(x)); },
     get innerHTML() { return el._html; }, set innerHTML(v) { el._html = v; kids.length = 0; for (const m of String(v).matchAll(/<(\w+)[^>]*class="([^"]+)"/g)) { const k = El(m[1]); k.className = m[2]; k.parentNode = el; kids.push(k); } },
@@ -28,7 +28,7 @@ function page(search = '?live=1', timers = null) {   // timers: an array that co
 test('every page script loads, in the order of index.html, with and without a pinned session', { timeout: 5000 }, () => {
   const p = page(); assert.deepEqual(p.errors, []); assert.ok(p.names.length >= 14, p.names.join());
   assert.deepEqual(fs.readdirSync(path.join(PUB, 'js')).filter((f) => f.endsWith('.js')).map((f) => f.slice(0, -3)).sort(), [...p.names].sort(), 'every file in public/js is loaded by index.html');
-  for (const g of ['S', 'startTalk', 'agentState', 'togglePlay', 'liveStart', 'share', 'busy', 'layout', 'doneQuip', 'narrate', 'applyLog']) assert.equal(p.run(`typeof ${g}`) !== 'undefined', true, g);
+  for (const g of ['S', 'startTalk', 'agentState', 'togglePlay', 'liveStart', 'share', 'shareBusy', 'layout', 'doneQuip', 'narrate', 'applyLog']) assert.equal(p.run(`typeof ${g}`) !== 'undefined', true, g);
   assert.equal(p.run('S.pin'), null);
   const q = page('?live=1&pin=abc&proj=-p'); assert.deepEqual(q.errors, []); assert.deepEqual(JSON.parse(q.run('JSON.stringify(S.pin)')), { id: 'abc', proj: '-p' });
 });
@@ -96,6 +96,9 @@ test('a full transcript message renders markdown and nothing else', { timeout: 5
   for (const x of ['<img src=x onerror=alert(1)>', '<script>x</script>', '[a](javascript:alert(1))', '[a](https://x.y/"onmouseover="alert(1))', '```\n</pre><script>x</script>\n```', '> <svg onload=x>']) assert.ok(ok(md(x)), x + ' → ' + md(x));
   const h = md('## Plan\n**b** *i* `c` [d](https://e.f/g)\n\n- one\n- two\n\n```\na < b\n```');
   for (const want of ['<b class="mdh">Plan</b>', '<b>b</b>', '<i>i</i>', '<code>c</code>', '<u title="https://e.f/g">d</u>', '<ul><li>one</li><li>two</li></ul>', '<pre>a &lt; b</pre>']) assert.ok(h.includes(want), want);
+  assert.equal(md('`*.js` and `*.ts`'), '<p><code>*.js</code> and <code>*.ts</code></p>', 'nothing inside a code span is markdown');
+  assert.equal(md('1. a\n\n2. b'), '<ol><li>a</li><li>b</li></ol>', 'a blank line between items keeps one list');
+  assert.equal(md('x \u00000\u0000 y'), '<p>x 0 y</p>', 'the text cannot fake a code span');
 });
 test('speech never reads markdown: links, lists, quotes, tables and code are dropped', { timeout: 5000 }, () => {
   const { run } = page(), m = '## Plan\n**Done.** Fixed `x` in [present.js](https://github.com/a/b) and _audio.js_.\n- one\n> quoted\n```js\nconst a = 1;\n```\n| a | b |\n|---|---|';
@@ -126,5 +129,5 @@ test('a line that turns into a report while it is read is answered once; an agen
 });
 test('the live poll passes over a batch that keeps failing, counting from zero', { timeout: 5000 }, () => {
   const { run } = page(); assert.equal(run(`S.pollFails = undefined; (S.pollFails = (S.pollFails || 0) + 1)`), 1);
-  assert.match(fs.readFileSync(path.join(PUB, 'js/live.js'), 'utf8'), /S\.pollFails = 0; S\.ep/, 'loadSession starts the count over');
+  assert.match(fs.readFileSync(path.join(PUB, 'js/live.js'), 'utf8'), /S\.seq = data\.seq \|\| 0; S\.pollFails = 0;/, 'loadSession starts the count over');
 });

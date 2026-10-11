@@ -44,7 +44,7 @@ setInterval(() => {
 }, 500);
 
 // ---------- speaking tiles ----------
-const mouths = new Map(), camOf = (id) => { const p = paneOf(id); return p && p.querySelector('.pcam'); };
+const mouths = new Map();
 // A custom character shows one of its pictures: talking (mouth open) wins, then celebrating, then thinking, else at rest; one it does not have falls back to rest.
 function setFrame(el, id, mouthOpen) {
   const svg = el && el.querySelector('svg'), c = S.agents[id] && S.agents[id].custom; if (!svg || !c) return; const t = $('#t-' + id);

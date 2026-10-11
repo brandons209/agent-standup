@@ -7,19 +7,20 @@ function addTile(p) {
   $('#stage').appendChild(d); galRefit();
 }
 function buildStage() {   // the tiles, and the presenter camera with them: a character change must never leave the old look in the corner of the shared screen
-  $('#stage').innerHTML = ''; Object.values(S.agents).forEach(addTile);
+  const f = S.focus; $('#stage').innerHTML = ''; Object.values(S.agents).forEach(addTile); S.focus = null; if (f) setFocus(f); for (const id of S.speakers) { const t = $('#t-' + id); if (t) t.classList.add('speaking'); }
   for (const [id, sh] of S.shares) { delete sh.el.dataset.cam; renderPane(sh.el, id); } paintShares();
 }
 const visibleTiles = () => [...$('#stage').children].filter((t) => t.style.display !== 'none').length;
 const galRefit = () => { if (!document.body.classList.contains('gallery')) return; const n = visibleTiles(); if (n !== S.galN) { S.galN = n; layout(); } };
 const layout = () => {
+  if (!$('#stage').offsetParent) return;   // hidden (board or tree view): nothing to measure; setView lays it out on the way back
   const st = $('#stage'), w = st.clientWidth - 28 || 600, nar = $('#center').clientWidth < 480, cols = nar ? (w >= 300 ? 2 : 1) : Math.max(1, Math.floor((w + 12) / 212)), colw = (w - 12 * (cols - 1)) / cols;
   const rh = Math.round(colw * (nar ? 0.66 : 0.74)); st.style.setProperty('--cols', cols); st.style.setProperty('--rh', rh + 'px'); // Spotlight size: the biggest block (k columns × fr rows) that stays close to 3:2 and leaves room beside it for the others.
   const gal = !nar && document.body.classList.contains('gallery');
   if (gal) {   // gallery: equal tiles, the column count that makes them biggest while all fit without scrolling
     const n = Math.max(1, visibleTiles()), W = st.clientWidth - 28, H = st.clientHeight - 28, g = 12, A = 4 / 3; let bc = 1, btw = -1, br = n;
     for (let c = 1; c <= n; c++) { const r = Math.ceil(n / c), tw = Math.min((W - g * (c - 1)) / c, ((H - g * (r - 1)) / r) * A); if (tw > btw) { btw = tw; bc = c; br = r; } }
-    st.style.setProperty('--cols', bc); st.style.setProperty('--rh', Math.floor(Math.min((H - g * (br - 1)) / br, btw / A)) + 'px'); st.style.setProperty('--fcols', 1); st.style.setProperty('--fr', 1); st.classList.toggle('one', bc === 1);
+    st.style.setProperty('--cols', bc); st.style.setProperty('--rh', Math.floor(Math.min((H - g * (br - 1)) / br, btw / A)) + 'px'); st.style.setProperty('--fcols', 1); st.style.setProperty('--fr', 1);
   } else {
   const maxRows = Math.max(cols > 1 ? 2 : 1, Math.floor((st.clientHeight * 0.7 + 12) / (rh + 12)));   // the stage scrolls, so the spotlight may be a bit taller than the free space
   let k = 1, fr = 1, best = -1;
@@ -30,16 +31,16 @@ const layout = () => {
   }
   if (nar) { k = cols; fr = cols > 1 ? 2 : 1; }   // side panel: small tiles, a banner-sized spotlight
   else if (best < 0) { k = Math.min(2, cols); fr = Math.min(2, maxRows); }
-  st.style.setProperty('--fcols', k); st.style.setProperty('--fr', fr); st.classList.toggle('one', cols === 1);
+  st.style.setProperty('--fcols', k); st.style.setProperty('--fr', fr);
   }
-  document.body.classList.toggle('narrow', $('#center').clientWidth <= 480); document.body.classList.toggle('compact', $('#center').clientWidth <= 480 && !$('#roster').offsetWidth); document.body.classList.toggle('tiny', $('#center').clientWidth < 300); drawGantt();
+  document.body.classList.toggle('narrow', $('#center').clientWidth <= 480); while (S.shares.size > shareCap()) unshare(primaryShare());   // a window that turns narrow keeps one screen, the newest document.body.classList.toggle('compact', $('#center').clientWidth <= 480 && !$('#roster').offsetWidth); document.body.classList.toggle('tiny', $('#center').clientWidth < 300); drawGantt();
 };
 new ResizeObserver(layout).observe($('#center'));
 
 function mdHTML(src) {   // a transcript message as markdown: everything is escaped first, then only these forms become tags (no raw HTML, links are not clickable)
-  const inl = (t) => esc(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^\w*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>').replace(/(^|[^\w])_([^_\s][^_]*)_(?!\w)/g, '$1<i>$2</i>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, t, u) => `<u title="${u}">${t}</u>`);
-  const out = [], lines = String(src).replace(/\r/g, '').split('\n'); let list = null, para = [];
+  const inl = (t) => { const code = []; return esc(t).replace(/`([^`]+)`/g, (m, c) => `\u0000${code.push(c) - 1}\u0000`).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^\w*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>').replace(/(^|[^\w])_([^_\s][^_]*)_(?!\w)/g, '$1<i>$2</i>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, t, u) => `<u title="${u}">${t}</u>`).replace(/\u0000(\d+)\u0000/g, (m, n) => `<code>${code[n]}</code>`); };   // code spans are set aside first, so nothing inside them is read as markdown
+  const out = [], lines = String(src).replace(/[\r\u0000]/g, '').split('\n'); let list = null, para = [];   // \u0000 marks a code span below, so the text itself cannot hold one
   const flush = () => { if (para.length) out.push(`<p>${para.map(inl).join('<br>')}</p>`); para = []; if (list) { out.push(`</${list}>`); list = null; } };
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i], fence = l.match(/^\s*```/);
@@ -49,20 +50,20 @@ function mdHTML(src) {   // a transcript message as markdown: everything is esca
     if (h) { flush(); out.push(`<b class="mdh">${inl(h[2])}</b>`); }
     else if (li) { const kind = li[1] ? 'ol' : 'ul'; if (para.length || list !== kind) { const keep = list === kind && !para.length; if (!keep) { flush(); out.push(`<${kind}>`); list = kind; } } out.push(`<li>${inl(li[2])}</li>`); }
     else if (q) { flush(); out.push(`<blockquote>${inl(q[1])}</blockquote>`); }
-    else if (!l.trim()) flush();
+    else if (!l.trim()) { const next = lines.slice(i + 1).find((x) => x.trim()) || ''; if (!(list && /^\s*(?:[-*+]|\d+[.)])\s+/.test(next))) flush(); }   // a blank line between two items does not end the list
     else { if (list) flush(); para.push(l); }
   }
   flush(); return out.join('');
 }
-const whoTag = (id) => { const p = S.agents[id]; return `<span class="who" style="--c:${p && p.shirt ? p.shirt : 'inherit'}">${esc(nameOf(id))}</span>`; };   // each agent's name in its own colour, as on its tile
+const agentColor = (id) => (S.agents[id] && S.agents[id].shirt) || 'inherit', whoTag = (id) => `<span class="who" style="--c:${agentColor(id)}">${esc(nameOf(id))}</span>`;   // each agent's name in its own colour, as on its tile
 function logRow(i) {
   const e = S.events[i], arrow = e.to ? ` <span class="arrow">→</span> ${whoTag(e.to)}` : '';
   const full = prefs.logFull && e.kind !== 'tools' && e.text, body = e.kind === 'tools' ? e.tools.map((t) => t.name).join(', ') : full ? (e.kind === 'order' ? `${nameOf(e.to)}, ` : '') + String(e.text).trim() : spoken(e), k = { order: L('tâche', 'task'), report: L('rapport', 'report'), say: '', user: L('brief', 'brief'), tools: L('outils', 'tools') }[e.kind];
-  return `<div class="row ${e.kind}" data-i="${i}" data-a="${esc(e.agent)}">${whoTag(e.agent)}${arrow} <span class="k">${k}</span><div class="txt${full ? ' full md' : ''}">${full ? mdHTML(body) : esc(body)}</div></div>`;
+  return `<div class="row ${e.kind}" data-i="${i}" style="--c:${agentColor(e.agent)}">${whoTag(e.agent)}${arrow} <span class="k">${k}</span><div class="txt${full ? ' full md' : ''}">${full ? mdHTML(body) : esc(body)}</div></div>`;
 }
 const logAtEnd = (log) => log.scrollHeight - log.scrollTop - log.clientHeight < 40;   // the reader is at the bottom: new lines keep it there; scrolled up to read, it stays put
 function renderLog(full) {
-  const log = $('#log'), stick = full || logAtEnd(log); let from = S.live ? Math.max(0, S.events.length - 300) : 0;
+  const log = $('#log'), stick = logAtEnd(log); let from = S.live ? Math.max(0, S.events.length - 300) : 0;
   if (S.live && prefs.logText) { let n = 0; from = S.events.length; while (from > 0 && n < 300) if (!quiet(S.events[--from])) n++; }   // spoken lines only: the last 300 of them, however many tool calls came between
   if (full || S.logTo < from || S.logTo > S.events.length) { log.innerHTML = ''; S.logTo = from; }
   const html = [];
@@ -76,7 +77,7 @@ function renderLog(full) {
 }
 function logChat(id, line, label) {   // banter is not in the session: with the option on, it is written into the transcript as it is said
   if (!prefs.logChat) return; const log = $('#log'), stick = logAtEnd(log);
-  log.insertAdjacentHTML('beforeend', `<div class="row chat" data-a="${esc(id)}">${whoTag(id)} <span class="k">${esc(label || '')}</span><div class="txt">${esc(line)}</div></div>`);
+  log.insertAdjacentHTML('beforeend', `<div class="row chat" style="--c:${agentColor(id)}">${whoTag(id)} <span class="k">${esc(label || '')}</span><div class="txt">${esc(line)}</div></div>`);
   if (S.live) while (log.children.length > 320) log.firstChild.remove(); filterLog(); if (stick) log.scrollTop = log.scrollHeight;
 }
 function filterLog() { const q = $('#logQ').value.trim().toLowerCase(); for (const r of $('#log').children) r.style.display = !q || r.textContent.toLowerCase().includes(q) ? '' : 'none'; }
@@ -187,8 +188,8 @@ function agentState(id, now) {
 }
 const STATE_CLASSES = ['working', 'waiting', 'blocked', 'stalled', 'done'];
 function celebrate(id) {   // done: a cheer, a little dance, and the character's celebrating picture, for a moment
-  const t = $('#t-' + id); if (!t) return; const pr = t.querySelector('.prop'); pr.textContent = '🎉'; pr.className = 'prop cheer'; t.classList.add('celebrate'); setFrame(t, id); clearTimeout(t._celT);
-  t._celT = setTimeout(() => { t.classList.remove('celebrate'); if (pr.classList.contains('cheer')) { pr.textContent = ''; pr.className = 'prop'; } if (!S.speakers.has(id)) setFrame(t, id); }, 2500);
+  const t = $('#t-' + id); if (!t) return; const pr = t.querySelector('.prop'); pr.textContent = '🎉'; pr.className = 'prop cheer'; t.classList.add('celebrate'); setFrame(t, id); syncCam(id); clearTimeout(t._celT);
+  t._celT = setTimeout(() => { t.classList.remove('celebrate'); if (pr.classList.contains('cheer')) { pr.textContent = ''; pr.className = 'prop'; } if (!S.speakers.has(id)) setFrame(t, id); syncCam(id); }, 2500);
 }
 function paintStates() {
   const now = Date.now(), n = { working: 0, waiting: 0, blocked: 0, stalled: 0, done: 0 }, ros = [], attn = [];
@@ -200,7 +201,7 @@ function paintStates() {
     const pr = t.querySelector('.prop'), want = { blocked: '✋', stalled: '😰', waiting: '⌛' }[st.k] || (st.think && !t.classList.contains('musing') ? '💭' : ''), was = S.prevState[p.id];   // 💭 only while no thought bubble says it already   // a raised hand, a sweat drop, an hourglass: the call metaphor for "needs you / stuck / waiting"
     if (st.k === 'done' && was && was !== 'done' && was !== 'idle') celebrate(p.id);
     else if (!pr.classList.contains('cheer')) { if (pr.textContent !== want) pr.textContent = want; pr.className = 'prop ' + (want ? (st.think ? 'thinking' : st.k) : ''); }
-    if (!S.speakers.has(p.id)) setFrame(t, p.id); const pe = paneOf(p.id), cam = pe && pe.querySelector('.pcam'); if (cam) { cam.classList.toggle('thinking', !!st.think); cam.classList.toggle('celebrate', t.classList.contains('celebrate')); if (!S.speakers.has(p.id)) setFrame(cam, p.id); }
+    if (!S.speakers.has(p.id)) setFrame(t, p.id); syncCam(p.id);
     if (shown && !S.gone.has(p.id)) ros.push({ p, st });
     if (p.id === 'main' && st.k === 'done' && was && was !== 'done' && was !== 'idle' && S.live && S.playing && Date.now() - (S.mainBusyAt || 0) > 45000) confetti();
     if (p.id === 'main') { if (st.k === 'working' || st.k === 'waiting') S.mainBusyAt = S.mainBusyAt || Date.now(); else if (st.k === 'done') S.mainBusyAt = 0; }
