@@ -64,7 +64,9 @@ Outputs are trimmed (about 1–2 KB each) to keep the call fast. Results of inte
 | ![todo](https://atoll92.github.io/agent-standup/media/todo.jpg) | ![recap](https://atoll92.github.io/agent-standup/media/recap.jpg) | ![fr](https://atoll92.github.io/agent-standup/media/hero-fr.jpg) |
 
 ## Personality, without noise
-Sub-agents answer when they get an order ("Running the tests, as usual.", "Grepping like there's no tomorrow."), say goodbye when they leave, and now and then have a little thought; a failing tool call makes the tile shake; confetti when the lead finishes a long job. When the call has been silent for a while, someone fills the gap the way people do in video calls ("Can you hear me?", "You guys still here?", "Can everyone see my screen?"): after 45 seconds in a live call, about 10 seconds in a replay, at most three times per silence and further and further apart. It is all local (no API), absent from the transcript, and can be turned off in ⚙ → Little lines & animations.
+In a live call, when the lead starts on its tools without a word after your order, it says what it is starting with ("Got it. Let me look at server.js."). Sub-agents answer when they get an order ("Running the tests, as usual.", "Grepping like there's no tomorrow."), say goodbye when they leave, and now and then have a little thought; a failing tool call makes the tile shake; confetti when the lead finishes a long job. Whoever receives a report sometimes says thanks ("Got it, thanks."), and an agent that has been thinking for a long time says so ("Hmm, let me think."). When the call has been silent for a while, someone fills the gap the way people do in video calls ("Can you hear me?", "You guys still here?", "Can everyone see my screen?"): after 45 seconds in a live call, about 10 seconds in a replay, at most three times per silence and further and further apart. It is all local (no API), absent from the transcript, and can be turned off in ⚙ → Little lines & animations.
+
+Sub-agents also talk to each other, from what really happened: a new agent asks a question and the lead answers, a report gets a reaction that fits (all good, errors along the way, it took long) and sometimes a word from a third agent, an agent that fails three times in a row gets a “you okay?”, and every few minutes the lead calls a quick round. ⚙ → Display → **Chatter between agents**: Quiet (default: only the real exchanges) / Normal / Lively. When the lead finishes, it reads the part of its last message that the live reading had cut short, so you know what was done.
 
 ## Glance without the panel (VS Code)
 The status bar shows live counts for your workspace (needs you, working, your turn) and turns red when an agent may be waiting for you; hover for the sessions, click to open the call on the most urgent one (`agentStandup.statusBar`).
@@ -87,16 +89,17 @@ The header shows how full the lead's context is (`ctx 62%`, orange then red, wit
 Other agent tools than Claude Code (Codex CLI, Gemini CLI, OpenCode…) are researched in [ROADMAP.md](ROADMAP.md): their log formats are mostly undocumented, so no adapter is shipped yet.
 
 ## Languages
-Pick one in ⚙ → Language: **English, Français, 繁體中文, 简体中文, Español, Deutsch, Português (Brasil), 日本語**. The interface (menus, chips, tooltips, recap) is translated; VS Code's command titles, setting descriptions and status bar follow VS Code's own display language. English and French are written by hand; the other languages are **AI-drafted and not yet reviewed by native speakers**, so corrections are very welcome: each language is one small JSON file (`public/locales/<code>.json`), see [public/locales/README.md](public/locales/README.md) to fix or add one (`npm run i18n` checks the files). The words the agents say stay in the language of your session (French translation of their lines is optional); the little banter lines and the demo exist in English and French.
+Pick one in ⚙ → Language: **English, Français, 繁體中文, 简体中文, Español, Deutsch, Dansk, Português (Brasil), 日本語**. The interface (menus, chips, tooltips, recap) is translated; VS Code's command titles, setting descriptions and status bar follow VS Code's own display language. English and French are written by hand; the other languages are **AI-drafted and not yet reviewed by native speakers**, so corrections are very welcome: each language is one small JSON file (`public/locales/<code>.json`), see [public/locales/README.md](public/locales/README.md) to fix or add one (`npm run i18n` checks the files). The words the agents say stay in the language of your session (French translation of their lines is optional); the little banter lines and the demo exist in English and French.
 
 ## Your own characters
+Two packs ship with the app: ⚙ → Characters → **Starter pack** or **Cat pack** (11 cats by a contributor) puts them on the call at once, and **Drawn characters** goes back to the default. **My folder** uses your own images below (picked by itself the first time if your folder already has images).
+
 Replace the drawn characters with your own pixel art. Drop PNG (or GIF/WebP/SVG) files, 300 KB at most each, into `~/.agent-standup/characters` (⚙ → Characters shows the folder, and in VS Code *Open folder* opens it; the `agentStandup.charactersPath` setting changes it):
-- `lead.png` (or `claude.png`) is the lead, `you.png` is you, any other image becomes a sub-agent (one per agent, repeated if you have fewer images than agents);
-- sub-agents get a random image by default; turn on ⚙ → Characters → **Rotate characters, no repeats** to hand them out in turn, so with N images any N sub-agents in a row all look different;
+- `lead.png` (or `claude.png`) is the lead, `you.png` is you, any other image becomes a sub-agent (one per agent: two sub-agents only share an image once every image is taken);
 - `name-talk.png` next to `name.png` is an optional open-mouth frame that shows while the character speaks;
 - 32×32 or 64×64 px, transparent background, facing front, feet at the bottom looks best. The art is shown crisp (no smoothing) on top of the usual scene and desk, and every status, hand and badge still works.
 - SVG works too and stays sharp at any size; it may animate itself with CSS `@keyframes` (blinking, a swaying tail…), but scripts and external files are ignored, and video exports show it as a still frame.
-Press **Reload** in the menu to see changes. A starter pack is in [examples/characters](examples/characters), and animated SVG examples in [examples/characters/mane6](examples/characters/mane6).
+Your characters sit at the desk without the laptop (it would cover the bottom of the sprite); ⚙ → Characters → **Laptop in front of your own characters** puts a darker one back while they work. Press **Reload** in the menu to see changes. A starter pack is in [examples/characters](examples/characters), a cat pack in [examples/cats](examples/cats), and animated SVG examples in [examples/characters/mane6](examples/characters/mane6).
 
 ## Agents list
 On wide windows (900 px+), a fixed list sits left of the call: every agent with its role and one status line, **most urgent first** (needs you, stalled, working, waiting, done) and the lead pinned on top. It stays readable with dozens of agents, which a grid of tiles does not. Click a name to put that agent in the spotlight (kept for 25 s even when someone else speaks), double-click for details. Toggle it in ⚙ → Agents list.
@@ -108,6 +111,8 @@ The **Sessions** tab lists every session active in the last 12 hours, across all
 Every tile carries one status: **working** (with what it is doing), **waiting on another agent** (who), **needs you?** (a file edit or write, or a question, has been pending for 15 s+), **stalled** (waiting on an agent that has been silent for 2 min+), or **done**. A summary sits in the header, and the tab title shows how many agents need you. The "needs you?" signal is a heuristic: Claude Code does not record permission prompts, so commands (Bash) are not flagged because they can legitimately run for minutes (they get a ⏳ badge after 1 min instead). Measured on real sessions, edits that stay pending for 15 s+ are rare, so the signal is mostly right.
 
 ## Voices
+Each line is read with a voice of its own language (French or English), whatever language the interface is in.
+
 Four styles in ⚙ (default: **Cartoon voices**, so everything stays understandable):
 - **Animal Crossing** — every agent "talks" in gibberish, one blip per letter, with a sentence melody (up for questions, down for statements) and a register of its own.
 - **Simlish** — the same idea with flowing syllables, vowels and little consonant noises.
@@ -128,7 +133,7 @@ The API key is read only from `OPENAI_API_KEY` in the environment of VS Code / t
 ## Handy extras
 - **Copy as Markdown** in the recap: a ready-to-paste standup report (who did what, files, tokens, final report of each agent).
 - **Notify me when agents finish** (⚙): a soft chime, the tab title and, in VS Code, a notification once the team has worked for a while and gone quiet.
-- **Search** the transcript, **ambience volume**, and a compact layout when the panel is narrow (side bar).
+- **Search** the transcript, **ambience volume**, and a compact layout when the panel is narrow (side bar): under about 300 px wide, one row per agent instead of tiles. In replay, speed presets (1×, 2×, 4×, 8×) and each session remembers where you stopped.
 
 ## Install
 Three ways in — pick one (details in [Works with your tools](#works-with-your-tools)): the **VS Code extension** (below), the **`agent-standup` command** (`npx @double_geste/agent-standup --open`), or the **desktop app** (macOS, from the release page). Cursor, Windsurf and VSCodium install the same `.vsix`.
@@ -264,7 +269,7 @@ The website counts visits anonymously (a 1-pixel file hosted on GitHub per chann
 - "Hide code & file names in videos" does not mask what the agents say (speech bubbles, subtitles, voices).
 
 ## Credits
-Several ideas in 1.23 (settings kept in a file, session stickiness, subtitles that follow the voice, Kokoro voices) started in [neondragon's fork](https://github.com/neondragon/agent-standup) of this project. Thank you!  Their code was read and rewritten for this codebase. The Traditional Chinese wording was polished with suggestions from a Taiwanese reader on Reddit. Unofficial: not affiliated with Anthropic.
+Several ideas in 1.23 (settings kept in a file, session stickiness, subtitles that follow the voice, Kokoro voices) started in [neondragon's fork](https://github.com/neondragon/agent-standup) of this project. Thank you!  Their code was read and rewritten for this codebase. [rqwj](https://github.com/rqwj) made each sub-agent get its own character image (#1) and [KajetanCiunelis](https://github.com/KajetanCiunelis) drew the cat pack in `examples/cats` and suggested the laptop option (#2). The Traditional Chinese wording was polished with suggestions from a Taiwanese reader on Reddit. Unofficial: not affiliated with Anthropic.
 
 ## License
 
@@ -274,6 +279,19 @@ MIT
 This dev was replaced by his own agents. If Agent Standup made your sessions more fun, you can [buy him a coffee](https://www.buymeacoffee.com/bored_dev_and_his_robots) ☕ — there is also a ☕ line in the ⚙ menu and at the end of each recap.
 
 Agent Standup is free and MIT licensed. I'm also available for work around AI agents and developer tooling: reach me through my GitHub profile, [Atoll92](https://github.com/Atoll92).
+
+## Settings menu and shortcuts
+⚙ has sections that fold (and remember it), a search box, and a Display section. “Notify me when the agents finish” is on by default (change it in ⚙ → Sound). The **?** help also explains what each status means.
+
+Press **?** in the app for the full list. Highlights: **Space** pause, **M** mute, **T** tree view, **J / K** next agent that needs you, **Cmd/Ctrl+K** go to a session, and in replay **← / →** step, **N** next highlight.
+
+## Security and what it reads
+- **It reads local files and sends nothing by default.** Agent Standup reads the session files Claude Code already writes (`~/.claude/projects`, or `CLAUDE_CONFIG_DIR`) and draws them in a page. It never writes to your sessions; the only time it starts Claude Code is the optional translation helper described below.
+- **Local only.** The server listens on `127.0.0.1` (never on the network), refuses requests whose Host or Origin is not local, and refuses cross-site requests on every endpoint that does something (translation, jokes, sound, settings).
+- **The only things that call out** are optional and off by default: French translation and jokes (your own Claude login, the small Haiku model, with all tools disabled), the FIP radio stream, and the usage counter (one empty request a day to a 1-pixel file, only if you turn it on).
+- **No dependencies**: the code is plain Node.js and one HTML file, so there is nothing hidden in `node_modules`. The optional Kokoro voices install a third-party package only when you click Install.
+- **Many sessions at once?** The **Sessions** view shows every session across your projects on one board (working, waiting, needs you, done); click one to open its call. **Live** follows one session at a time, the most recent or the project you pick.
+- Found a problem? Please open an issue.
 
 ## Privacy and usage counting
 Agent Standup reads local session files and sends nothing anywhere by default. The only optional network uses are: French translation / jokes (your own Claude login, off unless you turn them on), the FIP radio stream (if you turn it on), and the **optional usage counter**: if you set `agentStandup.shareUsage` to `true` (off by default, and ignored when VS Code telemetry is off), the extension makes at most one empty request per day to a 1-pixel file in this repository's releases. There is no identifier and no content; GitHub sees your IP like for any download. It lets the maintainer count active installs (`npm run stats`).

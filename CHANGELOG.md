@@ -1,5 +1,62 @@
 # Changelog
 
+## 1.25.6
+- **The lead answers your order.** About one time in three, Claude starts on its tools without writing a word, and the call stayed silent after your order (half a minute on average, sometimes minutes). In a live call the lead now says what it is starting with, taken from the tool call itself (“Got it. Let me look at server.js.”, “Okay. I’m running a command: run the tests.”). Only when it has not spoken by itself; local like the other little lines, absent from the transcript, off with ⚙ → Little lines & animations.
+- Fix: in a live call, sub-agents no longer answered the lead’s orders, and the lead hardly ever thanked them for a report. Since 1.25.0 these little answers were only said when the call was less than 6 seconds behind the session, and reading the order itself takes longer than that while the new agent is already at work. An answer to what was just said is now allowed up to 30 seconds behind (remarks from bystanders still wait for a quiet moment). After a parallel launch, the first three agents answer (only the first one did since 1.25.2).
+- An order you type while the lead is working is now part of the call. Claude Code hands such a message over in the middle of the turn, in a record of its own, and the call ignored it: your line was neither shown nor read, and the lead’s answer came out of nowhere.
+- Fix: joining a live call read the end of the previous one again. The call picked the session up 16 events before its end, whatever its age, so the last lines of a session that was long over were said as if they had just happened (and said once more each time the session was loaded again: a rewritten transcript, a return from another session). A live call now starts when you join it: what happened before is on screen (states, transcript) and only what comes after is said, once. If the agents are at work when you join, the last 10 seconds are said too, so you know what they are on.
+
+## 1.25.5
+- Fix: the lead could read the same wrap-up several times in a row (its state flipped to done more than once without a new message). Once per message now.
+- While a screen is shared, a member who speaks still gets the spotlight (the presenter’s own tile stays small: its camera is already in the corner of the share).
+
+## 1.25.4
+- Fix: after a change of characters (a pack, Reload, your folder), the small camera in the corner of a shared screen kept the previous look while the tile had the new one, so the lead could appear as two different characters at once.
+
+## 1.25.3
+- **Character packs built in**: ⚙ → Characters → Starter pack or Cat pack switches the whole call to those characters in one click, in the extension, the command and the desktop app alike; Drawn characters is the default; My folder uses your own images (picked by itself if your folder already had some). Until now the packs only lived in the repository, to copy by hand.
+- **The voice follows the language of the line, not of the interface.** A session written in French with the interface in English was read by an English voice (French with an English accent); the other way round, an English line was read by a French voice. Each line now gets a voice of its own language when it clearly reads as French or English (the short lines of banter keep the interface language). A line already in French is no longer sent to Claude for translation.
+
+## 1.25.2
+- **Sub-agents show up at once in a live call.** When the lead launches several agents in parallel, their tiles appear the moment the orders are written (before, each tile waited for its order to be read out, one after the other, and a burst of hundreds of tool events could hide them until the call caught up). The first order is read in full; the others are named in one line (“Also Remy on X, Iris on Y”). Hundreds of tool events from parallel agents now scroll past in a couple of seconds instead of minutes.
+- **The lead says what it did.** When the lead finishes (confetti), the part of its last message that the live reading had cut short is read as a wrap-up (“To sum up: …”), so you know what was done without opening the transcript.
+- **Quiet chatter really is quiet**: no lines to fill the silences, no thinking out loud, no remarks from bystanders; only the real exchanges (orders, reports, a word of thanks or acknowledgement).
+- A little faster voice while catching up on a backlog.
+
+## 1.25.1
+- Fix: in a live call, the first line after a silence (typically your own order) was skipped or rushed. The call measured how far behind it was against the previous event, which after a few idle minutes looked like a huge backlog. The lag is now the gap between the line being played and the newest line of the session, so an idle session is never “behind”.
+- Fix: your own sub-agent characters were picked per agent without looking at the others, so two sub-agents often got the same picture while others went unused. A new sub-agent now gets a picture no other agent on the call holds; pictures repeat only once every one is taken. Contributed by [rqwj](https://github.com/rqwj) (#1).
+- A cat pack in `examples/cats` (11 cats, CC0), contributed by [KajetanCiunelis](https://github.com/KajetanCiunelis) (#2). Their suggestion too: ⚙ → Characters → **Laptop in front of your own characters** (off by default) shows a darker laptop while a custom character works, dark enough to stay visible under a white or cream sprite.
+
+## 1.25.0
+Five UX improvements and agents that talk to each other more.
+- **Jump to who needs you**: press **J** / **K** (or click the “need you” / “stalled” chip) to move to the next agent that needs you or is stalled. The help (**?**) now explains each state.
+- **Settings menu**: sections that fold (and remember it), a search box, a new Display section. “Notify me when the agents finish” is now on by default (until you choose otherwise; the browser asks permission on your first click).
+- **Cmd/Ctrl+K**: jump to any session from any view, with search.
+- **Very narrow panel** (under 300 px, like the VS Code side bar): one row per agent instead of tiles. Wider windows keep the tiles.
+- **Replay**: **←** / **→** step through the call, **N** / **Shift+N** jump between highlights, speed presets 1× 2× 4× 8×, and each session remembers where you stopped. Browser shortcuts (Cmd+R, Ctrl+N…) are no longer taken over by the page.
+- **Agents talk to each other**, using what really happened in the session (edits, tool calls, errors, files, time taken): a new agent asks a question and the lead answers; a report gets a reaction that fits (all good, errors along the way, that took long) and sometimes a word from a third agent; an agent that fails three times in a row gets a “you okay?”; every few minutes the lead calls a quick round and the busy agents answer. ⚙ → Display → **Chatter between agents**: Quiet (default) / Normal / Lively.
+- Reports are introduced more naturally (“All done. …”); orders keep the lead’s exact instructions, read a little longer in a live call.
+- **Live calls keep the rhythm of the real session**: the page measures how far behind the real conversation it is and, past 6 s, speaks a little faster and reads shorter lines; the small talk and the exchanges between agents only happen when the call has caught up; past a minute it skips ahead. New events are polled every 0.4 s (was 0.7) and their audio is prepared as soon as they arrive. On a simulated live session the median delay between a line being written and it being spoken went from about 3 s to 1 s.
+
+## 1.24.3
+- **Dansk** (Danish) interface, suggested by a Reddit reader. AI-drafted: corrections welcome in `public/locales/da.json`.
+- **Keyboard shortcuts** are listed under ⚙ → Keyboard shortcuts, or press **?**. Switching to the tree view with **T** now says how to get back.
+- README: a security section (what it reads, what it can send, local only) and how several sessions at once are handled.
+
+## 1.24.2
+Narrow and short windows (the VS Code side bar, a small panel), found by going through every panel at five window sizes.
+- Fix: the Sessions view showed a blank page when the window was 640 px wide or less, and stayed blank on the next load. A style meant for the status chips of the header was also applied to the whole page.
+- Fix: the settings gear (⚙) slid off the right edge under about 400 px. The buttons now keep their size; the name, the context gauge and the token counter give way instead (the gauge is hidden under 480 px, the counter under 420 px).
+- Fix: in a window less than about 350 px tall, the Highlights bar covered the seek and speed sliders while an agent shared their screen. The shared screen now shrinks, and the bar keeps to two rows and scrolls.
+- Fix: the task list of the shared screen was cut off with no way to scroll (no task visible at 1280×450, a list of 8 cut at 1280×720). It now uses the full height, scrolls, and brings the task in progress into view.
+- Fix: in a window narrower than about 480 px, the task list squeezed the shared terminal to a strip. The task list is now hidden there and the terminal keeps the room.
+- Sessions view: cards of sessions that need you or are stalled keep their coloured border and status chip, but are no longer filled with red or orange, and titles are no longer tinted. That fill came from the same misapplied style.
+
+## 1.24.1
+- Fix: the settings menu (⚙) was taller than a small window since 1.24.0 and its last entries could not be reached. It now stops at the bottom of the window and scrolls.
+- **A little more talk between agents**: whoever receives a report sometimes says thanks ("Got it, thanks.", "Noted. I'll take it from here.", about one report in four), and an agent that has been thinking for a long time says so ("Hmm, let me think.", "Hang on, I want to get this right."): after 20 seconds without a word in a live call, once per silence, and in a replay before a line that really took 40 seconds or more to come, about every other time. Eight variations of each, never the same twice in a row, in English and French. Part of ⚙ → Little lines & animations.
+
 ## 1.24.0
 - **Video export records an MP4** (H.264 video + AAC audio, 1280×720) when the browser can record it, and falls back to `.webm` as before when it cannot (⚙ → Tools → 🎞 Export video). X, phones and most chat apps refuse `.webm`. Checked in Chrome; not tested inside VS Code's own panel, which may still produce a `.webm` there.
 - **Clip to share** (⚙ → Tools → 🎬 Clip to share (25 s)): a short clip of about 25 seconds, saved as `agent-standup-clip.mp4` (`.webm` when the browser cannot record MP4). In the middle of a replay it starts at the current position; otherwise one spoken line before the first error or loop of the session when there is one, and failing that at the moment the lead first hands out work. The line being said when time is up is finished rather than cut, so the length varies by a few seconds. The clip carries the site address (atoll92.github.io/agent-standup) in the top right corner and ends with a short end card (product name, the tagline "Your Claude Code agents as a live team call", the site address). The full export has neither.

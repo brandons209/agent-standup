@@ -251,6 +251,12 @@ function parseRecord(st, r) {
     if (id && status && status !== 'running') st.raw.push({ ts, agent, kind: 'agentdone', toolId: id });
     return;
   }
+  if (r.type === 'attachment' && r.attachment && r.attachment.type === 'queued_command') {   // an order typed while the lead was working: Claude Code hands it over in the middle of the turn, as an attachment and not as a user message
+    const q = r.attachment, human = q.origin ? q.origin.kind === 'human' : q.commandMode === 'prompt'; if (agent !== 'main' || !human) return;   // the same record also carries task notifications
+    const txt = (Array.isArray(q.prompt) ? q.prompt.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : typeof q.prompt === 'string' ? q.prompt : '').replace(HARNESS, '').trim();
+    if (txt && !/^<(system-reminder|command-|local-command|task-notification)/.test(txt)) st.raw.push({ ts, agent: 'user', kind: 'user', text: txt });
+    return;
+  }
   if (r.type === 'user') {
     const items = [];   // tool results: the real output that appeared on the agent's screen
     for (const b of blocks(r)) if (b.type === 'tool_result' && (st.toolName[b.tool_use_id] === 'Agent' || st.toolName[b.tool_use_id] === 'Task') && !(st.bg && st.bg[b.tool_use_id]) && !/^\s*Async agent launched/i.test(resultText(b.content))) st.raw.push({ ts, agent, kind: 'agentdone', toolId: b.tool_use_id });   // a synchronous call: the lead got the sub-agent's answer back, so it has finished (async launches answer immediately and are not a completion)
@@ -545,8 +551,10 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const CHAR_NAME = /^[\w][\w .()\-]{0,78}\.(png|gif|webp|jpe?g|svg)$/i, CHAR_MAX = 300 * 1024, CHAR_TYPES = { png: 'image/png', gif: 'image/gif', webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', svg: 'image/svg+xml' };
 const charactersDir = () => process.env.AGENT_STANDUP_CHARACTERS || path.join(os.homedir(), '.agent-standup', 'characters');
 // lstat, not stat: a symlink is not a regular file, so it is skipped and never served
-function listCharacters() {
-  const dir = charactersDir(); let names = []; try { names = fs.readdirSync(dir); } catch {}
+// Built-in character packs, shipped with the app (examples/<folder>): picked in ⚙ → Characters, or copied into the person's own folder as a start
+const PACKS = { starter: 'characters', cats: 'cats' }, packDir = (name) => (PACKS[name] ? path.join(__dirname, 'examples', PACKS[name]) : null);
+function listCharacters(pack) {
+  const dir = pack ? packDir(pack) : charactersDir(); let names = []; if (!dir) return { dir: '', max: CHAR_MAX, chars: [] }; try { names = fs.readdirSync(dir); } catch {}
   const ok = names.filter((f) => CHAR_NAME.test(f)).filter((f) => { try { const st = fs.lstatSync(path.join(dir, f)); return st.isFile() && st.size <= CHAR_MAX; } catch { return false; } }).slice(0, 80);
   const stem = (f) => f.replace(/\.[^.]+$/, ''), by = new Map(ok.map((f) => [stem(f).toLowerCase(), f]));
   const chars = ok.filter((f) => !/-talk$/i.test(stem(f))).map((f) => { const st = stem(f), l = st.toLowerCase();
@@ -564,11 +572,12 @@ function start(port = PORT) {
   const json = (o, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
   // Endpoints with side effects (they spawn programs or claim the sound), and the one that serves pictures from a session, refuse requests that a browser marks as coming from another site, e.g. an <img> on a web page.
   const sfs = req.headers['sec-fetch-site'];
-  if (sfs && sfs !== 'same-origin' && sfs !== 'none' && ['/api/translate', '/api/quips', '/api/warm', '/api/audio', '/api/tts', '/api/prefs', '/api/prefs.js', '/api/voices', '/api/kokoro', '/api/kokoro/install', '/api/media'].includes(url.pathname)) { res.writeHead(403); return res.end('forbidden'); }
+  if (sfs && sfs !== 'same-origin' && sfs !== 'none' && (req.method !== 'GET' || ['/api/translate', '/api/quips', '/api/warm', '/api/audio', '/api/tts', '/api/prefs', '/api/prefs.js', '/api/voices', '/api/kokoro', '/api/kokoro/install', '/api/media'].includes(url.pathname))) { res.writeHead(403); return res.end('forbidden'); }
   const readBody = (cb) => {   // request bodies are small JSON: stop reading beyond 256 KB and give up after 10 s
-    let body = '', over = false; req.setTimeout(10000, () => req.destroy());
-    req.on('data', (d) => { if (over) return; body += d; if (body.length > 262144) { over = true; res.writeHead(413); res.end('too large'); req.destroy(); } });
-    req.on('end', () => { if (!over) cb(body); });
+    const chunks = []; let size = 0, over = false; req.setTimeout(10000, () => req.destroy());
+    if (+req.headers['content-length'] > 262144) { res.writeHead(413); res.end('too large'); return req.destroy(); }
+    req.on('data', (d) => { if (over) return; size += d.length; if (size > 262144) { over = true; res.writeHead(413); res.end('too large'); req.destroy(); } else chunks.push(d); });   // bytes, not characters
+    req.on('end', () => { if (!over) cb(Buffer.concat(chunks).toString('utf8')); });
   };
   const textList = (x) => (Array.isArray(x) ? x : []).slice(0, 200).map((t) => String(t).slice(0, 2000));
   try {
@@ -610,7 +619,8 @@ function start(port = PORT) {
     if (url.pathname === '/api/prefs') return json(readPrefs() || {});
     if (url.pathname === '/api/current') return json(currentSession(url.searchParams.get('proj') || '', url.searchParams.get('id') || '', { proj: url.searchParams.get('sproj') || '', id: url.searchParams.get('sid') || '' }));
     if (url.pathname === '/api/board') return json(boardRows());
-    if (url.pathname === '/api/characters') return json(listCharacters());
+    if (url.pathname === '/api/characters') return json(listCharacters(url.searchParams.get('pack') || ''));
+    if (url.pathname === '/api/packs') return json(Object.keys(PACKS).map((name) => ({ name, n: listCharacters(name).chars.length })));
     if (url.pathname === '/api/media') {
       const q = (k) => url.searchParams.get(k) || '', SAFE = /^[\w.\-]+$/, n = +q('n') || 0, bad = [q('proj'), q('id'), q('agent'), q('tool')].some((v) => !SAFE.test(v) || v === '..' || v.length > 200);
       const file = bad || !Number.isInteger(n) || n < 0 || n > 9 ? null : mediaFile(q('proj'), q('id'), q('agent')), im = file && toolImage(file, q('tool'), n);
@@ -632,9 +642,10 @@ function start(port = PORT) {
       }
       return json({ id: tl.id, agents: tl.agents, total: tl.events.length, events: tl.events.slice(+after) });
     }
-    if (url.pathname.startsWith('/characters/')) {   // only plain image files of the characters folder, by exact name
-      let f = ''; try { f = decodeURIComponent(url.pathname.slice('/characters/'.length)); } catch {}
-      const dir = charactersDir(), fp = path.join(dir, f);
+    const pk = url.pathname.match(/^\/packs\/([a-z]+)\/(.*)$/);
+    if (url.pathname.startsWith('/characters/') || (pk && packDir(pk[1]))) {   // only plain image files of the characters folder (or of a built-in pack), by exact name
+      let f = ''; try { f = decodeURIComponent(pk ? pk[2] : url.pathname.slice('/characters/'.length)); } catch {}
+      const dir = pk ? packDir(pk[1]) : charactersDir(), fp = path.join(dir, f);
       try { const ls = fs.lstatSync(fp); if (!CHAR_NAME.test(f) || !fp.startsWith(dir + path.sep) || !ls.isFile() || ls.size > CHAR_MAX) throw 0; } catch { res.writeHead(404); return res.end('not found'); }
       res.writeHead(200, { 'content-type': CHAR_TYPES[f.split('.').pop().toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" }); return fs.createReadStream(fp).pipe(res);   // an SVG opened directly must not run scripts against this server
     }
