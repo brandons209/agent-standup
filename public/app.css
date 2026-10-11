@@ -122,6 +122,7 @@
   body.logb aside { width:auto; height:var(--logh, 240px); border-left:0; border-top:1px solid var(--line) }
   #logGrip { position:absolute; z-index:2; touch-action:none; top:0; bottom:0; left:-3px; width:6px; cursor:col-resize } #logGrip:hover { background:var(--accent); opacity:.4 }
   body.logb #logGrip { top:-3px; bottom:auto; left:0; right:0; width:auto; height:6px; cursor:row-resize }
+  .logbtns { display:flex; gap:2px } .logbtns .ic { width:28px; height:28px; font-size:13px }
   aside h2 { display:flex; align-items:center; justify-content:space-between; margin:0; padding:11px 14px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); border-bottom:1px solid var(--line) }
   #log { flex:1; overflow:auto; font-size:var(--logf, 12.5px) }
   .row { padding:.55em 14px; border-bottom:1px solid var(--line) }
