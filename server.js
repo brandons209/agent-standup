@@ -133,7 +133,7 @@ function stamp(proj, id) {
 const tlCache = new Map();   // "proj/id" → { st (file stamp), tl, at, ms, files[], feed, sq, json?, gz?, idle? }
 const MAX_CACHED_SESSIONS = 8;   // one tab per session: several are watched at once, and every eviction makes their pages load again
 const saidTs = new Map();   // "proj/id" → the newest event time a page has said in that session; outlives the timeline cache, so a reloaded or moved page does not read it again
-function noteSaid(key, v) { const n = +v; if (!(n > 0) || n > Date.now() + 60000) return saidTs.get(key) || 0; const m = Math.max(saidTs.get(key) || 0, n); saidTs.delete(key); saidTs.set(key, m); if (saidTs.size > 200) saidTs.delete(saidTs.keys().next().value); return m; }
+function noteSaid(key, v) { const n = +v; if (!(n > 0) || n > Date.now() + 5000) return saidTs.get(key) || 0; const m = Math.max(saidTs.get(key) || 0, n); saidTs.delete(key); saidTs.set(key, m); if (saidTs.size > 200) saidTs.delete(saidTs.keys().next().value); return m; }
 function timelineEntry(proj, id) {
   const key = proj + '/' + id, st = stamp(proj, id), hit = tlCache.get(key), now = Date.now();
   if (hit && ((hit.st === st && !(hit.recentUntil && now > hit.recentUntil)) || now - hit.at < Math.max(250, hit.ms * 2))) {   // nothing was written (a sub-agent's 4-minute silence rule can flip without any file change); or a very big session, which is not rebuilt on every poll
@@ -244,8 +244,8 @@ function sessionMtime(proj, id) {
 }
 function currentSession(projFilter, idFilter, stick) {
   const safe = (x) => typeof x === 'string' && /^[\w.\-]+$/.test(x) && x !== '..';
-  if (stick && safe(stick.id) && safe(stick.proj) && (!projFilter || stick.proj === projFilter || stick.proj.startsWith(projFilter + '-')) && Date.now() - sessionMtime(stick.proj, stick.id) < STICK_MS) return { proj: stick.proj, id: stick.id, mtime: sessionMtime(stick.proj, stick.id) };
   if (idFilter) return safe(idFilter) && safe(projFilter) && fs.existsSync(path.join(ROOT, projFilter, idFilter + '.jsonl')) ? { proj: projFilter, id: idFilter, mtime: Date.now() } : { missing: true };   // pinned: it is that session or nothing
+  if (stick && safe(stick.id) && safe(stick.proj) && (!projFilter || stick.proj === projFilter || stick.proj.startsWith(projFilter + '-')) && Date.now() - sessionMtime(stick.proj, stick.id) < STICK_MS) return { proj: stick.proj, id: stick.id, mtime: sessionMtime(stick.proj, stick.id) };
   let best = null;
   if (!fs.existsSync(ROOT)) return {};
   const consider = (proj, id, m) => { if (!best || m > best.mtime) best = { proj, id, mtime: m }; };
@@ -620,9 +620,9 @@ const charactersDir = () => process.env.AGENT_STANDUP_CHARACTERS || path.join(os
 const PACKS = { starter: 'characters', cats: 'cats' }, packDir = (name) => (PACKS[name] ? path.join(__dirname, 'examples', PACKS[name]) : null);
 function listCharacters(pack) {
   const dir = pack ? packDir(pack) : charactersDir(); let names = []; if (!dir) return { dir: '', max: CHAR_MAX, chars: [] }; try { names = fs.readdirSync(dir); } catch {}
-  const ok = names.filter((f) => CHAR_NAME.test(f)).filter((f) => { try { const st = fs.lstatSync(path.join(dir, f)); return st.isFile() && st.size <= CHAR_MAX; } catch { return false; } }).slice(0, 80);
-  const stem = (f) => f.replace(/\.[^.]+$/, ''), by = new Map(ok.map((f) => [stem(f).toLowerCase(), f]));
-  const chars = ok.filter((f) => !/-(talk|think|celebrate)$/i.test(stem(f))).map((f) => { const st = stem(f), l = st.toLowerCase();
+  const ok = names.filter((f) => CHAR_NAME.test(f)).filter((f) => { try { const st = fs.lstatSync(path.join(dir, f)); return st.isFile() && st.size <= CHAR_MAX; } catch { return false; } });
+  const stem = (f) => f.replace(/\.[^.]+$/, ''), by = new Map(ok.map((f) => [stem(f).toLowerCase(), f])), frame = (f) => { const m = stem(f).toLowerCase().match(/^(.+)-(talk|think|celebrate)$/); return !!m && by.has(m[1]); };   // a frame only when its character is there: "deep-think.png" alone is a character
+  const chars = ok.filter((f) => !frame(f)).slice(0, 80).map((f) => { const st = stem(f), l = st.toLowerCase();
     return { stem: st, file: f, talk: by.get(l + '-talk') || null, think: by.get(l + '-think') || null, celebrate: by.get(l + '-celebrate') || null, role: /^(lead|claude)$/.test(l) ? 'lead' : /^(you|human|user)$/.test(l) ? 'you' : 'agent' }; }).sort((a, b) => a.stem.localeCompare(b.stem));
   return { dir, max: CHAR_MAX, chars };
 }

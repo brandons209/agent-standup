@@ -35,18 +35,20 @@ async function url() {
   return `http://localhost:${port}/${q}`;
 }
 
+const OPENING = {}, SAFE_ID = /^[\w.-]{1,200}$/;   // OPENING: the slot of a tab still being made
 async function openPanel(pin) {   // pin: { id, proj } of the session to lock the tab to; none: the tab that follows the latest activity
-  pin = pin && typeof pin.id === 'string' ? pin : null;
-  const key = pin ? `${pin.proj || ''}/${pin.id}` : 'follow', old = panels.get(key);
-  if (old) { try { old.reveal(); return; } catch { panels.delete(key); } }   // a disposed panel falls through and is recreated
+  pin = pin && SAFE_ID.test(pin.id) && SAFE_ID.test(pin.proj) ? pin : null;
+  const key = pin ? `${pin.proj}/${pin.id}` : 'follow', old = panels.get(key);
+  if (old) { if (old === OPENING) return; try { old.reveal(); return; } catch { panels.delete(key); } }   // a disposed panel falls through and is recreated
+  panels.set(key, OPENING);   // taken before the awaits below: a second click while this one opens does not make a second tab
   let u;
-  try { u = await url(); } catch (e) { return vscode.window.showErrorMessage(e.message); }
+  try { u = await url(); } catch (e) { panels.delete(key); return vscode.window.showErrorMessage(e.message); }
   if (pin) u = u.replace(/([?&])proj=[^&]*&?/, '$1').replace(/[?&]$/, '') + `&pin=${encodeURIComponent(pin.id)}&proj=${encodeURIComponent(pin.proj || '')}`;   // one proj parameter only: the pinned session's project
-  const ext = await vscode.env.asExternalUri(vscode.Uri.parse(u + '&embed=1'));
+  let ext; try { ext = await vscode.env.asExternalUri(vscode.Uri.parse(u + '&embed=1')); } catch (e) { panels.delete(key); return vscode.window.showErrorMessage(e.message); }
   const row = pin && require('./server.js').boardRows().find((r) => r.id === pin.id), title = pin ? ('Standup: ' + ((row && row.title) || tt('Untitled session'))).slice(0, 40) : 'Agent Standup';
   const panel = vscode.window.createWebviewPanel('agentStandup', title, vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
   panels.set(key, panel); relay(panel.webview); panel.webview.html = frameHtml(ext.toString(true));
-  panel.onDidDispose(() => panels.delete(key));
+  panel.onDidDispose(() => { if (panels.get(key) === panel) panels.delete(key); });
   panel.onDidChangeViewState((e) => { if (e.webviewPanel.active) e.webviewPanel.webview.postMessage({ agentStandup: 'claim' }); });   // the tab you look at is the one that talks
 }
 const frameHtml = (src) => `<!doctype html><html><head><meta charset="utf-8">
@@ -58,7 +60,7 @@ const frameHtml = (src) => `<!doctype html><html><head><meta charset="utf-8">
 const DONATE_HOSTS = /^(www\.)?(buymeacoffee\.com|ko-fi\.com|paypal\.me|paypal\.com|github\.com)$/;
 const relay = (webview) => webview.onDidReceiveMessage((m) => {
   if (!m) return;
-  if (m.agentStandup === 'openSession' && typeof m.id === 'string') openPanel({ id: m.id, proj: typeof m.proj === 'string' ? m.proj : '' });
+  if (m.agentStandup === 'openSession') openPanel({ id: m.id, proj: m.proj });
   if (m.agentStandup === 'openBrowser') openBrowser();
   if (m.agentStandup === 'openCharacters') openCharacters();
   if (m.agentStandup === 'notify' && typeof m.text === 'string') vscode.window.showInformationMessage('Agent Standup: ' + m.text.slice(0, 120));

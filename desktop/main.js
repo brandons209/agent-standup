@@ -16,7 +16,11 @@ const winOpts = { width: 1280, height: 820, minWidth: 420, minHeight: 360, backg
   webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, autoplayPolicy: 'document-user-activation-required' } };
 function guard(wc) {   // links to the app open a window of their own; other https links open in the browser
   wc.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(`http://localhost:${port}/`)) { const w = new BrowserWindow({ ...winOpts, show: true }); guard(w.webContents); extra.add(w); w.on('closed', () => extra.delete(w)); w.loadURL(url); return { action: 'deny' }; }
+    if (url.startsWith(`http://localhost:${port}/`)) {
+      const pin = new URL(url).searchParams.get('pin'), same = pin && [...extra].find((w) => !w.isDestroyed() && new URL(w.webContents.getURL()).searchParams.get('pin') === pin);
+      if (same) { same.show(); same.focus(); return { action: 'deny' }; }   // one window per session: the one already open comes to the front
+      const w = new BrowserWindow({ ...winOpts, show: true }); guard(w.webContents); extra.add(w); w.on('closed', () => extra.delete(w)); w.loadURL(url); return { action: 'deny' };
+    }
     try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {} return { action: 'deny' };
   });
   wc.on('will-navigate', (e, url) => { if (!url.startsWith(`http://localhost:${port}/`)) { e.preventDefault(); try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {} } });
