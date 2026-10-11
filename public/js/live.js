@@ -118,9 +118,8 @@ function openWindow(proj, id) {
   else window.open('/?live=1&pin=' + encodeURIComponent(id) + '&proj=' + encodeURIComponent(proj), '_blank');
 }
 async function openSession(proj, id) {
-  if (S.pin && (S.pin.id !== id || S.pin.proj !== proj)) { openWindow(proj, id); return; }
-  S.pin = { id, proj }; setView('call');
-  if (S.live || S.demo) { if (S.demo) await setMode('live'); S.cur = null; fillProjects(); await followCurrent(); } else await setMode('live');
+  if (S.live && !S.demo && (!S.cur || S.cur.id !== id || S.cur.proj !== proj)) { openWindow(proj, id); return; }   // another session: a window of its own (this one keeps what it shows, pinned or following)
+  setView('call'); if (!S.live || S.demo) { S.stick = { proj, id }; S.cur = null; await setMode('live'); }   // from a replay or the demo: this window goes live on it
 }
 $('#boardv').onclick = (e) => { const n = e.target.closest('.bnew'); if (n) { e.stopPropagation(); openWindow(n.dataset.p, n.dataset.i); return; } const c = e.target.closest('.bcard'); if (c) openSession(c.dataset.p, c.dataset.i); };
 // Cmd/Ctrl+K: jump to any session from any view

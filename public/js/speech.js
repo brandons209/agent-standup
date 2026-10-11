@@ -44,7 +44,7 @@ setInterval(() => {
 }, 500);
 
 // ---------- speaking tiles ----------
-const mouths = new Map();
+const mouths = new Map(), camOf = (id) => { const p = paneOf(id); return p && p.querySelector('.pcam'); };
 // A custom character shows one of its pictures: talking (mouth open) wins, then celebrating, then thinking, else at rest; one it does not have falls back to rest.
 function setFrame(el, id, mouthOpen) {
   const svg = el && el.querySelector('svg'), c = S.agents[id] && S.agents[id].custom; if (!svg || !c) return; const t = $('#t-' + id);
@@ -56,9 +56,10 @@ function startTalk(id, text, label) {
   S.spokeAt = performance.now(); S.fill = 0; S.mused = false;
   if (!S.speakers.size && !(S.focusLock > Date.now())) setFocus(id); S.gone.delete(id); if (S.doneAt[id] != null) S.doneAt[id] = S.clock; t.style.display = ''; t.classList.add('speaking'); S.speakers.add(id); S.say[id] = { text, label }; AUD.duck(true);
   const shown0 = pieces(text), first = shown0.length > 1 ? shown0[0] : text; const b = t.querySelector('.bubble'); b.innerHTML = (label ? `<small>${esc(label)}</small>` : '') + esc(first);
-  const pane = paneOf(id), cam = pane && pane.querySelector('.pcam'); if (cam) { setPaneCaption(id, first); cam.classList.add('speaking'); }
+  const cam0 = camOf(id); if (cam0) { setPaneCaption(id, first); cam0.classList.add('speaking'); }
   const m = t.querySelector('.mouthE'); let open = false; clearInterval(mouths.get(id));
   mouths.set(id, setInterval(() => {
+    const cam = camOf(id);   // looked up each time: the pane may have gone to another agent since
     if (!m) { const lv0 = S.level[id], op = lv0 ? lv0() > 0.05 : (open = !open); setFrame(t, id, op); if (cam) setFrame(cam, id, op); return; }   // custom character: its open-mouth picture while the voice is loud
     const pm = cam && cam.querySelector('.mouthE'), lv = S.level[id]; if (lv) { const v = lv(); const ry = (.9 + Math.min(4.2, v * 28)).toFixed(1), rx = (4.8 - Math.min(1.1, v * 6)).toFixed(1); m.setAttribute('ry', ry); m.setAttribute('rx', rx); if (pm) { pm.setAttribute('ry', ry); pm.setAttribute('rx', rx); } }
     else { open = !open; m.setAttribute('ry', open ? 4.2 : 1.1); m.setAttribute('rx', open ? 4 : 4.7); if (pm) { pm.setAttribute('ry', open ? 4.2 : 1.1); pm.setAttribute('rx', open ? 4 : 4.7); } }
@@ -80,7 +81,7 @@ function confetti() {
 function stopTalk(id) {
   captionClear(id); S.spokeAt = performance.now();
   clearInterval(mouths.get(id)); mouths.delete(id); S.speakers.delete(id); if (!S.speakers.size) AUD.duck(false); if (S.focus === id && S.speakers.size) setFocus([...S.speakers][0]);
-  const cam = paneOf(id) && paneOf(id).querySelector('.pcam'); if (cam) { setPaneCaption(id, ''); cam.classList.remove('speaking'); const pm = cam.querySelector('.mouthE'); if (pm) { pm.setAttribute('ry', .9); pm.setAttribute('rx', 4.6); } }
+  const cam = camOf(id); if (cam) { setPaneCaption(id, ''); cam.classList.remove('speaking'); const pm = cam.querySelector('.mouthE'); if (pm) { pm.setAttribute('ry', .9); pm.setAttribute('rx', 4.6); } }
   const t = $('#t-' + id); if (!t) return;
   t.classList.remove('speaking'); const m = t.querySelector('.mouthE'); if (m) { m.setAttribute('ry', .9); m.setAttribute('rx', 4.6); }
   setFrame(t, id); if (cam) setFrame(cam, id);
