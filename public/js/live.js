@@ -15,13 +15,14 @@ const niceProj = (p) => (p === '_demo' ? '' : String(p).replace(/^-+/, '').repla
 async function fillProjects() {   // live view: follow the latest activity anywhere, or pin one project
   const sel = $('#liveProj'); let rows = []; try { rows = await (await fetch('/api/projects')).json(); } catch {}
   sel.innerHTML = `<option value="">${L('Tous les projets (le plus récent)', 'All projects (most recent)')}</option>` + rows.map((r) => `<option value="${esc(r.proj)}">${esc(niceProj(r.proj))}</option>`).join('');
-  sel.value = prefs.proj && rows.some((r) => r.proj === prefs.proj) ? prefs.proj : ''; sel.style.display = rows.length > 1 ? '' : 'none';
+  sel.value = prefs.proj && rows.some((r) => r.proj === prefs.proj) ? prefs.proj : ''; sel.style.display = rows.length > 1 && !S.pin ? '' : 'none';
 }
-$('#liveProj').onchange = () => { Q.delete('proj'); prefs.proj = $('#liveProj').value; S.pin = ''; savePrefs(); S.cur = null; followCurrent(); };
+$('#liveProj').onchange = () => { Q.delete('proj'); prefs.proj = $('#liveProj').value; savePrefs(); S.cur = null; followCurrent(); };
 async function followCurrent() {
-  const cur = await (await fetch('/api/current?proj=' + encodeURIComponent(Q.get('proj') || prefs.proj || '') + (S.pin ? '&id=' + encodeURIComponent(S.pin) : '') + (S.stick && !S.pin ? '&sproj=' + encodeURIComponent(S.stick.proj) + '&sid=' + encodeURIComponent(S.stick.id) : ''))).json();
+  const proj = S.pin ? S.pin.proj : Q.has('proj') ? Q.get('proj') : prefs.proj || '';   // an empty ?proj= means all projects
+  const cur = await (await fetch('/api/current?proj=' + encodeURIComponent(proj) + (S.pin ? '&id=' + encodeURIComponent(S.pin.id) : S.stick ? '&sproj=' + encodeURIComponent(S.stick.proj) + '&sid=' + encodeURIComponent(S.stick.id) : ''))).json();
+  if (cur.missing) { $('#eT').textContent = L('Cette session est terminée.', 'This session has ended.'); $('#eP').textContent = ''; $('#empty').classList.add('on'); return false; }
   if (!cur.id) { $('#empty').classList.add('on'); return false; } $('#empty').classList.remove('on');
-  if (S.pin && cur.id !== S.pin) S.pin = '';   // the pinned session is gone: follow the latest one instead of staying silently pinned
   if (S.cur && S.cur.id === cur.id && S.cur.proj === cur.proj) return false;
   if (!(await loadSession(cur.proj, cur.id))) return false; S.stick = { proj: cur.proj, id: cur.id };   // kept when a reload clears S.cur, so it does not hand the call to another session
   const start = liveStart(); if (!S.locked && !S.userPaused) run(start); return true;
@@ -49,6 +50,7 @@ function amend(e, was) {   // the server corrected an event the call already has
 }
 let polling = false;
 setInterval(async () => {
+  if (document.hidden && (S.hidTick = (S.hidTick || 0) + 1) % 5) return;   // a hidden window polls every 5th tick
   if (!S.live || polling) return; polling = true;
   try {
     const switched = await followCurrent(); if (S.offline) { S.offline = false; syncUI(); }
@@ -68,10 +70,8 @@ setInterval(async () => {
 }, 400);
 
 
-window.addEventListener('message', (e) => {   // the VS Code status bar asks to follow a given session
-  const d = e.data; if (!EMBED || e.source !== window.parent || !d || d.agentStandup !== 'pin' || typeof d.id !== 'string') return;
-  prefs.proj = typeof d.proj === 'string' ? d.proj : ''; S.pin = d.id; S.cur = null; setView('call'); if (S.live) { fillProjects(); followCurrent(); } else setMode('live');
-});
+window.addEventListener('focus', () => { if (!S.locked) claimAudio(); });
+window.addEventListener('message', (e) => { if (EMBED && e.source === window.parent && e.data && e.data.agentStandup === 'claim' && !S.locked) claimAudio(); });   // VS Code: this tab became the active one
 // ---------- meeting chrome: participants and a clock ----------
 function renderMeet() {
   const m = $('#meet'); if (!m) return; const n = Object.keys(S.agents).filter((id) => id !== 'user' && !S.gone.has(id) && ((S.status[id] && S.status[id] !== 'done') || id === 'main')).length;
@@ -103,15 +103,20 @@ async function renderBoardView() {
     const sum = BORDER.filter((k) => cnt[k]).map((k) => `<span class="stc ${k}">${BSTATE[k][0]} ${cnt[k]} ${L(BSTATE[k][2], BSTATE[k][1])}</span>`).join('');
     $('#boardv').innerHTML = `<div class="bsum">${sum || `<span>${L('Aucune session récente', 'No recent session')}</span>`}</div><div class="bgrid">${rows.map((r) => {
       const [ic, en, fr] = BSTATE[r.state], extra = r.state === 'blocked' ? ` · ${esc(r.tool)} ${agoStr(r.ageMs)}` : r.state === 'working' && r.tool ? ` · ${esc(r.tool)}` : r.state === 'idle' || r.state === 'turn' ? ` · ${agoStr(now - r.mtime)}` : '';
-      return `<div class="bcard ${r.state}" tabindex="0" role="button" data-p="${esc(r.proj)}" data-i="${esc(r.id)}"><div><span class="stc ${r.state}">${ic} ${L(fr, en)}${extra}</span></div><div class="bt">${esc(/^[0-9a-f]{8}-[0-9a-f-]{27}$/.test(r.title) ? L('Session sans titre', 'Untitled session') : r.title)}</div><div class="bp">${esc(niceProj(r.proj))}</div>${r.subTotal ? `<div class="bm">👥 ${r.subActive}/${r.subTotal} ${L('sous-agents actifs', 'sub-agents active')}</div>` : ''}</div>`; }).join('')}</div>`;
+      return `<div class="bcard ${r.state}" tabindex="0" role="button" data-p="${esc(r.proj)}" data-i="${esc(r.id)}"><button class="bnew" data-p="${esc(r.proj)}" data-i="${esc(r.id)}" title="${esc(L('Ouvrir dans une nouvelle fenêtre', 'Open in a new window'))}">⧉</button><div><span class="stc ${r.state}">${ic} ${L(fr, en)}${extra}</span></div><div class="bt">${esc(/^[0-9a-f]{8}-[0-9a-f-]{27}$/.test(r.title) ? L('Session sans titre', 'Untitled session') : r.title)}</div><div class="bp">${esc(niceProj(r.proj))}</div>${r.subTotal ? `<div class="bm">👥 ${r.subActive}/${r.subTotal} ${L('sous-agents actifs', 'sub-agents active')}</div>` : ''}</div>`; }).join('')}</div>`;
   } catch {} finally { boardBusy = false; }
 }
 $('#boardv').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('bcard')) { e.preventDefault(); e.target.click(); } };
+function openWindow(proj, id) {
+  if (EMBED) window.parent.postMessage({ agentStandup: 'openSession', proj, id }, '*');
+  else window.open('/?live=1&pin=' + encodeURIComponent(id) + '&proj=' + encodeURIComponent(proj), '_blank');
+}
 async function openSession(proj, id) {
-  prefs.proj = proj; S.pin = id; savePrefs(); setView('call');
+  if (S.pin && (S.pin.id !== id || S.pin.proj !== proj)) { openWindow(proj, id); return; }
+  S.pin = { id, proj }; setView('call');
   if (S.live || S.demo) { if (S.demo) await setMode('live'); S.cur = null; fillProjects(); await followCurrent(); } else await setMode('live');
 }
-$('#boardv').onclick = (e) => { const c = e.target.closest('.bcard'); if (c) openSession(c.dataset.p, c.dataset.i); };
+$('#boardv').onclick = (e) => { const n = e.target.closest('.bnew'); if (n) { e.stopPropagation(); openWindow(n.dataset.p, n.dataset.i); return; } const c = e.target.closest('.bcard'); if (c) openSession(c.dataset.p, c.dataset.i); };
 // Cmd/Ctrl+K: jump to any session from any view
 async function openSwitcher() {
   let sw = $('#switcher'); if (sw) { closeSwitcher(); return; }

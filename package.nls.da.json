@@ -2,6 +2,7 @@
   "extension.description": "Se din Claude Code-session som et levende, animeret teammøde: lederen giver ordrer, underagenter deltager, deler deres skærm og rapporterer tilbage — med stemmer, et træ over underagenter, tidslinje, resumé og videoeksport.",
   "command.open.title": "Agent Standup: Åbn live-opkald",
   "command.openInBrowser.title": "Agent Standup: Åbn i browser (stemme + lyd)",
+  "command.openSession.title": "Agent Standup: Åbn en session i sin egen fane",
   "command.focus.title": "Agent Standup: Vis sidepanel",
   "command.openCharacters.title": "Agent Standup: Åbn mappen med figurer (dit eget pixelart)",
   "view.name": "Live-opkald",

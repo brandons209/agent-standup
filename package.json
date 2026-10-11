@@ -37,7 +37,12 @@
     "commands": [
       {
         "command": "agentStandup.open",
-        "title": "%command.open.title%"
+        "title": "%command.open.title%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agentStandup.openSession",
+        "title": "%command.openSession.title%"
       },
       {
         "command": "agentStandup.openInBrowser",
@@ -52,6 +57,15 @@
         "title": "%command.openCharacters.title%"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentStandup.open",
+          "when": "view == agentStandup.view",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Agent Standup",
       "properties": {

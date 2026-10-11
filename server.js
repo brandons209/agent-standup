@@ -245,7 +245,7 @@ function sessionMtime(proj, id) {
 function currentSession(projFilter, idFilter, stick) {
   const safe = (x) => typeof x === 'string' && /^[\w.\-]+$/.test(x) && x !== '..';
   if (stick && safe(stick.id) && safe(stick.proj) && (!projFilter || stick.proj === projFilter || stick.proj.startsWith(projFilter + '-')) && Date.now() - sessionMtime(stick.proj, stick.id) < STICK_MS) return { proj: stick.proj, id: stick.id, mtime: sessionMtime(stick.proj, stick.id) };
-  if (idFilter && projFilter && projFilter !== '..' && idFilter !== '..' && /^[\w.\-]+$/.test(idFilter) && /^[\w.\-]+$/.test(projFilter) && fs.existsSync(path.join(ROOT, projFilter, idFilter + '.jsonl'))) return { proj: projFilter, id: idFilter, mtime: Date.now() };   // pinned from the board
+  if (idFilter) return safe(idFilter) && safe(projFilter) && fs.existsSync(path.join(ROOT, projFilter, idFilter + '.jsonl')) ? { proj: projFilter, id: idFilter, mtime: Date.now() } : { missing: true };   // pinned: it is that session or nothing
   let best = null;
   if (!fs.existsSync(ROOT)) return {};
   const consider = (proj, id, m) => { if (!best || m > best.mtime) best = { proj, id, mtime: m }; };

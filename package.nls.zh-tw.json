@@ -2,6 +2,7 @@
   "extension.description": "把你的 Claude Code 工作階段變成即時動畫團隊視訊通話：主代理下達指令，子代理加入、分享畫面並回報——附語音、子代理樹狀圖、時間軸、摘要與影片匯出。",
   "command.open.title": "Agent Standup: 開啟即時視訊通話",
   "command.openInBrowser.title": "Agent Standup: 在瀏覽器中開啟（語音 + 聲音）",
+  "command.openSession.title": "Agent Standup:在獨立分頁中開啟工作階段",
   "command.focus.title": "Agent Standup: 顯示側邊欄",
   "command.openCharacters.title": "Agent Standup: 開啟角色資料夾（你自己的像素畫）",
   "view.name": "即時視訊通話",

@@ -2,6 +2,7 @@
   "extension.description": "Watch your Claude Code session as a live, animated team call: the lead gives orders, sub-agents join, share their screen and report back — with voices, a sub-agent tree, timeline, recap and video export.",
   "command.open.title": "Agent Standup: Open live call",
   "command.openInBrowser.title": "Agent Standup: Open in browser (voice + sound)",
+  "command.openSession.title": "Agent Standup: Open a session in its own tab",
   "command.focus.title": "Agent Standup: Show sidebar",
   "command.openCharacters.title": "Agent Standup: Open characters folder (your own pixel art)",
   "view.name": "Live call",

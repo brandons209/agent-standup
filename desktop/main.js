@@ -5,18 +5,26 @@ const path = require('path'), fs = require('fs');
 const core = require('./core/server.js');
 const SELFTEST = process.argv.includes('--selftest') ? process.argv[process.argv.indexOf('--selftest') + 1] : null;   // renders the window to a PNG and quits: used to check a build
 let win = null, tray = null, port = 0, quitting = false, lastNeeds = 0, trayTimer = null;
+const extra = new Set();   // windows opened for one session each
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();   // a second copy only brings the first one to the front
 else app.on('second-instance', () => showWindow());
 
 function showWindow() { if (!win) createWindow(); if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+const winOpts = { width: 1280, height: 820, minWidth: 420, minHeight: 360, backgroundColor: '#12131a', title: 'Agent Standup',
+  webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, autoplayPolicy: 'document-user-activation-required' } };
+function guard(wc) {   // links to the app open a window of their own; other https links open in the browser
+  wc.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(`http://localhost:${port}/`)) { const w = new BrowserWindow({ ...winOpts, show: true }); guard(w.webContents); extra.add(w); w.on('closed', () => extra.delete(w)); w.loadURL(url); return { action: 'deny' }; }
+    try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {} return { action: 'deny' };
+  });
+  wc.on('will-navigate', (e, url) => { if (!url.startsWith(`http://localhost:${port}/`)) { e.preventDefault(); try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {} } });
+}
 function createWindow() {
-  win = new BrowserWindow({ width: 1280, height: 820, minWidth: 420, minHeight: 360, backgroundColor: '#12131a', title: 'Agent Standup', show: !SELFTEST,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, autoplayPolicy: 'document-user-activation-required' } });
+  win = new BrowserWindow({ ...winOpts, show: !SELFTEST });
   win.loadURL(`http://localhost:${port}/`);
-  win.webContents.setWindowOpenHandler(({ url }) => { try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {} return { action: 'deny' }; });
-  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(`http://localhost:${port}/`)) { e.preventDefault(); try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {} } });
+  guard(win.webContents);
   win.on('close', (e) => { if (!quitting && !SELFTEST && process.platform !== 'linux') { e.preventDefault(); win.hide(); } });   // closing the window keeps the indicator running (not on Linux: many desktops have no tray to come back from)
   win.on('closed', () => { win = null; });
 }
@@ -30,7 +38,7 @@ function refreshTray() {
   const text = [c.needs ? `✋${c.needs}` : '', c.working ? `⚙${c.working}` : '', !c.needs && !c.working && c.turn ? '✓' : ''].filter(Boolean).join(' ');
   if (process.platform === 'darwin') tray.setTitle(text ? ' ' + text : '');
   tray.setToolTip('Agent Standup' + (text ? ' — ' + [c.needs && `${c.needs} may need you`, c.working && `${c.working} working`, !c.needs && !c.working && c.turn && 'your turn'].filter(Boolean).join(', ') : ''));
-  if (c.needs > lastNeeds && !(win && win.isFocused()) && Notification.isSupported()) new Notification({ title: 'Agent Standup', body: 'An agent may be waiting for you ✋' }).show();
+  if (c.needs > lastNeeds && !BrowserWindow.getFocusedWindow() && Notification.isSupported()) new Notification({ title: 'Agent Standup', body: 'An agent may be waiting for you ✋' }).show();
   lastNeeds = c.needs;
 }
 function createTray() {
