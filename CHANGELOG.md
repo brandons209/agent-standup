@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.26.0
+- **One window per session.** Open any session in its own tab (VS Code) or window (desktop app, browser) with ⧉ on its card or next to the call title, or with the new command “Agent Standup: Open a session in its own tab”. A pinned window stays on its session and says so when it ends; tabs are ordinary editor tabs, so they can be maximised or moved to their own window. A reload or a moved tab carries on where it was, without reading anything twice.
+- **Screens stay shared while an agent thinks.** A shared screen stays up between two commands instead of closing and opening again, and hands over smoothly when someone else takes it. ⚙ → how long it stays while its agent thinks (90 s by default). Option: several screens at once, up to four.
+- **Gallery view** (▦ or G): every camera the same size, fitted to the window.
+- **The transcript** can dock at the bottom and be resized; text size buttons; spoken lines only; full messages rendered as markdown; chatter in the transcript (option); each name in its agent’s colour.
+- **Who is talking** is easier to follow: a glowing ring in the speaker’s colour, on their tile and on their shared screen.
+- **Characters think and celebrate.** Custom characters can have `name-think` and `name-celebrate` pictures next to `name-talk`; the drawn ones get a thinking pose and a little dance when they finish. Every sub-agent that finishes says a word of its own.
+- **Sub-agents are named after their character** (“Rainbow Dash”), or from your own list (⚙). No character is shown twice among the agents on the call, and a name frees up when its agent leaves.
+- **Sub-agents say what they are doing** in a live call, in turn, without spending any tokens (⚙, on by default).
+- ⚙ → how long a finished agent stays on the call (30 s by default; it was 2 minutes).
+- Fix: a live line could go missing until a reload when the page failed halfway through an update. Fix: long lines no longer freeze on their first part. Fix: the lead showed “waiting” while it worked with background agents. Fix: the ambience volume now covers every office sound. Fix: the laptop option also puts a laptop in front of Claude and you. Fix: speech no longer reads link brackets, list marks or tables.
+- The page is split into a stylesheet and one script per part; the landing page has its character animations again.
+
 ## 1.25.8
 - **Inner thoughts.** In a live call, an agent that has been at work for a while thinks to itself: a lighter, italic bubble that is not said out loud. What it thinks is real. When the session keeps the agent’s own reasoning, the bubble shows it, sentence by sentence, before anything else; Claude Code only keeps that text for some of the lead’s steps and almost never for sub-agents, so the rest of the time the thought is about what the agent is on: the command it is waiting for, the files it goes between, its current to-do item, a failure, its task. About one thought in five escapes as a mumble: the character’s own voice, low and muffled, lips closed, cut as soon as anyone speaks. Never while the agent talks, two at most on screen, off in Quiet or with ⚙ → Little lines & animations.
 - **Your own lines are always voiced.** An order typed during a long command is handed over when the command returns, stamped with the time you typed it: two minutes “late”, so the call showed it without a voice, as it does when it is far behind. It now takes its place when the lead gets it. And whatever the backlog, a line of yours is never skipped nor muted: it is said, shortened if need be.
