@@ -60,8 +60,9 @@ function logRow(i) {
   const full = prefs.logFull && e.kind !== 'tools' && e.text, body = e.kind === 'tools' ? e.tools.map((t) => t.name).join(', ') : full ? (e.kind === 'order' ? `${nameOf(e.to)}, ` : '') + String(e.text).trim() : spoken(e), k = { order: L('tâche', 'task'), report: L('rapport', 'report'), say: '', user: L('brief', 'brief'), tools: L('outils', 'tools') }[e.kind];
   return `<div class="row ${e.kind}" data-i="${i}" data-a="${esc(e.agent)}">${whoTag(e.agent)}${arrow} <span class="k">${k}</span><div class="txt${full ? ' full md' : ''}">${full ? mdHTML(body) : esc(body)}</div></div>`;
 }
+const logAtEnd = (log) => log.scrollHeight - log.scrollTop - log.clientHeight < 40;   // the reader is at the bottom: new lines keep it there; scrolled up to read, it stays put
 function renderLog(full) {
-  const log = $('#log'); let from = S.live ? Math.max(0, S.events.length - 300) : 0;
+  const log = $('#log'), stick = full || logAtEnd(log); let from = S.live ? Math.max(0, S.events.length - 300) : 0;
   if (S.live && prefs.logText) { let n = 0; from = S.events.length; while (from > 0 && n < 300) if (!quiet(S.events[--from])) n++; }   // spoken lines only: the last 300 of them, however many tool calls came between
   if (full || S.logTo < from || S.logTo > S.events.length) { log.innerHTML = ''; S.logTo = from; }
   const html = [];
@@ -71,12 +72,12 @@ function renderLog(full) {
   }
   log.insertAdjacentHTML('beforeend', html.join('')); S.logTo = S.events.length;
   if (S.live) while (log.children.length > 320) log.firstChild.remove();
-  filterLog();
+  filterLog(); if (S.live && stick) log.scrollTop = log.scrollHeight;
 }
 function logChat(id, line, label) {   // banter is not in the session: with the option on, it is written into the transcript as it is said
-  if (!prefs.logChat) return; const log = $('#log');
+  if (!prefs.logChat) return; const log = $('#log'), stick = logAtEnd(log);
   log.insertAdjacentHTML('beforeend', `<div class="row chat" data-a="${esc(id)}">${whoTag(id)} <span class="k">${esc(label || '')}</span><div class="txt">${esc(line)}</div></div>`);
-  if (S.live) while (log.children.length > 320) log.firstChild.remove(); filterLog();
+  if (S.live) while (log.children.length > 320) log.firstChild.remove(); filterLog(); if (stick) log.scrollTop = log.scrollHeight;
 }
 function filterLog() { const q = $('#logQ').value.trim().toLowerCase(); for (const r of $('#log').children) r.style.display = !q || r.textContent.toLowerCase().includes(q) ? '' : 'none'; }
 $('#logQ').oninput = filterLog;
@@ -88,7 +89,7 @@ function paintStatus() {
   }
   paintStates(); galRefit();
   const prev = $('.row.now'); if (prev) prev.classList.remove('now');
-  const now = $(`.row[data-i="${S.idx}"]`); if (now) { now.classList.add('now'); if (document.body.classList.contains('log')) now.scrollIntoView({ block: 'nearest' }); }
+  const now = $(`.row[data-i="${S.idx}"]`); if (now) { now.classList.add('now'); if (!S.live && document.body.classList.contains('log')) now.scrollIntoView({ block: 'nearest' }); }   // live, the transcript follows its newest line instead (renderLog)
   later('detail', renderDetail); later('tree', renderTree); later('meet', renderMeet, 400); drawGantt();
   $('#seek').value = S.idx; $('#pos').textContent = `${Math.min(S.idx + 1, S.events.length)} / ${S.events.length}`;
 }

@@ -40,7 +40,7 @@
   /* ---------- layout ---------- */
   main { flex:1; display:flex; min-height:0; position:relative }
   #cols { flex:1; display:flex; min-width:0; min-height:0 }
-  #center { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; position:relative; overflow:hidden }
+  #center { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; position:relative; overflow:hidden; container-type:size }   /* shared screens are sized against the room left here, not the window (a transcript docked below takes some) */
   #stage { flex:1; overflow:auto; padding:14px; display:grid; gap:12px; align-content:start; grid-auto-flow:dense;
            grid-template-columns:repeat(var(--cols,4),1fr); grid-auto-rows:var(--rh,160px) }
   body.gallery #stage { overflow:hidden; align-content:center; justify-content:center; grid-template-columns:repeat(var(--cols,4), minmax(0, calc(var(--rh,160px) * 4 / 3))) }
@@ -86,8 +86,8 @@
   .prop.waiting { animation:tick 2.4s ease-in-out infinite } @keyframes tick { 50% { transform:rotate(180deg) } }
   .prop.cheer { animation:cheer 1.1s ease-out both } @keyframes cheer { 0% { transform:scale(.3) translateY(10px); opacity:0 } 40% { transform:scale(1.25); opacity:1 } 100% { transform:translateY(-14px); opacity:0 } }
   /* ---------- screen sharing (presentation mode) ---------- */
-  #shares { display:none; flex:0 1 auto; min-height:96px; overflow:hidden; height:clamp(190px,46vh,430px); background:radial-gradient(ellipse at 50% 0,#1b2033,#0b0d14); border-bottom:1px solid var(--line); padding:12px 16px; gap:10px; grid-template-columns:repeat(var(--sc,1),minmax(0,1fr)); grid-auto-rows:minmax(0,1fr) }
-  #shares.on { display:grid; animation:fadein .3s } #shares.pic, #shares[data-n="3"], #shares[data-n="4"] { height:clamp(240px,60vh,640px) }
+  #shares { display:none; flex:0 1 auto; min-height:96px; overflow:hidden; height:clamp(min(190px, 70cqh),46cqh,430px); background:radial-gradient(ellipse at 50% 0,#1b2033,#0b0d14); border-bottom:1px solid var(--line); padding:12px 16px; gap:10px; grid-template-columns:repeat(var(--sc,1),minmax(0,1fr)); grid-auto-rows:minmax(0,1fr) }
+  #shares.on { display:grid; animation:fadein .3s } #shares.pic, #shares[data-n="3"], #shares[data-n="4"] { height:clamp(min(240px, 70cqh),60cqh,640px) }
   #shares[data-n="2"], #shares[data-n="3"], #shares[data-n="4"] { --sc:2 } #shares[data-n="3"] .pane:last-child { grid-column:span 2 } #shares:not([data-n="1"]) .pwin { flex-basis:100% }   /* several screens: two columns, the third one across */
   .pane { position:relative; display:flex; justify-content:center; min-width:0; min-height:0; overflow:hidden; transition:opacity .18s } .pane.swap { opacity:0 }   /* changing hands: the content fades, the stage stays */
   .pwin { flex:0 1 900px; display:flex; flex-direction:column; border-radius:10px; overflow:hidden; background:#0d1117; box-shadow:0 18px 50px rgba(0,0,0,.6), 0 0 0 2px rgba(240,160,32,.55) }
@@ -111,7 +111,7 @@
   .pbadge { margin-left:auto; flex:none; background:rgba(240,160,32,.94); color:#201400; font-weight:600; font-size:11px; padding:1px 10px; border-radius:99px; white-space:nowrap }
   .pane.has-todo .pcam { right:270px } .pane .pcam { position:absolute; right:28px; bottom:22px; width:158px; height:118px; z-index:2; cursor:default; box-shadow:0 8px 24px rgba(0,0,0,.6); animation:none }   /* .pane: it is also a .tile, whose rules come later */
   .pcap { display:none; position:absolute; left:24px; right:200px; bottom:20px; z-index:2; background:rgba(10,11,16,.84); backdrop-filter:blur(6px); border-radius:10px; padding:6px 12px; font-size:13px; max-height:calc(100% - 34px); overflow-y:auto; scrollbar-width:thin } .pcap:not(:empty) { display:block }
-  body.narrow #shares { height:clamp(150px,36vh,260px) } body.narrow .pane .pcam { width:110px; height:82px } body.narrow .pcap { left:14px; right:146px; font-size:12.5px }
+  body.narrow #shares { height:clamp(min(150px, 70cqh),36cqh,260px) } body.narrow .pane .pcam { width:110px; height:82px } body.narrow .pcap { left:14px; right:146px; font-size:12.5px }
   body.narrow .ptodo { display:none } body.narrow .pane.has-todo .pcam { right:28px }
   #shares:not([data-n="1"]) .ptodo { display:none } #shares:not([data-n="1"]) .pane .pcam { width:96px; height:72px; right:10px; bottom:10px } #shares:not([data-n="1"]) .pane.has-todo .pcam { right:10px } #shares:not([data-n="1"]) .pcap { left:10px; right:116px; bottom:10px; font-size:12px }   /* too narrow for a terminal and a task list side by side: the terminal keeps the room */
   #gantt { display:none; flex:none; width:100%; background:#0f1118; border-top:1px solid var(--line); cursor:pointer }
