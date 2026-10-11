@@ -34,7 +34,7 @@ const toolLabel = (b, ts) => {
     case 'Write': out.d = { kind: 'write', file: i.file_path, text: clip(i.content, 800) }; break;
     case 'Grep': out.d = { kind: 'grep', pattern: clip(i.pattern, 100), path: i.path, glob: i.glob }; break;
     case 'Glob': out.d = { kind: 'glob', pattern: clip(i.pattern, 100), path: i.path }; break;
-    case 'TodoWrite': out.d = { kind: 'todo', items: (i.todos || []).slice(0, 20).map((x) => ({ c: clip(x.content, 120), s: x.status })) }; break;
+    case 'TodoWrite': out.d = { kind: 'todo', items: (i.todos || []).slice(0, 20).map((x) => ({ c: clip(x.content, 120), s: ['pending', 'in_progress', 'completed'].includes(x.status) ? x.status : 'pending' })) }; break;
     case 'WebFetch': out.d = { kind: 'web', url: i.url }; break;
     case 'WebSearch': out.d = { kind: 'web', query: i.query }; break;
     case 'NotebookEdit': out.d = { kind: 'edit', file: i.notebook_path, old: '', new: clip(i.new_source, 500) }; break;
