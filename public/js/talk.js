@@ -137,12 +137,30 @@ const LEAD = {
   en: { in: ['Got it.', 'Okay.', 'On it.', 'Sure.', 'Right.'], read: 'Let me look at ', edit: 'I’m editing ', write: 'I’m writing ', cmd: 'I’m running ', note: 'I’m running a command: ', grep: 'Let me search the code.', glob: 'Let me see which files we have.', todo: 'Let me lay out a plan.', web: 'Let me check the web.', question: 'I have a question for you.', any: 'Let me get started.', and: ' and ' },
   fr: { in: ['D’accord.', 'Compris.', 'Très bien.', 'Entendu.', 'Ça marche.'], read: 'Je regarde ', edit: 'Je modifie ', write: 'J’écris ', cmd: 'Je lance ', note: 'Je lance une commande : ', grep: 'Je cherche dans le code.', glob: 'Je regarde quels fichiers on a.', todo: 'Je fais mon plan.', web: 'Je vais voir sur le web.', question: 'J’ai une question pour vous.', any: 'Je m’y mets.', and: ' et ' },
 };
-async function leadAck(ev, token) {
-  if (!prefs.banter || !S.agents.main) { S.owed = false; return; } if (S.hurry || S.boost > 1 || !nearLive() || S.speakers.size) return; S.owed = false;   // reading your order took a while: the first tool is rarely less than 6 s old; if now is a bad moment, the next tool will do
-  const W = LEAD[FR() ? 'fr' : 'en'], d = ev.tools[0].d || {}, k = d.kind === 'text' ? d.what : d.kind; let what = W[k] || W.any;
+function toolLine(ev, W) {   // what an agent is doing, said in its own words, from its tool call
+  const d = ev.tools[0].d || {}, k = d.kind === 'text' ? d.what : d.kind; let what = W[k] || W.any;
   if (k === 'read' || k === 'edit' || k === 'write') { const files = [...new Set(ev.tools.filter((t) => (t.d || {}).kind === k).map((t) => base(t.d.file)).filter(Boolean))].slice(0, 2); what = files.length ? what + files.join(W.and) + '.' : W.any; }
   else if (k === 'cmd') { const note = (d.note || '').trim().replace(/[.\s]+$/, ''), cmd = String(d.text || '').trim().split(/\s+/).slice(0, 2).join(' ').slice(0, 26); what = note ? W.note + note + '.' : cmd ? what + cmd + '.' : W.any; }
-  await sayLine('main', `${W.in[hash('k' + ev.ts) % W.in.length]} ${what}`, '💬', token);
+  return what;
+}
+async function leadAck(ev, token) {
+  if (!prefs.banter || !S.agents.main) { S.owed = false; return; } if (S.hurry || S.boost > 1 || !nearLive() || S.speakers.size) return; S.owed = false;   // reading your order took a while: the first tool is rarely less than 6 s old; if now is a bad moment, the next tool will do
+  const W = LEAD[FR() ? 'fr' : 'en']; await sayLine('main', `${W.in[hash('k' + ev.ts) % W.in.length]} ${toolLine(ev, W)}`, '💬', token);
+}
+// Live: a sub-agent at work says now and then what it is doing, in turn with everyone else. Only when the call is up to date and quiet, never twice in a row
+// from the same agent, and a line that cannot be said now is dropped, not kept for later: five agents at work must not fill the call.
+const NARR = {
+  en: { read: 'Reading ', edit: 'Editing ', write: 'Writing ', cmd: 'Running ', note: 'Running: ', grep: 'Searching the code.', glob: 'Looking at which files we have.', todo: 'Updating my plan.', web: 'Checking the web.', question: 'I have a question.', any: 'On it.', and: ' and ',
+    err: ['Hmm, that failed. Checking why.', 'That did not work. Let me look.', 'An error. Give me a second.', 'Not what I expected. Looking into it.'] },
+  fr: { read: 'Je lis ', edit: 'Je modifie ', write: 'J’écris ', cmd: 'Je lance ', note: 'Je lance : ', grep: 'Je cherche dans le code.', glob: 'Je regarde quels fichiers on a.', todo: 'Je mets mon plan à jour.', web: 'Je vais voir sur le web.', question: 'J’ai une question.', any: 'Je m’y mets.', and: ' et ',
+    err: ['Hmm, ça a planté. Je regarde pourquoi.', 'Ça n’a pas marché. Je regarde.', 'Une erreur. Deux secondes.', 'Pas ce que j’attendais. Je creuse.'] },
+};
+async function narrate(ev, token, err) {
+  const id = ev.agent, t = $('#t-' + id), now = performance.now();
+  if (!S.live || !prefs.narrate || !prefs.banter || prefs.chat === 'quiet' || !isSub(id) || !caughtUp() || S.hurry || S.boost > 1 || S.speakers.size || TH.voice) return;
+  if (now - S.spokeAt < 5000 || now - (S.narrAt || 0) < 6000 || now - ((S.narrBy || {})[id] || 0) < 12000 / chatMul() || !t || t.style.display === 'none' || t.classList.contains('musing')) return;
+  const W = NARR[FR() ? 'fr' : 'en'], line = err ? W.err[hash('e' + ev.ts) % W.err.length] : toolLine(ev, W); if (!line) return;
+  S.narrAt = now; (S.narrBy = S.narrBy || {})[id] = now; await sayLine(id, line, '🛠', token);
 }
 async function wrapUp(token) {   // live, once the lead is done: the part of its last message that the clipped reading left out, so you know what was done
   if (!S.wrap || S.speakers.size || !prefs.voice && !prefs.banter) return false; S.wrap = false;

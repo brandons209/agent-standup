@@ -4,7 +4,7 @@
 const test = require('node:test'), assert = require('node:assert'), fs = require('fs'), os = require('os'), path = require('path');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'as-live-'));
 process.env.AGENT_STANDUP_PREFS = path.join(tmp, 'prefs.json'); process.env.AGENT_STANDUP_KOKORO_DIR = path.join(tmp, 'kokoro'); process.env.AGENT_STANDUP_PROJECTS = path.join(tmp, 'projects');
-fs.writeFileSync(process.env.AGENT_STANDUP_PREFS, JSON.stringify({ lang: 'en', voice: false, chat: 'normal', banter: true, _t: Date.now() }));   // no voice: a line lasts as long as its text, on every machine
+fs.writeFileSync(process.env.AGENT_STANDUP_PREFS, JSON.stringify({ lang: 'en', voice: false, chat: 'normal', banter: true, narrate: false, _t: Date.now() }));   // no voice: a line lasts as long as its text, on every machine
 let puppeteer = null; for (const m of ['puppeteer-core', path.join(process.env.PUPPETEER_DIR || '/tmp/as/pp', 'node_modules/puppeteer-core')]) { try { puppeteer = require(m); break; } catch {} }
 const CHROME = [process.env.CHROME_PATH, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium-browser', '/usr/bin/chromium', 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'].find((p) => p && fs.existsSync(p));
 const missing = !puppeteer ? 'puppeteer-core is not installed (npm i)' : !CHROME ? 'no Chrome found (set CHROME_PATH)' : '';
@@ -157,6 +157,16 @@ test('live call', { skip: missing || false, timeout: 600000 }, async (t) => {
     await page.evaluate(() => { S.cur = null; }); await wait(2500);   // a reload of the feed (restart, rewritten transcript)
     assert.equal(await page.evaluate(() => S.cur && S.cur.proj), a.proj, 'a reload does not hand the call to the other session');
     await page.close(); assert.deepEqual(errors, []);
+  });
+
+  await t.test('a sub-agent at work says what it is doing, in turn: never over another line, never twice in a row', async () => {
+    const s = session(); s.user('hello', Date.now() - 600000); s.say('Ready.', { at: Date.now() - 590000, end: true }); const c = await open(s);
+    await c.page.evaluate(() => { prefs.narrate = true; window.__talking = 0; window.__overlap = 0; const st = window.startTalk, sp = window.stopTalk; window.startTalk = function (id) { if (S.speakers.size && !S.speakers.has(id)) window.__overlap++; return st.apply(this, arguments); }; window.stopTalk = sp; });
+    s.user('Check the login'); await wait(1500); s.launch(1, 'Check login', 'Look at the login page'); await wait(1500);
+    for (let k = 0; k < 4; k++) { const id = s.tool('Read', { file_path: `/x/src/file${k}.js` }, { sub: 1 }); await wait(400); s.result(id, 'ok', { sub: 1 }); await wait(3500); }
+    await c.quiet(); const said = await c.said(), mine = said.filter((x) => x.label === '🛠');
+    assert.ok(mine.length >= 1, 'it said what it was doing'); assert.ok(mine.every((x) => /^Reading file\d\.js\.$/.test(x.line)), JSON.stringify(mine));
+    assert.ok(mine.length <= 2, 'at most one line per 12 s from one agent'); assert.equal(await c.page.evaluate(() => window.__overlap), 0, 'never over someone else'); await c.close();
   });
 
   await t.test('pausing and resuming at the end of a live call does not repeat the last line', async () => {
