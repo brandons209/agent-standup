@@ -30,7 +30,7 @@ async function run(i) {
     const backlog = S.live ? S.events.length - i : 0, quick = S.live ? Math.min(1, 40 / Math.max(1, backlog)) : 1;   // live: hundreds of tool events from parallel sub-agents must not take minutes to scroll past
     if (ev.kind === 'results') { applyResults(ev, S.boost > 1); if (quick === 1 && ev.items.some((it) => it.err)) { await narrate(ev, token, true); if (token !== S.token) return; } await sleep((S.boost === 1 && S.shares.has(ev.agent) && ev.items.some((it) => it.img) ? (S.live ? 900 : 1800) : S.demo ? 900 : S.live ? 30 * quick : 80) / spd()); i++; continue; }   // a picture gets a moment on screen
     if (ev.kind === 'tools') { applyStatus(ev); tickTools(ev); AUD.click(); OFFICE.kick(ev.tools[ev.tools.length - 1].name); paintStatus(); if (S.live && S.owed && ev.agent === 'main') { await leadAck(ev, token); if (token !== S.token) return; } if (quick === 1) { await narrate(ev, token); if (token !== S.token) return; await smallTalk(token); } await sleep((S.demo ? 1100 : S.live ? 110 * quick : 250) / spd()); i++; continue; }
-    const group = [ev]; let j = i + 1;   // sub-agents talking back-to-back were running in parallel: they talk over each other
+    const group = [ev], fin = []; let j = i + 1;   // sub-agents talking back-to-back were running in parallel: they talk over each other
     if (ev.kind === 'order') {   // several orders in a row (a parallel launch): the new agents all appear now, the first order is read, the others are named in one line
       while (j < Math.min(S.events.length, i + 40) && group.length < 8) { const e2 = S.events[j]; if (e2.kind === 'usage' || e2.kind === 'compact') { tally(e2); j++; continue; } if (e2.kind === 'order' && e2.agent === ev.agent) { group.push(e2); j++; } else break; }
       if (group.length > 1) { for (const g of group) applyStatus(g); paintStatus(); }
@@ -39,7 +39,7 @@ async function run(i) {
       while (j < Math.min(S.events.length, i + 28) && group.length < 3) {
         const e2 = S.events[j];
         if (e2.kind === 'usage' || e2.kind === 'compact') { tally(e2); j++; continue; }
-        if (e2.kind === 'finish') { applyStatus(e2); j++; continue; }
+        if (e2.kind === 'finish') { applyStatus(e2); if (isSub(e2.agent)) fin.push(e2.agent); j++; continue; }
         if (e2.kind === 'tools') { tally(e2); tickTools(e2); applyStatus(e2); j++; continue; }
         if (e2.kind === 'results') { tally(e2); applyResults(e2, true); j++; continue; }
         if (e2.kind !== 'order' && isSub(e2.agent) && !group.some((g) => g.agent === e2.agent)) { group.push(e2); j++; } else break;
@@ -54,7 +54,7 @@ async function run(i) {
       if (g.kind === 'order') { S.status[g.to] = 'working'; AUD.join(); setTimeout(() => { paintStatus(); fly(g.agent, g.to, '📨'); popTile(g.to); }, 30); }
       if (g.kind === 'report') { AUD.ding(); setTimeout(() => { fly(g.agent, g.to, '✅'); popTile(g.agent); }, 30); }
       const said = clipSpeech(line, S.pace); if (g.agent === 'main' && g.kind === 'say') { const full = plain(g.text), key = said.replace(/…$/, '').trim().slice(-30), pos = key ? full.indexOf(key) : -1, n = pos >= 0 ? pos + key.length : said.length; S.mainSaid = { ev: g, said: n, full: n >= full.length - 5 }; }
-      return speakLine(said, S.agents[g.agent], true, token, sessFr(said, g), g.kind === 'user').then(() => { if (token === S.token) stopTalk(g.agent); if (g.kind === 'report') S.reportAt[g.agent] = performance.now(); });
+      return speakLine(said, S.agents[g.agent], true, token, sessFr(said, g), g.kind === 'user').then(() => { if (token !== S.token) return; stopTalk(g.agent); if (g.kind === 'report') S.reportAt[g.agent] = performance.now(); });
     };
     let plays;
     if (ev.kind === 'order' && group.length > 1) {   // the first order in full, then "Also Remy on X, Iris on Y"
@@ -64,7 +64,8 @@ async function run(i) {
     }
     else if (S.live) { plays = []; let chain = Promise.resolve(); for (const g of group) { chain = chain.then(() => (token === S.token ? playOne(g) : null)); plays.push(chain); } } else plays = group.map(playOne);   // live: one voice at a time so each can be heard; replay keeps the overlapping chatter
     S.idx = j - 1; paintStatus(); await Promise.all(plays); if (token !== S.token) return;
-    for (const g of (ev.kind === 'order' ? group.slice(0, 3) : group)) { await converse(g, token); if (token !== S.token) return; }   // a parallel launch: the first three answer, as long as the call keeps up
+    for (const g of (ev.kind === 'order' ? group.slice(0, 3) : group)) { const late = S.late.indexOf(g); if (late >= 0) S.late.splice(late, 1); await converse(g, token); if (token !== S.token) return; }   // a parallel launch: the first three answer, as long as the call keeps up; a line that became a report while it was read answers here, once
+    for (const id of fin) { await doneQuip(id, token); if (token !== S.token) return; }
     i = j;
   }
   if (token === S.token) {

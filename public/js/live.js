@@ -6,7 +6,7 @@ async function loadSession(proj, id) {
   const r = await fetch(`/api/session?proj=${encodeURIComponent(proj)}&id=${id}`), data = await r.json();
   if (mine !== S.loadN || data.error) return false; S.saidSrv = +r.headers.get('x-said') || 0;
   closeAllShares(); S.term = {}; S.focus = null; S.agents = {}; S.castN = 0; for (const k in nameBook) delete nameBook[k]; [{ id: 'user' }, ...data.agents].forEach((a) => (S.agents[a.id] = persona(a)));
-  clearThoughts(); Object.assign(TH, { since: {}, next: {}, said: {}, last: 0 }); S.events = data.events; stampT(0); S.byK = new Map(data.events.map((e) => [e.k, e])); S.seq = data.seq || 0; S.ep = data.ep || ''; S.sawEnd = data.events.some((e) => e.end); S.late = []; S.pos = 0; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
+  clearThoughts(); Object.assign(TH, { since: {}, next: {}, said: {}, last: 0 }); S.events = data.events; stampT(0); S.byK = new Map(data.events.map((e) => [e.k, e])); S.seq = data.seq || 0; S.pollFails = 0; S.ep = data.ep || ''; S.sawEnd = data.events.some((e) => e.end); S.late = []; S.pos = 0; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
   const opt = $('#sessions').selectedOptions[0]; S.title = (S.live ? niceProj(proj) : opt && opt.dataset.title) || '';
   if (proj === '_demo') S.events.forEach((e) => { if (e.fr) trMem.set(baseText(e), e.fr); });   // the demo ships its own French
   $('#subtitle').textContent = S.title; recomputeStatus(0); buildStage(); renderHighlights(); setFocus('main'); renderLog(true); computeGantt(); layout(); paintStatus(); prefetchTr(0); return true;
@@ -21,9 +21,10 @@ $('#liveProj').onchange = () => { Q.delete('proj'); prefs.proj = $('#liveProj').
 async function followCurrent() {
   const proj = S.pin ? S.pin.proj : Q.has('proj') ? Q.get('proj') : prefs.proj || '';   // an empty ?proj= means all projects
   const cur = await (await fetch('/api/current?proj=' + encodeURIComponent(proj) + (S.pin ? '&id=' + encodeURIComponent(S.pin.id) : S.stick ? '&sproj=' + encodeURIComponent(S.stick.proj) + '&sid=' + encodeURIComponent(S.stick.id) : ''))).json();
-  if (cur.missing) { $('#eT').textContent = L('Cette session est terminée.', 'This session has ended.'); $('#eP').textContent = ''; $('#empty').classList.add('on'); return false; }
+  if (cur.missing) { if (S.cur) { pause(); S.cur = null; } $('#eT').textContent = L('Cette session est terminée.', 'This session has ended.'); $('#eP').textContent = ''; $('#empty').classList.add('on'); return false; }
   if (!cur.id) { $('#empty').classList.add('on'); return false; } $('#empty').classList.remove('on');
   if (S.cur && S.cur.id === cur.id && S.cur.proj === cur.proj) return false;
+  S.keep = S.stick && S.stick.id === cur.id && S.stick.proj === cur.proj ? S.since : 0;   // the same session again (the server lost our place): what this page already said stays said, even if the server forgot it
   if (!(await loadSession(cur.proj, cur.id))) return false; S.stick = { proj: cur.proj, id: cur.id };   // kept when a reload clears S.cur, so it does not hand the call to another session
   const start = liveStart(); if (!S.locked && !S.userPaused) run(start); return true;
 }
@@ -35,7 +36,7 @@ function midWork() {   // someone is in the middle of something: the session doe
 }
 function liveStart() {   // S.saidSrv: how far this session was already said (by any page, before a reload); S.join: you are joining now, so what came before is past
   const n = S.events.length, now = Date.now() - (midWork() ? JOIN_BACK_MS : 0);
-  if (!S.locked) { S.since = S.join ? Math.max(S.saidSrv || 0, now) : S.saidSrv || now; S.join = false; }
+  if (!S.locked) { S.since = S.join ? Math.max(S.saidSrv || 0, now) : Math.max(S.saidSrv || now, S.keep || 0); S.join = false; } S.keep = 0;
   const since = S.locked ? Date.now() : S.since; let i = n; while (i > Math.max(0, n - 16) && S.events[i - 1].ts > since) i--;   // by the session's own stamps, as run() marks them: _t depends on the order this page received events in, so it would not survive a reload
   recomputeStatus(i); S.idx = S.pos = i; S.from = since; trNew(Math.max(0, n - 16)); paintStatus(); return i;
 }
@@ -70,7 +71,7 @@ setInterval(async () => {
     paintStatus();
   } catch (err) {
     console.error('live poll', err); if (!S.offline) { S.offline = true; syncUI(); }
-    if (d && d.seq && S.seq !== d.seq && ++S.pollFails >= 3) { S.seq = d.seq; S.pollFails = 0; }   // a batch that keeps failing is passed over, so the call does not stall on it
+    if (d && d.seq && S.seq !== d.seq && (S.pollFails = (S.pollFails || 0) + 1) >= 3) { S.seq = d.seq; S.pollFails = 0; }   // a batch that keeps failing is passed over, so the call does not stall on it
   } finally { polling = false; }
 }, 400);
 
@@ -80,7 +81,7 @@ window.addEventListener('message', (e) => { if (EMBED && e.source === window.par
 // ---------- meeting chrome: participants and a clock ----------
 function renderMeet() {
   const m = $('#meet'); if (!m) return; const n = Object.keys(S.agents).filter((id) => id !== 'user' && !S.gone.has(id) && ((S.status[id] && S.status[id] !== 'done') || id === 'main')).length;
-  const e0 = S.events[0], cur = S.events[Math.min(S.idx, S.events.length - 1)]; let ms = 0;
+  const cur = S.events[Math.min(S.idx, S.events.length - 1)]; let ms = 0;
   if (S.live) ms = Date.now() - (S.joinAt || (S.joinAt = Date.now())); else if (cur) ms = cur.t || 0;
   const s = Math.max(0, Math.floor(ms / 1000)), hh = Math.floor(s / 3600), mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
   const html = `${S.live ? '<i title="live"></i>' : ''}<span>👥 ${n}</span><span>${hh ? hh + ':' : ''}${mm}:${ss}</span>`; if (m.innerHTML !== html) m.innerHTML = html;

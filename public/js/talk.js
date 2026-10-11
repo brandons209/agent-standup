@@ -46,34 +46,33 @@ async function exSay(id, line, token) {   // one line of an exchange, then a sho
   if (token !== S.token) return false; await sleep((150 + Math.random() * 250) / spd()); return token === S.token;
 }
 const exReady = () => prefs.banter && !S.hurry && S.boost <= 1 && !S.recomputing && !S.speakers.size && caughtUp() && performance.now() - (S.exAt || 0) > (S.live ? 22000 : 9000 / spd()) / chatMul();
-const exLog = (kind) => { (S.exLog = S.exLog || []).push(kind); };
 function noteTrouble(agent, ok) {   // three errors in a row: someone asks if everything is alright
   if (ok) { S.errRun[agent] = 0; return; } if (!prefs.banter || S.recomputing) return;
   S.errRun[agent] = (S.errRun[agent] || 0) + 1; if (S.errRun[agent] === 3) (S.exQ = S.exQ || []).push(agent);
 }
 function pickOther(not, prefer) { const ids = Object.keys(S.agents).filter((id) => id !== 'user' && !not.includes(id) && exVisible(id)); const pr = ids.filter(prefer || (() => false)); const a = pr.length ? pr : ids; return a.length ? a[Math.floor(Math.random() * a.length)] : null; }
 async function handoffX(g, seed, token) {   // an order: the new agent asks a question, the lead answers
-  const E = EXCH[FR() ? 'fr' : 'en'], b = g.to, a = g.agent; if (!exVisible(a) || !exVisible(b)) return false; exLog('handoff');
+  const E = EXCH[FR() ? 'fr' : 'en'], b = g.to, a = g.agent; if (!exVisible(a) || !exVisible(b)) return false;
   return (await exSay(b, exPick(E.ask, seed), token)) && (await exSay(a, exPick(E.askBack, seed >>> 3), token));
 }
 async function reportX(g, i, seed, token) {   // a report: the receiver reacts to what really happened
   const E = EXCH[FR() ? 'fr' : 'en'], b = g.agent, a = g.to; if (a === 'user' || !exVisible(a) || !exVisible(b)) return false; const f = exchFacts(i, b);
-  if (f.errs > 0) { exLog('report-errors'); return (await exSay(a, exPick(E.err, seed, f), token)) && (await exSay(b, exPick(E.errBack, seed >>> 3), token)); }
-  if (f.ms >= 120000) { exLog('report-slow'); return (await exSay(a, exPick(E.slow, seed, f), token)) && (await exSay(b, exPick(E.slowBack, seed >>> 3), token)); }
-  exLog('report-ok'); if (!(await exSay(a, exPick(E.ok, seed, f, nameOf(b)), token))) return false;
+  if (f.errs > 0) {return (await exSay(a, exPick(E.err, seed, f), token)) && (await exSay(b, exPick(E.errBack, seed >>> 3), token)); }
+  if (f.ms >= 120000) {return (await exSay(a, exPick(E.slow, seed, f), token)) && (await exSay(b, exPick(E.slowBack, seed >>> 3), token)); }
+ if (!(await exSay(a, exPick(E.ok, seed, f, nameOf(b)), token))) return false;
   const c = (seed >>> 5) % 100 < 35 ? pickOther([a, b]) : null; if (c) await exSay(c, exPick(E.chime, seed >>> 7, nameOf(b)), token); return true;
 }
 async function troubleX(token) {   // someone keeps failing: a colleague checks in
   const E = EXCH[FR() ? 'fr' : 'en']; while (S.exQ && S.exQ.length) {
     const x = S.exQ.shift(); if (!exVisible(x)) continue; const h = pickOther([x], (id) => id === 'main'); if (!h) continue; const seed = hash('t' + x + Date.now());
-    exLog('trouble'); return (await exSay(h, exPick(E.trouble, seed, nameOf(x)), token)) && (await exSay(x, exPick(E.troubleBack, seed >>> 3), token));
+   return (await exSay(h, exPick(E.trouble, seed, nameOf(x)), token)) && (await exSay(x, exPick(E.troubleBack, seed >>> 3), token));
   }
   return false;
 }
 async function syncX(g, token) {   // every few minutes of the session: the lead asks where everyone is, the busy agents answer
   if (chatMul() < 0.9 || !g.ts || g.ts - (S.syncTs || 0) < 180000 || !exVisible('main')) return false;
   const now = Date.now(), busy = Object.keys(S.agents).filter((id) => id !== 'user' && id !== 'main' && exVisible(id) && agentState(id, now).k === 'working').slice(0, 3); if (busy.length < 2) return false;
-  S.syncTs = g.ts; const E = EXCH[FR() ? 'fr' : 'en'], seed = hash('s' + g.ts); exLog('sync');
+  S.syncTs = g.ts; const E = EXCH[FR() ? 'fr' : 'en'], seed = hash('s' + g.ts);
   if (!(await exSay('main', exPick(E.sync, seed), token))) return false;
   for (const [n, id] of busy.entries()) { const act = (S.act[id] || '').replace(/^\S+\s/, '') || L('au travail', 'working'); if (!(await exSay(id, exPick(E.syncAns, seed >>> (n + 1), act.charAt(0).toLowerCase() + act.slice(1)), token))) return false; }
   return true;
@@ -189,7 +188,7 @@ async function smallTalk(token) {
   if (!think && (quiet < (S.live ? 45000 : 12000 / spd()) * [1, 2.5, 6][n] || (S.live && Date.now() - last.ts > 6e5))) return;   // live: a session untouched for ten minutes is a call that is over
   const busy = here.filter((id) => agentState(id, Date.now()).k === 'working'), sharer = [...S.shares.keys()].find((x) => here.includes(x)), who = think ? muser : sharer || pick(busy.length ? busy : here); if (!who) return;   // whoever shares their screen speaks, so the screen stays up
   const P = FILL[FR() ? 'fr' : 'en'][S.shares.has(who) ? 'share' : busy.length ? 'busy' : 'wait']; let line = think ? varied('think', Math.floor(Math.random() * 97)) : pick(P); if (!think && line === S.lastFill) line = P[(P.indexOf(line) + 1) % P.length]; if (!think) S.lastFill = line;
-  startTalk(who, line, think ? '💭' : '💬'); logChat(who, line, think ? '💭' : '💬'); if (think) S.mused = true; else S.fill = n + 1; await speakLine(line, S.agents[who], true, token); stopTalk(who);
+  startTalk(who, line, think ? '💭' : '💬'); logChat(who, line, think ? '💭' : '💬'); if (think) S.mused = true; else S.fill = n + 1; await speakLine(line, S.agents[who], true, token); if (token === S.token) stopTalk(who);
 }
 async function card(text, sub, ms = 2500) {
  

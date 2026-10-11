@@ -11,11 +11,11 @@ function El(tag = 'div') {
     querySelectorAll: () => [], setAttribute() {}, getBoundingClientRect: () => ({ width: 100, height: 100, left: 0, top: 0 }), animate: () => ({}), scrollTo() {}, focus() {}, addEventListener() {} };
   return el;
 }
-function page(search = '?live=1') {
+function page(search = '?live=1', timers = null) {   // timers: an array that collects setTimeout callbacks, to run them by hand
   const byId = new Map(), get = (id) => { if (!byId.has(id)) { const e = El(); e.id = id; byId.set(id, e); } return byId.get(id); }, errors = [];
   const document = { body: El('body'), documentElement: El(), hidden: false, createElement: (t) => El(t), getElementById: get, addEventListener() {},
     querySelector: (s) => (/^#[\w-]+$/.test(s) ? get(s.slice(1)) : s.startsWith('#') ? null : El()), querySelectorAll: (s) => (s === '.tile.presenter' ? [...byId.values()].filter((e) => e.classList.contains('presenter')) : []) };
-  const ctx = { console: { ...console, log() {}, warn() {} }, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, clearInterval() {}, requestAnimationFrame: () => 0, performance: { now: () => 0 },
+  const ctx = { console: { ...console, log() {}, warn() {} }, setTimeout: (f) => (timers ? timers.push(f) : 0), setInterval: () => 0, clearTimeout() {}, clearInterval() {}, requestAnimationFrame: () => 0, performance: { now: () => 0 },
     URLSearchParams, URL, TextEncoder, TextDecoder, fetch: () => new Promise(() => {}), localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     location: { search, href: 'http://localhost/' + search }, navigator: { userAgent: '' }, document, SpeechSynthesisUtterance: function () {},
     ResizeObserver: function () { return { observe() {} }; }, MutationObserver: function () { return { observe() {} }; }, Image: function () { return El(); }, Blob: function () {}, FileReader: function () { return El(); },
@@ -109,4 +109,22 @@ test('the landing page builds from the app and its script runs', { timeout: 1000
   const html = fs.readFileSync(path.join(tmp, 'docs/index.html'), 'utf8'); assert.doesNotMatch(html, /\/\*ART_(JS|CSS)\*\/|__VERSION__/); assert.match(html, /@keyframes/);
   for (const m of html.matchAll(/<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/g)) new vm.Script(m[1]);   // parses as a browser script would
   fs.rmSync(tmp, { recursive: true });
+});
+test('a line that turns into a report while it is read is answered once; an agent that finishes mid-burst still gets its done line', { timeout: 5000 }, async () => {
+  const timers = [], { run } = page('?live=1', timers), flush = async () => { for (let n = 0; n < 8; n++) { run('__rel.splice(0).forEach((r) => r())'); timers.splice(0).forEach((f) => f()); for (let k = 0; k < 20; k++) await new Promise((r) => setImmediate(r)); } };
+  run(`paintStatus = () => {}; trNew = () => {}; warmTTS = () => {}; prefetchQuips = () => {}; syncUI = () => {}; AUD.init = () => {}; AUD.ding = () => {}; AUD.join = () => {}; fly = () => {}; popTile = () => {};
+    startTalk = () => {}; stopTalk = () => {}; renderLog = () => {}; wrapUp = async () => false; smallTalk = async () => {};
+    window.__conv = []; converse = async (g) => { __conv.push(g.k + ':' + g.kind); }; window.__qu = []; doneQuip = async (id) => { __qu.push(id); }; window.__rel = []; speakLine = () => new Promise((r) => __rel.push(r));
+    S.live = true; S.locked = false; S.agents = { a: { id: 'a', name: 'A' }, b: { id: 'b', name: 'B' }, c: { id: 'c', name: 'C' } };
+    S.events = [{ k: 's1', ts: Date.now(), agent: 'a', kind: 'say', text: 'I have finished checking the module carefully.' }]; stampT(0); S.byK = new Map(S.events.map((e) => [e.k, e])); S.late = []; S.pos = 0; run(0);`);
+  for (let k = 0; k < 20; k++) await new Promise((r) => setImmediate(r));   // the line is being read: its voice has not ended
+  run(`{ const e = S.events[0], was = { kind: e.kind, n: 0, end: e.end }; Object.assign(e, { kind: 'report', to: 'main' }); amend(e, was); }`); await flush();
+  assert.deepEqual(JSON.parse(run('JSON.stringify(__conv)')), ['s1:report'], 'answered once, as a report');
+  run(`pause(); __qu = []; const T = Date.now(); S.events = [{ k: 'x1', ts: T, agent: 'a', kind: 'say', text: 'Working on the parser right now, step one.' }, { k: 'f1', ts: T + 1, agent: 'c', kind: 'finish', to: 'main' }, { k: 'x2', ts: T + 2, agent: 'b', kind: 'say', text: 'Tests are running on my side right now.' }]; stampT(0); S.late = []; run(0);`);
+  await flush(); assert.deepEqual(JSON.parse(run('JSON.stringify(__qu)')), ['c']);
+  run('pause()');
+});
+test('the live poll passes over a batch that keeps failing, counting from zero', { timeout: 5000 }, () => {
+  const { run } = page(); assert.equal(run(`S.pollFails = undefined; (S.pollFails = (S.pollFails || 0) + 1)`), 1);
+  assert.match(fs.readFileSync(path.join(PUB, 'js/live.js'), 'utf8'), /S\.pollFails = 0; S\.ep/, 'loadSession starts the count over');
 });
