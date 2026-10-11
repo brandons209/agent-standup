@@ -316,7 +316,7 @@ const capTimers = new Map();   // agent id → timers that advance its subtitle
 function captionClear(id) { (capTimers.get(id) || []).forEach(clearTimeout); capTimers.delete(id); }
 function setCaption(id, text) {
   const t = $('#t-' + id), b = t && t.querySelector('.bubble'), say = S.say[id]; if (!b || !say) return;
-  b.innerHTML = (say.label ? `<small>${esc(say.label)}</small>` : '') + esc(text); if (S.present === id) $('#pcap').textContent = text;
+  b.innerHTML = (say.label ? `<small>${esc(say.label)}</small>` : '') + esc(text); setCaption(id, text);
 }
 function captionRun(id, text, totalMs, from = 0) {   // from: how far into the line the voice already is, when the timing is corrected along the way
   captionClear(id); const ps = pieces(text); if (ps.length < 2 || !(totalMs > 0)) return;

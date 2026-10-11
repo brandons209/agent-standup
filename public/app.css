@@ -43,7 +43,7 @@
   #stage { flex:1; overflow:auto; padding:14px; display:grid; gap:12px; align-content:start; grid-auto-flow:dense;
            grid-template-columns:repeat(var(--cols,4),1fr); grid-auto-rows:var(--rh,160px) }
   #tree { flex:1; overflow:auto; padding:16px 18px; display:none }
-  body.tree #stage, body.board #stage, body.board #tree { display:none } body.tree #tree { display:block } body.board #boardv { display:block } body.board #present, body.board #gantt { display:none !important }
+  body.tree #stage, body.board #stage, body.board #tree { display:none } body.tree #tree { display:block } body.board #boardv { display:block } body.board #shares, body.board #gantt { display:none !important }
   #roster { display:none; width:232px; flex:none; flex-direction:column; gap:5px; padding:10px 8px; overflow:auto; border-right:1px solid var(--line); background:var(--panel) }
   @media (min-width:900px) { body.rost:not(.tree):not(.board) #roster { display:flex } }
   #roster h3 { margin:2px 6px 4px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--dim) }
@@ -82,31 +82,34 @@
   .prop.waiting { animation:tick 2.4s ease-in-out infinite } @keyframes tick { 50% { transform:rotate(180deg) } }
   .prop.cheer { animation:cheer 1.1s ease-out both } @keyframes cheer { 0% { transform:scale(.3) translateY(10px); opacity:0 } 40% { transform:scale(1.25); opacity:1 } 100% { transform:translateY(-14px); opacity:0 } }
   /* ---------- screen sharing (presentation mode) ---------- */
-  #present { display:none; flex:0 1 auto; min-height:96px; overflow:hidden; position:relative; height:clamp(190px,46vh,430px); background:radial-gradient(ellipse at 50% 0,#1b2033,#0b0d14); border-bottom:1px solid var(--line); padding:12px 16px; justify-content:center }
-  #present.on { display:flex; animation:fadein .3s } #present.pic { height:clamp(220px,60vh,640px) }
+  #shares { display:none; flex:0 1 auto; min-height:96px; overflow:hidden; height:clamp(190px,46vh,430px); background:radial-gradient(ellipse at 50% 0,#1b2033,#0b0d14); border-bottom:1px solid var(--line); padding:12px 16px; gap:10px; grid-template-columns:repeat(var(--sc,1),minmax(0,1fr)); grid-auto-rows:minmax(0,1fr) }
+  #shares.on { display:grid; animation:fadein .3s } #shares.pic, #shares[data-n="3"], #shares[data-n="4"] { height:clamp(240px,60vh,640px) }
+  #shares[data-n="2"], #shares[data-n="3"], #shares[data-n="4"] { --sc:2 } #shares[data-n="3"] .pane:last-child { grid-column:span 2 }   /* several screens: two columns, the third one across */
+  .pane { position:relative; display:flex; justify-content:center; min-width:0; min-height:0; overflow:hidden; transition:opacity .18s } .pane.swap { opacity:0 }   /* changing hands: the content fades, the stage stays */
   .pwin { flex:0 1 900px; display:flex; flex-direction:column; border-radius:10px; overflow:hidden; background:#0d1117; box-shadow:0 18px 50px rgba(0,0,0,.6), 0 0 0 2px rgba(240,160,32,.55) }
   .pbar { display:flex; align-items:center; gap:6px; padding:7px 10px; background:#1c1f2b; font-size:11.5px; color:#9aa0b4 } .pbar i { width:10px; height:10px; border-radius:50%; display:inline-block }
-  .pbar .r { background:#ff5f57 } .pbar .y { background:#febc2e } .pbar .g { background:#28c840 } #ptitle { margin:0 0 0 14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0 }
-  #pbody { flex:1; overflow:hidden; padding:10px 14px; font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; color:#d6dae6 } .pwin.editor #pbody { background:#1a1b26; padding:0 }
-  .pwin.image #pbody { display:flex; gap:8px; align-items:center; justify-content:center; background:#0b0c11; padding:8px } .pwin.image #pbody img { flex:0 1 auto; min-width:0; max-width:100%; max-height:100%; object-fit:contain; border-radius:4px } .pmore { color:#9aa0b4; font-size:12px } .dimg { display:block; max-width:100%; border-radius:6px; margin:4px 0 }
+  .pbar .r { background:#ff5f57 } .pbar .y { background:#febc2e } .pbar .g { background:#28c840 } .ptitle { margin:0 0 0 14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0 }
+  .pbody { flex:1; overflow:hidden; padding:10px 14px; font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; color:#d6dae6 } .pwin.editor .pbody { background:#1a1b26; padding:0 }
+  .pwin.image .pbody { display:flex; gap:8px; align-items:center; justify-content:center; background:#0b0c11; padding:8px } .pwin.image .pbody img { flex:0 1 auto; min-width:0; max-width:100%; max-height:100%; object-fit:contain; border-radius:4px } .pmore { color:#9aa0b4; font-size:12px } .dimg { display:block; max-width:100%; border-radius:6px; margin:4px 0 }
   .ptab { display:flex; align-items:center; gap:10px; background:#16161e; padding:5px 12px; border-bottom:1px solid #2a2b3d; font:11.5px -apple-system,system-ui,sans-serif } .ptab span { background:#1a1b26; padding:3px 10px; border-radius:6px 6px 0 0; color:#e9eaf0 } .ptab em { color:#6b7089; font-style:normal }
   .ln { display:flex; gap:10px; padding:0 12px; white-space:pre-wrap; word-break:break-all } .ln b { width:12px; flex:none; color:#7a7f98; font-weight:400 } .ln.add { background:rgba(63,185,80,.16); color:#9be9a8 } .ln.del { background:rgba(248,81,73,.16); color:#ffa198 }
   .tl { white-space:pre-wrap; word-break:break-word } .tl .ps { color:#7ee787 } .tl.cmd { color:#e6edf3 } .tl.tool { color:#8b95b0 } .dotg { color:#58a6ff }
   .tl.new { animation:lineIn .28s ease-out } @keyframes lineIn { from { opacity:0; transform:translateY(5px) } }
   .cursor { display:inline-block; width:7px; height:14px; background:#c9d1d9; vertical-align:-2px; animation:blinkc 1s steps(1) infinite } @keyframes blinkc { 50% { opacity:0 } }
-  #pstat { flex:none; padding:4px 12px; background:#161925; color:#8b95b0; font:11.5px ui-monospace,Menlo,monospace; border-top:1px solid #232637; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-  #ptodo { flex:0 0 230px; margin-left:12px; align-self:flex-start; position:relative; max-height:100%; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; background:rgba(20,22,32,.92); border:1px solid #2a2d3d; border-radius:10px; padding:8px 10px; font-size:12px }
-  #ptodo h5 { margin:0 0 6px; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim) } .td { display:flex; gap:7px; padding:2px 0; color:#c3c6d4 } .td i { font-style:normal; flex:none } .td.completed { color:#6b7089; text-decoration:line-through } .td.completed i { color:var(--ok) } .td.in_progress { color:#fff } .td.in_progress i { color:var(--gold) }
+  .pstat { flex:none; padding:4px 12px; background:#161925; color:#8b95b0; font:11.5px ui-monospace,Menlo,monospace; border-top:1px solid #232637; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .ptodo { flex:0 0 230px; margin-left:12px; align-self:flex-start; position:relative; max-height:100%; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; background:rgba(20,22,32,.92); border:1px solid #2a2d3d; border-radius:10px; padding:8px 10px; font-size:12px }
+  .ptodo h5 { margin:0 0 6px; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim) } .td { display:flex; gap:7px; padding:2px 0; color:#c3c6d4 } .td i { font-style:normal; flex:none } .td.completed { color:#6b7089; text-decoration:line-through } .td.completed i { color:var(--ok) } .td.in_progress { color:#fff } .td.in_progress i { color:var(--gold) }
   .tl.out { color:#aab2c5 } .tl.err { color:#ff7b72 } .tl.dim { color:#6b7089 } .tl.run { color:#ffd24a } .tl.cmd { margin-top:5px }
   .ln.ctx b { width:34px; text-align:right; color:#4b5069 } .ln.ctx { color:#d3d7e6 } .ln.err { color:#ff7b72 } .ln.dim { color:#6b7089 } .ln.run { color:#ffd24a }
   .spin { display:inline-block; width:9px; height:9px; margin-right:6px; border:2px solid #ffd24a; border-top-color:transparent; border-radius:50%; animation:spin .7s linear infinite; vertical-align:-1px } @keyframes spin { to { transform:rotate(360deg) } }
   .ticker em { font-style:normal; color:#9aa3bd; font-size:10px } .ticker em.ok { color:#58d68d } .ticker em.bad { color:#ff7b72 }
   .status { max-width:84%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  #pbadge { margin-left:auto; flex:none; background:rgba(240,160,32,.94); color:#201400; font-weight:600; font-size:11px; padding:1px 10px; border-radius:99px; white-space:nowrap }
-  #present.has-todo #pcam { right:270px } #pcam { position:absolute; right:28px; bottom:22px; width:158px; height:118px; z-index:2; cursor:default; box-shadow:0 8px 24px rgba(0,0,0,.6) }
-  #pcap { display:none; position:absolute; left:24px; right:200px; bottom:20px; z-index:2; background:rgba(10,11,16,.84); backdrop-filter:blur(6px); border-radius:10px; padding:6px 12px; font-size:13px; max-height:calc(100% - 34px); overflow-y:auto; scrollbar-width:thin } #pcap:not(:empty) { display:block }
-  body.narrow #present { height:clamp(150px,36vh,260px) } body.narrow #pcam { width:110px; height:82px } body.narrow #pcap { left:14px; right:146px; font-size:12.5px }
-  body.narrow #ptodo { display:none } body.narrow #present.has-todo #pcam { right:28px }   /* too narrow for a terminal and a task list side by side: the terminal keeps the room */
+  .pbadge { margin-left:auto; flex:none; background:rgba(240,160,32,.94); color:#201400; font-weight:600; font-size:11px; padding:1px 10px; border-radius:99px; white-space:nowrap }
+  .pane.has-todo .pcam { right:270px } .pcam { position:absolute; right:28px; bottom:22px; width:158px; height:118px; z-index:2; cursor:default; box-shadow:0 8px 24px rgba(0,0,0,.6) }
+  .pcap { display:none; position:absolute; left:24px; right:200px; bottom:20px; z-index:2; background:rgba(10,11,16,.84); backdrop-filter:blur(6px); border-radius:10px; padding:6px 12px; font-size:13px; max-height:calc(100% - 34px); overflow-y:auto; scrollbar-width:thin } .pcap:not(:empty) { display:block }
+  body.narrow #shares { height:clamp(150px,36vh,260px) } body.narrow .pcam { width:110px; height:82px } body.narrow .pcap { left:14px; right:146px; font-size:12.5px }
+  body.narrow .ptodo { display:none } body.narrow .pane.has-todo .pcam { right:28px }
+  #shares:not([data-n="1"]) .ptodo { display:none } #shares:not([data-n="1"]) .pcam { width:96px; height:72px; right:10px; bottom:10px } #shares:not([data-n="1"]) .pane.has-todo .pcam { right:10px } #shares:not([data-n="1"]) .pcap { left:10px; right:116px; bottom:10px; font-size:12px }   /* too narrow for a terminal and a task list side by side: the terminal keeps the room */
   #gantt { display:none; flex:none; width:100%; background:#0f1118; border-top:1px solid var(--line); cursor:pointer }
   body.replay #gantt { display:block }
   aside { display:none; width:320px; flex:none; border-left:1px solid var(--line); background:var(--panel); flex-direction:column; min-height:0 }
@@ -151,7 +154,7 @@
   .bubble { display:none; position:absolute; z-index:6; top:6px; left:6px; width:max-content; max-width:calc(100% - 12px); background:#fff; color:#1b1d27; border-radius:11px; padding:6px 10px; font-size:12.5px; line-height:1.35; box-shadow:0 4px 14px rgba(0,0,0,.35); overflow-wrap:anywhere }
   .tile.speaking, .tile.bye { overflow:visible; z-index:4 } .tile > svg:first-child { border-radius:13px } .tile.speaking .prop { left:auto; right:8px; top:52px }
   .tile.focus.speaking:has(.status:not(:empty)) .bubble { top:32px }   /* the spotlight has room: there the badge stays visible above the bubble */
-  body:not(.tiny) #center:has(#pcap:not(:empty)) .tile.presenter:not(.bye) .bubble { display:none }   /* the presenter's line is the caption of the shared screen: not said twice */
+  body:not(.tiny) .tile.presenter.capshown:not(.bye) .bubble { display:none }   /* the presenter's line is the caption of the shared screen: not said twice */
   .tile.musing:not(.speaking):not(.bye) .bubble { display:block; top:auto; bottom:36px; max-width:min(80%, 320px); font-size:12px; font-style:italic; color:#40455c; background:rgba(255,255,255,.88); border-radius:14px; box-shadow:0 2px 8px rgba(0,0,0,.28); animation:fadein .5s }   /* an inner thought: not said, so lower, lighter, and never over the status at the top */
   .tile.focus.musing:not(.speaking):not(.bye) .bubble { bottom:46px; font-size:13px } .tile.musing:not(.speaking):not(.bye) .bubble small { display:inline; margin-right:5px; font-style:normal }
   .tile.bye .bubble { display:block; font-size:13.5px; animation:fadein .25s } .tile.speaking .bubble { display:block; font-size:13px } .tile.focus.speaking .bubble { font-size:14.5px } .bubble small { display:block; color:#6a6f85; font-size:10.5px }
@@ -211,7 +214,7 @@
   body.compact #stage .tile .status:empty { display:none }
   body.compact #stage .tile .tag { order:1 } body.compact #stage .tile .status { order:2 } body.compact #stage .tile .prop { order:3 }
   @media (max-width:899px) { #menu .mi[data-t=roster] { display:none } }   /* the agents list only exists from 900 px: no switch for it under that */
-  body.tiny #present { display:none !important } body.tiny #hl { display:none } body.tiny #gantt { display:none }   /* under 300 px: the rows only */
+  body.tiny #shares { display:none !important } body.tiny #hl { display:none } body.tiny #gantt { display:none }   /* under 300 px: the rows only */
   #menu.on { display:block } #menu h4 { margin:8px 10px 4px; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600 }
   .mi { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; text-align:left; padding:8px 10px; border-radius:8px } .mi:hover { background:var(--panel2) }
   .sw { width:30px; height:17px; border-radius:99px; background:#3a3e50; position:relative; flex:none; transition:background .15s } .sw::after { content:''; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:#fff; transition:transform .15s }

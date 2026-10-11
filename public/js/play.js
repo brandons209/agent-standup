@@ -28,7 +28,7 @@ async function run(i) {
     if (ev.kind === 'usage' || ev.kind === 'compact') { if (ev.kind === 'compact' && S.live && prefs.banter) toast(`${nameOf(ev.agent)}: ${L('contexte compacté 🗜', 'context compacted 🗜')}`); i++; continue; }
     if (ev.kind === 'finish') { applyStatus(ev); paintStatus(); i++; continue; }
     const backlog = S.live ? S.events.length - i : 0, quick = S.live ? Math.min(1, 40 / Math.max(1, backlog)) : 1;   // live: hundreds of tool events from parallel sub-agents must not take minutes to scroll past
-    if (ev.kind === 'results') { applyResults(ev, S.boost > 1); await sleep((S.boost === 1 && S.present === ev.agent && ev.items.some((it) => it.img) ? (S.live ? 900 : 1800) : S.demo ? 900 : S.live ? 30 * quick : 80) / spd()); i++; continue; }   // a picture gets a moment on screen
+    if (ev.kind === 'results') { applyResults(ev, S.boost > 1); await sleep((S.boost === 1 && S.shares.has(ev.agent) && ev.items.some((it) => it.img) ? (S.live ? 900 : 1800) : S.demo ? 900 : S.live ? 30 * quick : 80) / spd()); i++; continue; }   // a picture gets a moment on screen
     if (ev.kind === 'tools') { applyStatus(ev); tickTools(ev); AUD.click(); OFFICE.kick(ev.tools[ev.tools.length - 1].name); paintStatus(); if (S.live && S.owed && ev.agent === 'main') { await leadAck(ev, token); if (token !== S.token) return; } if (quick === 1) await smallTalk(token); await sleep((S.demo ? 1100 : S.live ? 110 * quick : 250) / spd()); i++; continue; }
     const group = [ev]; let j = i + 1;   // sub-agents talking back-to-back were running in parallel: they talk over each other
     if (ev.kind === 'order') {   // several orders in a row (a parallel launch): the new agents all appear now, the first order is read, the others are named in one line

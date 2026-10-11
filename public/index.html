@@ -42,6 +42,7 @@
   <button class="mi" data-t="reactions"><span data-fr="Barre de réactions (👍 👏 ☕)" data-en="Reactions bar (👍 👏 ☕)">Barre de réactions (👍 👏 ☕)</span><i class="sw"></i></button>
   <button class="mi" data-t="banter"><span data-fr="Petites répliques et animations" data-en="Little lines & animations">Petites répliques et animations</span><i class="sw"></i></button>
   <div class="box"><div class="lbl"><span data-fr="Bavardage entre agents" data-en="Chatter between agents">Bavardage entre agents</span></div><select id="chatSel"><option value="quiet" data-fr="Discret" data-en="Quiet">Discret</option><option value="normal" data-fr="Normal" data-en="Normal">Normal</option><option value="lively" data-fr="Animé" data-en="Lively">Animé</option></select></div>
+  <button class="mi" data-t="multiShare"><span data-fr="Plusieurs écrans partagés à la fois" data-en="Several screens shared at once">Plusieurs écrans partagés à la fois</span><i class="sw"></i></button>
   <button class="mi" data-t="vanish"><span data-fr="Retirer les agents terminés (2 min)" data-en="Remove finished agents (2 min)">Retirer les agents terminés (2 min)</span><i class="sw"></i></button>
   <button class="mi" data-t="epi"><span data-fr="Réactions et blagues" data-en="Reactions & jokes">Réactions et blagues</span><i class="sw"></i></button>
   <h4 data-fr="Source" data-en="Source">Source</h4>
@@ -66,7 +67,7 @@
 <main>
   <nav id="roster" aria-label="Agents"></nav>
   <section id="center">
-    <div id="present"><div class="pwin term"><div class="pbar"><i class="r"></i><i class="y"></i><i class="g"></i><span id="ptitle"></span><span id="pbadge"></span></div><div id="pbody"></div><div id="pstat"></div></div><div id="ptodo" style="display:none"></div><div id="pcap"></div><div id="pcam" class="tile working"></div></div>
+    <div id="shares"></div>
     <div id="stage"></div><div id="tree"></div><div id="boardv"></div>
     <div id="reactBar" aria-label="Reactions"><button data-e="👍">👍</button><button data-e="👏">👏</button><button data-e="☕">☕</button><button data-e="🔥">🔥</button><button data-e="🙌">🙌</button></div>
     <div id="hl"></div>

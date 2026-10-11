@@ -29,12 +29,12 @@ function drawFrame(cv, mark = 0) {   // mark: 1 = a clip to share (site address 
   c.font = 'bold 20px "Comic Sans MS",sans-serif'; c.fillStyle = '#e9eaf0'; c.fillText('🎥 ' + ((!hide && S.title) || 'Agent Standup'), 20, 32);
   if (mark) { c.font = '13px sans-serif'; c.textAlign = 'right'; const w = c.measureText(SITE).width; c.fillStyle = '#12131a'; c.fillRect(W - 32 - w, 8, w + 32, 34); c.fillStyle = '#8b90a8'; c.fillText(SITE, W - 20, 30); c.textAlign = 'start'; }
   const ids = Object.keys(S.agents).filter((id) => id === 'main' || id === 'user' || (S.status[id] && !S.gone.has(id))), sp = [...S.speakers].filter((id) => S.agents[id]).slice(0, 3), big = sp.length ? sp : ['main', 'user'];
-  const pres = S.present && S.agents[S.present], m = pres && termModel(S.present), bw = Math.min(480, (W - 40) / big.length - 12), bh = pres ? (m.view === 'image' ? 420 : 330) : bw * 0.75;   // a picture gets a taller window
+  const pid = primaryShare(), pres = pid && S.agents[pid], m = pres && termModel(pid), bw = Math.min(480, (W - 40) / big.length - 12), bh = pres ? (m.view === 'image' ? 420 : 330) : bw * 0.75;   // a picture gets a taller window
   if (pres) {
     const x = 20, y = 50, w = W - 40, ed = m.view === 'editor', col = { cmd: '#e6edf3', out: '#aab2c5', err: '#ff7b72', tool: '#8b95b0', dim: '#6b7089', run: '#ffd24a', add: '#9be9a8', del: '#ffa198', ctx: '#d6dae6' };
     c.fillStyle = ed ? '#1a1b26' : '#0d1117'; c.beginPath(); c.roundRect(x, y, w, bh, 12); c.fill(); c.fillStyle = '#1c1f2b'; c.fillRect(x, y, w, 28);
     ['#ff5f57', '#febc2e', '#28c840'].forEach((cl, i) => { c.fillStyle = cl; c.beginPath(); c.arc(x + 16 + i * 18, y + 14, 5, 0, 7); c.fill(); });
-    c.font = '13px sans-serif'; c.fillStyle = '#9aa0b4'; c.fillText(ed ? (hide ? m.title.split(' — ').pop() : m.title) : m.view === 'image' ? (hide ? '' : m.title) : S.agents[S.present].name + ' — zsh', x + 90, y + 19); c.font = '14px monospace';
+    c.font = '13px sans-serif'; c.fillStyle = '#9aa0b4'; c.fillText(ed ? (hide ? m.title.split(' — ').pop() : m.title) : m.view === 'image' ? (hide ? '' : m.title) : S.agents[pid].name + ' — zsh', x + 90, y + 19); c.font = '14px monospace';
     if (m.view === 'image') {   // masked like the code: a picture from the session is replaced by an empty frame
       const im = hide ? null : mediaImg(m.imgs[0]), ax = x + 14, ay = y + 38, aw = w - 238, ah = bh - 82, k = im && im.complete && im.naturalWidth ? Math.min(aw / im.naturalWidth, ah / im.naturalHeight, 1.5) : 0;
       if (k) c.drawImage(im, ax + (aw - im.naturalWidth * k) / 2, ay + (ah - im.naturalHeight * k) / 2, im.naturalWidth * k, im.naturalHeight * k);
@@ -49,10 +49,10 @@ function drawFrame(cv, mark = 0) {   // mark: 1 = a clip to share (site address 
       if (keep < txt.length) { c.globalAlpha = 0.4; for (const b of txt.slice(keep).matchAll(/\S+/g)) c.fillRect(x + 14 + (pre.length + keep + b.index) * cw, yy - 10, b[0].length * cw - 3, 10); c.globalAlpha = 1; }
     });
     c.font = '12px monospace'; c.fillStyle = '#8b95b0'; c.fillText(m.stat, x + 14, y + bh - 8);
-    c.fillStyle = 'rgba(240,160,32,.94)'; c.beginPath(); c.roundRect(x + 12, y + bh - 34, 300, 24, 12); c.fill(); c.fillStyle = '#201400'; c.font = 'bold 13px sans-serif'; c.fillText('🖥 ' + S.agents[S.present].name + ' ' + L('partage son écran', 'is sharing their screen'), x + 24, y + bh - 17);
-    tileOnCanvas(c, S.present, x + w - 210, y + bh - 160, 196, 147, false);
+    c.fillStyle = 'rgba(240,160,32,.94)'; c.beginPath(); c.roundRect(x + 12, y + bh - 34, 300, 24, 12); c.fill(); c.fillStyle = '#201400'; c.font = 'bold 13px sans-serif'; c.fillText('🖥 ' + S.agents[pid].name + ' ' + L('partage son écran', 'is sharing their screen'), x + 24, y + bh - 17);
+    tileOnCanvas(c, pid, x + w - 210, y + bh - 160, 196, 147, false);
   } else big.forEach((id, i) => tileOnCanvas(c, id, 20 + i * (bw + 12), 50, bw, bh, true));
-  const others = ids.filter((id) => (pres ? id !== S.present : !big.includes(id))).sort((a, b) => (S.status[b] === 'working') - (S.status[a] === 'working')).slice(0, 14), tw = 160, th = 120, cols = Math.floor((W - 40) / (tw + 8)), ty = 50 + bh + 14;
+  const others = ids.filter((id) => (pres ? id !== pid : !big.includes(id))).sort((a, b) => (S.status[b] === 'working') - (S.status[a] === 'working')).slice(0, 14), tw = 160, th = 120, cols = Math.floor((W - 40) / (tw + 8)), ty = 50 + bh + 14;
   others.forEach((id, i) => tileOnCanvas(c, id, 20 + (i % cols) * (tw + 8), ty + Math.floor(i / cols) * (th + 8), tw, th, false));
   const lead = sp[0] && S.say[sp[0]];
   if (lead) { c.font = '22px sans-serif'; const Ls = wrap(c, `${nameOf(sp[0])} : ${lead.text}`, W - 80, 2); c.fillStyle = 'rgba(0,0,0,.75)'; c.fillRect(0, H - 22 - Ls.length * 28, W, Ls.length * 28 + 22); c.fillStyle = '#fff'; Ls.forEach((l, i) => c.fillText(l, 40, H - 12 - (Ls.length - 1 - i) * 28 - 6)); }

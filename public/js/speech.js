@@ -47,15 +47,14 @@ setInterval(() => {
 const mouths = new Map();
 function startTalk(id, text, label) {
   const t = $('#t-' + id); if (!t) return; endThought(id); stopMumble(); TH.next[id] = Date.now() + 8000;   // a spoken line takes the bubble and the floor
-  if (S.present && S.present !== id) hidePresent();
   S.spokeAt = performance.now(); S.fill = 0; S.mused = false;
   if (!S.speakers.size && !(S.focusLock > Date.now())) setFocus(id); S.gone.delete(id); if (S.doneAt[id] != null) S.doneAt[id] = S.clock; t.style.display = ''; t.classList.add('speaking'); S.speakers.add(id); S.say[id] = { text, label }; AUD.duck(true);
   const shown0 = pieces(text), first = shown0.length > 1 ? shown0[0] : text; const b = t.querySelector('.bubble'); b.innerHTML = (label ? `<small>${esc(label)}</small>` : '') + esc(first);
-  if (S.present === id) { $('#pcap').textContent = first; $('#pcam').classList.add('speaking'); }
+  const pane = paneOf(id), cam = pane && pane.querySelector('.pcam'); if (cam) { setCaption(id, first); cam.classList.add('speaking'); }
   const m = t.querySelector('.mouthE'); let open = false; clearInterval(mouths.get(id));
   mouths.set(id, setInterval(() => {
-    if (!m) { const ct = t.querySelector('.cimg-talk'); if (ct) { const lv0 = S.level[id], op = lv0 ? lv0() > 0.05 : (open = !open); ct.style.display = op ? '' : 'none'; t.querySelector('.cimg').style.display = op ? 'none' : ''; if (S.present === id) { const pc = $('#pcam .cimg-talk'), pi = $('#pcam .cimg'); if (pc && pi) { pc.style.display = op ? '' : 'none'; pi.style.display = op ? 'none' : ''; } } } return; }   // custom character: swap between its two frames
-    const pm = S.present === id ? $('#pcam .mouthE') : null, lv = S.level[id]; if (lv) { const v = lv(); const ry = (.9 + Math.min(4.2, v * 28)).toFixed(1), rx = (4.8 - Math.min(1.1, v * 6)).toFixed(1); m.setAttribute('ry', ry); m.setAttribute('rx', rx); if (pm) { pm.setAttribute('ry', ry); pm.setAttribute('rx', rx); } }
+    if (!m) { const ct = t.querySelector('.cimg-talk'); if (ct) { const lv0 = S.level[id], op = lv0 ? lv0() > 0.05 : (open = !open); ct.style.display = op ? '' : 'none'; t.querySelector('.cimg').style.display = op ? 'none' : ''; const pc = cam && cam.querySelector('.cimg-talk'), pi = cam && cam.querySelector('.cimg'); if (pc && pi) { pc.style.display = op ? '' : 'none'; pi.style.display = op ? 'none' : ''; } } return; }   // custom character: swap between its two frames
+    const pm = cam && cam.querySelector('.mouthE'), lv = S.level[id]; if (lv) { const v = lv(); const ry = (.9 + Math.min(4.2, v * 28)).toFixed(1), rx = (4.8 - Math.min(1.1, v * 6)).toFixed(1); m.setAttribute('ry', ry); m.setAttribute('rx', rx); if (pm) { pm.setAttribute('ry', ry); pm.setAttribute('rx', rx); } }
     else { open = !open; m.setAttribute('ry', open ? 4.2 : 1.1); m.setAttribute('rx', open ? 4 : 4.7); if (pm) { pm.setAttribute('ry', open ? 4.2 : 1.1); pm.setAttribute('rx', open ? 4 : 4.7); } }
   }, 70));
   if (document.body.classList.contains('tree')) renderTree();
@@ -75,10 +74,10 @@ function confetti() {
 function stopTalk(id) {
   captionClear(id); S.spokeAt = performance.now();
   clearInterval(mouths.get(id)); mouths.delete(id); S.speakers.delete(id); if (!S.speakers.size) AUD.duck(false); if (S.focus === id && S.speakers.size) setFocus([...S.speakers][0]);
-  if (S.present === id) { $('#pcap').textContent = ''; $('#pcam').classList.remove('speaking'); const pm = $('#pcam .mouthE'); if (pm) { pm.setAttribute('ry', .9); pm.setAttribute('rx', 4.6); } }
+  const cam = paneOf(id) && paneOf(id).querySelector('.pcam'); if (cam) { setCaption(id, ''); cam.classList.remove('speaking'); const pm = cam.querySelector('.mouthE'); if (pm) { pm.setAttribute('ry', .9); pm.setAttribute('rx', 4.6); } }
   const t = $('#t-' + id); if (!t) return;
   t.classList.remove('speaking'); const m = t.querySelector('.mouthE'); if (m) { m.setAttribute('ry', .9); m.setAttribute('rx', 4.6); }
   const ct = t.querySelector('.cimg-talk'); if (ct) { ct.style.display = 'none'; t.querySelector('.cimg').style.display = ''; }
-  const pc = $('#pcam .cimg-talk'), pi = $('#pcam .cimg'); if (pc && pi && S.present === id) { pc.style.display = 'none'; pi.style.display = ''; }
+  const pc = cam && cam.querySelector('.cimg-talk'), pi = cam && cam.querySelector('.cimg'); if (pc && pi) { pc.style.display = 'none'; pi.style.display = ''; }
 }
 const clearSpeaking = () => [...S.speakers].forEach(stopTalk);

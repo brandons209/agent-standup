@@ -7,8 +7,8 @@ function addTile(p) {
   $('#stage').appendChild(d);
 }
 function buildStage() {   // the tiles, and the presenter camera with them: a character change must never leave the old look in the corner of the shared screen
-  $('#stage').innerHTML = ''; Object.values(S.agents).forEach(addTile); S.camFor = null;
-  const pr = S.present && S.agents[S.present]; if (pr) { $('#pcam').innerHTML = avatarSVG(pr, undefined, 'c' + pr.gid + '_') + `<div class="tag"><b>${esc(pr.name)}</b></div>`; S.camFor = pr.id; }
+  $('#stage').innerHTML = ''; Object.values(S.agents).forEach(addTile);
+  for (const [id, sh] of S.shares) { delete sh.el.dataset.cam; renderPane(sh.el, id); } paintShares();
 }
 const layout = () => {
   const st = $('#stage'), w = st.clientWidth - 28 || 600, nar = $('#center').clientWidth < 480, cols = nar ? (w >= 300 ? 2 : 1) : Math.max(1, Math.floor((w + 12) / 212)), colw = (w - 12 * (cols - 1)) / cols;
@@ -65,7 +65,7 @@ const applyStatus = (ev) => {
   if (ev.kind === 'user' || (ev.agent === 'main' && (ev.kind === 'say' || ev.kind === 'tools' || (ev.kind === 'order' && !ev.wf)))) S.turnOver = !!ev.end;   // Claude Code marks the message that closes the lead's turn; anything after it opens the next one (not the agents a workflow launches by itself)
 };
 function recomputeStatus(upTo) {
-  S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.lastTool = {}; S.mainBusyAt = 0; S.turnOver = false; S.th = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.recomputing = true; document.querySelectorAll('.tile').forEach((t) => { clearTimeout(t._byeT); t.classList.remove('bye'); }); hidePresent();
+  S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.lastTool = {}; S.mainBusyAt = 0; S.turnOver = false; S.th = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.resAt = {}; S.recomputing = true; document.querySelectorAll('.tile').forEach((t) => { clearTimeout(t._byeT); t.classList.remove('bye'); }); closeAllShares();
   S.status = {}; S.tc = {}; S.doneAt = {}; S.gone.clear(); S.leaving.clear(); document.querySelectorAll('.tile.vanishing').forEach((t) => t.classList.remove('vanishing')); const doneIdx = {}; document.querySelectorAll('.ticker').forEach((x) => { x.classList.remove('on'); x.innerHTML = ''; });
   for (let i = 0; i < upTo; i++) {
     const e = S.events[i]; applyStatus(e); tally(e); if (e.kind === 'tools') S.tc[e.agent] = (S.tc[e.agent] || 0) + e.tools.length;
@@ -84,7 +84,7 @@ function syncUI() {
 
 // ---------- tool ticker, shared screen, flying messages ----------
 // ---------- what each agent is doing: tool calls with their real outputs ----------
-S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.present = null; S.camFor = null; let presentTimer = null;
+S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.resAt = {}; S.shares = new Map(); S.vclock = 0;
 const later = (k, fn, ms = 160) => { later.p = later.p || {}; if (later.p[k]) return; later.p[k] = setTimeout(() => { later.p[k] = 0; fn(); }, ms); };   // coalesce bursts of repaints
 const fmtTok = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1000).toFixed(n < 1e4 ? 1 : 0) + 'k' : (n / 1e6).toFixed(n < 1e7 ? 2 : 1) + 'M');
 const tokTotal = (u) => (u ? u.i + u.o + u.w : 0);   // headline = input + output + cache writes; cache reads are cheap and shown separately

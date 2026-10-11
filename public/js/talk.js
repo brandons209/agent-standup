@@ -158,8 +158,8 @@ async function smallTalk(token) {
   const quiet = performance.now() - S.spokeAt, here = Object.keys(S.agents).filter((id) => id !== 'user' && $('#t-' + id) && $('#t-' + id).style.display !== 'none'), pick = (a) => a[Math.floor(Math.random() * a.length)];
   const p = before(S.events.length), muser = S.live && !n && !S.mused && p ? thinkerOf(p) : null, think = !!muser && here.includes(muser) && quiet > 6000 && Date.now() - p.ts > 20000 && Date.now() - p.ts < 180000;   // live: 20 s without a word from whoever is thinking, once per silence
   if (!think && (quiet < (S.live ? 45000 : 12000 / spd()) * [1, 2.5, 6][n] || (S.live && Date.now() - last.ts > 6e5))) return;   // live: a session untouched for ten minutes is a call that is over
-  const busy = here.filter((id) => agentState(id, Date.now()).k === 'working'), who = think ? muser : S.present && here.includes(S.present) ? S.present : pick(busy.length ? busy : here); if (!who) return;   // whoever shares their screen speaks, so the screen stays up
-  const P = FILL[FR() ? 'fr' : 'en'][who === S.present ? 'share' : busy.length ? 'busy' : 'wait']; let line = think ? varied('think', Math.floor(Math.random() * 97)) : pick(P); if (!think && line === S.lastFill) line = P[(P.indexOf(line) + 1) % P.length]; if (!think) S.lastFill = line;
+  const busy = here.filter((id) => agentState(id, Date.now()).k === 'working'), sharer = [...S.shares.keys()].find((x) => here.includes(x)), who = think ? muser : sharer || pick(busy.length ? busy : here); if (!who) return;   // whoever shares their screen speaks, so the screen stays up
+  const P = FILL[FR() ? 'fr' : 'en'][S.shares.has(who) ? 'share' : busy.length ? 'busy' : 'wait']; let line = think ? varied('think', Math.floor(Math.random() * 97)) : pick(P); if (!think && line === S.lastFill) line = P[(P.indexOf(line) + 1) % P.length]; if (!think) S.lastFill = line;
   startTalk(who, line, think ? '💭' : '💬'); if (think) S.mused = true; else S.fill = n + 1; await speakLine(line, S.agents[who], true, token); stopTalk(who);
 }
 async function card(text, sub, ms = 2500) {
