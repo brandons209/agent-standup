@@ -4,15 +4,23 @@
 function addTile(p) {
   const d = document.createElement('div'); d.className = 'tile' + (p.lead ? ' lead' : ''); d.id = 't-' + p.id; d.tabIndex = 0; d.setAttribute('role', 'button'); d.setAttribute('aria-label', p.name + ' — ' + p.role); d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(p.id); } }; d.style.display = 'none'; d.onclick = () => openDetail(p.id);
   d.innerHTML = `${avatarSVG(p, undefined, 't' + p.gid + '_')}<div class="bubble"></div><div class="status"></div><div class="prop"></div><div class="thought"></div><div class="ticker"></div><div class="tbadge"></div><div class="tag"><b>${esc(p.name)}</b><span>${esc(p.role)}</span><span class="tk"></span><span class="cx"></span></div>`;
-  $('#stage').appendChild(d);
+  $('#stage').appendChild(d); galRefit();
 }
 function buildStage() {   // the tiles, and the presenter camera with them: a character change must never leave the old look in the corner of the shared screen
   $('#stage').innerHTML = ''; Object.values(S.agents).forEach(addTile);
   for (const [id, sh] of S.shares) { delete sh.el.dataset.cam; renderPane(sh.el, id); } paintShares();
 }
+const visibleTiles = () => [...$('#stage').children].filter((t) => t.style.display !== 'none').length;
+const galRefit = () => { if (!document.body.classList.contains('gallery')) return; const n = visibleTiles(); if (n !== S.galN) { S.galN = n; layout(); } };
 const layout = () => {
   const st = $('#stage'), w = st.clientWidth - 28 || 600, nar = $('#center').clientWidth < 480, cols = nar ? (w >= 300 ? 2 : 1) : Math.max(1, Math.floor((w + 12) / 212)), colw = (w - 12 * (cols - 1)) / cols;
   const rh = Math.round(colw * (nar ? 0.66 : 0.74)); st.style.setProperty('--cols', cols); st.style.setProperty('--rh', rh + 'px'); // Spotlight size: the biggest block (k columns × fr rows) that stays close to 3:2 and leaves room beside it for the others.
+  const gal = !nar && document.body.classList.contains('gallery');
+  if (gal) {   // gallery: equal tiles, the column count that makes them biggest while all fit without scrolling
+    const n = Math.max(1, visibleTiles()), W = st.clientWidth - 28, H = st.clientHeight - 28, g = 12, A = 4 / 3; let bc = 1, btw = -1, br = n;
+    for (let c = 1; c <= n; c++) { const r = Math.ceil(n / c), tw = Math.min((W - g * (c - 1)) / c, ((H - g * (r - 1)) / r) * A); if (tw > btw) { btw = tw; bc = c; br = r; } }
+    st.style.setProperty('--cols', bc); st.style.setProperty('--rh', Math.floor(Math.min((H - g * (br - 1)) / br, btw / A)) + 'px'); st.style.setProperty('--fcols', 1); st.style.setProperty('--fr', 1); st.classList.toggle('one', bc === 1);
+  } else {
   const maxRows = Math.max(cols > 1 ? 2 : 1, Math.floor((st.clientHeight * 0.7 + 12) / (rh + 12)));   // the stage scrolls, so the spotlight may be a bit taller than the free space
   let k = 1, fr = 1, best = -1;
   for (let kk = 1; kk <= cols; kk++) for (let rr = 1; rr <= Math.min(4, maxRows); rr++) {
@@ -23,6 +31,7 @@ const layout = () => {
   if (nar) { k = cols; fr = cols > 1 ? 2 : 1; }   // side panel: small tiles, a banner-sized spotlight
   else if (best < 0) { k = Math.min(2, cols); fr = Math.min(2, maxRows); }
   st.style.setProperty('--fcols', k); st.style.setProperty('--fr', fr); st.classList.toggle('one', cols === 1);
+  }
   document.body.classList.toggle('narrow', $('#center').clientWidth <= 480); document.body.classList.toggle('compact', $('#center').clientWidth <= 480 && !$('#roster').offsetWidth); document.body.classList.toggle('tiny', $('#center').clientWidth < 300); drawGantt();
 };
 new ResizeObserver(layout).observe($('#center'));
@@ -52,7 +61,7 @@ function paintStatus() {
     const t = $('#t-' + p.id); if (!t) continue; const s = S.status[p.id];
     t.style.display = p.id === 'main' || p.id === 'user' || (s && (!S.gone.has(p.id) || S.leaving.has(p.id))) ? '' : 'none';
   }
-  paintStates();
+  paintStates(); galRefit();
   const prev = $('.row.now'); if (prev) prev.classList.remove('now');
   const now = $(`.row[data-i="${S.idx}"]`); if (now) { now.classList.add('now'); if (document.body.classList.contains('log')) now.scrollIntoView({ block: 'nearest' }); }
   later('detail', renderDetail); later('tree', renderTree); later('meet', renderMeet, 400); drawGantt();
