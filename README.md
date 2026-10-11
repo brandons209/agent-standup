@@ -117,6 +117,14 @@ Four styles in ⚙ (default: **Cartoon voices**, so everything stays understanda
 
 Long lines are subtitled one sentence at a time, in step with the voice.
 
+### Your own voice server (OpenAI-compatible)
+Any server that speaks OpenAI's `/v1/audio/speech` works: OpenAI itself, [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI), LocalAI, openedai-speech… Fill in ⚙ → *Voice server*:
+- **URL** (e.g. `http://localhost:8880/v1` or `https://api.openai.com/v1`), **model** (e.g. `kokoro`, `tts-1`, `gpt-4o-mini-tts`) and **format** (`wav` by default; it plays everywhere, including the VS Code panel);
+- a **default voice** and/or a **voice pool** (comma-separated), shared out to agents without a voice of their own;
+- a voice for the **lead**, for **you** and for **each of your character pictures** (one field per loaded image, so a pony keeps its voice whichever agent wears it). Voices you pick play clean; pool voices still get the cartoon effects in *Cartoon voices*.
+
+The API key is read only from `OPENAI_API_KEY` in the environment of VS Code / the server, never from the page; local servers usually need none. The key is sent to the URL you enter, so only enter servers you trust. When a URL and a voice are set, this server is used instead of the system or Kokoro voices; a line it fails to make is read by a system voice, and ⚙ shows the error.
+
 ## Handy extras
 - **Copy as Markdown** in the recap: a ready-to-paste standup report (who did what, files, tokens, final report of each agent).
 - **Notify me when agents finish** (⚙): a soft chime, the tab title and, in VS Code, a notification once the team has worked for a while and gone quiet.

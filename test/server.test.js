@@ -2,7 +2,7 @@
 const test = require('node:test'), assert = require('node:assert'), fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'as-test-'));
 process.env.AGENT_STANDUP_PREFS = path.join(tmp, 'prefs.json'); process.env.AGENT_STANDUP_KOKORO_DIR = path.join(tmp, 'kokoro'); process.env.AGENT_STANDUP_PROJECTS = path.join(tmp, 'projects');
-const get = (port, p, headers = {}, method = 'GET', body) => new Promise((res, rej) => { const r = http.request({ port, path: p, method, headers }, (x) => { let b = '', n = 0; x.on('data', (d) => { b += d; n += d.length; }); x.on('end', () => res({ status: x.statusCode, body: b, type: x.headers['content-type'], bytes: n })); }); r.on('error', rej); if (body) r.write(body); r.end(); });
+const get = (port, p, headers = {}, method = 'GET', body) => new Promise((res, rej) => { const r = http.request({ port, path: p, method, headers }, (x) => { let b = '', n = 0; x.on('data', (d) => { b += d; n += d.length; }); x.on('end', () => res({ status: x.statusCode, body: b, type: x.headers['content-type'], bytes: n, headers: x.headers })); }); r.on('error', rej); if (body) r.write(body); r.end(); });
 test('settings are kept in a file; cross-site writes are refused', async () => {
   const srv = require('../server.js').start(0); await new Promise((r) => srv.once('listening', r)); const port = srv.address().port;
   try {
@@ -32,4 +32,39 @@ test('pictures returned by tools are counted in the timeline and served from the
     assert.equal((await get(port, '/api/media?proj=..&id=s1&agent=main&tool=toolu_pic&n=0')).status, 400);
     assert.equal((await get(port, '/api/media?proj=-p&id=s1&agent=main&tool=toolu_pic&n=0', { 'sec-fetch-site': 'cross-site' })).status, 403);
   } finally { srv.close(); require('../server.js').shutdown(); }
+});
+test('OpenAI-compatible voice server: settings, request shape, cache, key never leaked, failure reported', async () => {
+  const oldKey = process.env.OPENAI_API_KEY; process.env.OPENAI_API_KEY = 'sk-test';
+  const calls = []; let fail401 = false;
+  const wav = Buffer.alloc(52); wav.write('RIFF', 0); wav.writeUInt32LE(44, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(22050, 24); wav.writeUInt32LE(44100, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(8, 40);
+  const fake = http.createServer((req, res) => { let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => {
+    calls.push({ path: req.url, auth: req.headers.authorization, body: JSON.parse(b) });
+    if (fail401) { res.writeHead(401); return res.end('bad key ' + req.headers.authorization); }
+    res.writeHead(200, { 'content-type': 'audio/wav' }); res.end(wav);
+  }); });
+  await new Promise((r) => fake.listen(0, '127.0.0.1', r)); const fport = fake.address().port;
+  const srv = require('../server.js').start(0); await new Promise((r) => srv.once('listening', r)); const port = srv.address().port, J = { 'content-type': 'application/json' };
+  const put = (tts) => get(port, '/api/prefs', J, 'PUT', JSON.stringify({ tts, _t: 1 }));
+  try {
+    assert.equal((await put({ url: `http://127.0.0.1:${fport}/v1/`, model: 'm', voice: 'v' })).status, 200);
+    const vo = await get(port, '/api/voices?engine=openai'); assert.equal(JSON.parse(vo.body).available, true);
+    assert.ok(!vo.body.includes('sk-test') && !vo.body.includes('127.0.0.1'));
+    const q = '/api/tts?engine=openai&voice=af_bella&rate=178&lang=en&text=';
+    const a = await get(port, q + 'hi'); assert.equal(a.status, 200); assert.equal(a.headers['content-type'], 'audio/wav'); assert.equal(a.headers['cache-control'], 'no-store');
+    assert.equal(calls.length, 1); const c = calls[0];
+    assert.equal(c.path, '/v1/audio/speech'); assert.equal(c.auth, 'Bearer sk-test');
+    assert.equal(c.body.model, 'm'); assert.equal(c.body.voice, 'af_bella'); assert.equal(c.body.speed, 1); assert.equal(c.body.response_format, 'wav'); assert.equal(c.body.input, 'hi');
+    assert.equal((await get(port, q + 'hi')).status, 200); assert.equal(calls.length, 1);
+    assert.equal((await get(port, '/api/tts?engine=openai&voice=%3Cscript%3E&text=hi')).status, 400);
+    assert.equal((await get(port, '/api/tts', { 'sec-fetch-site': 'cross-site' })).status, 403);
+    assert.equal((await get(port, '/api/prefs.js', { 'sec-fetch-site': 'cross-site' })).status, 403);
+    fail401 = true; await get(port, q + 'second');
+    const h = JSON.parse((await get(port, '/api/health')).body); assert.match(h.ttsError, /^HTTP 401/); assert.ok(!h.ttsError.includes('sk-test')); assert.equal(h.ttsKey, true);
+    assert.equal((await put({ url: '' })).status, 200);
+    assert.equal(JSON.parse((await get(port, '/api/voices?engine=openai')).body).available, false);
+    assert.equal(JSON.parse((await get(port, '/api/health')).body).ttsError, '');
+  } finally {
+    if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey;
+    srv.close(); fake.close(); require('../server.js').shutdown();
+  }
 });

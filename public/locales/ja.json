@@ -177,5 +177,15 @@
  "npm not found: install Node.js to enable this option.": "npm が見つかりません。このオプションを使うには Node.js をインストールしてください。",
  "The engine stopped: system voices are used instead.": "エンジンが停止しました。代わりにシステム音声を使います。",
  "Very natural voices (installs on demand)": "とても自然な音声（必要時にインストール）",
- "Voices ready.": "音声の準備ができました。"
+ "Voices ready.": "音声の準備ができました。",
+ " (set OPENAI_API_KEY where the server runs)": " (サーバーが動作している場所で OPENAI_API_KEY を設定してください)",
+ "API key: set OPENAI_API_KEY where the server runs.": "API キー: サーバーが動作している場所で OPENAI_API_KEY を設定してください。",
+ "comma-separated voices": "カンマ区切りの音声",
+ "Default voice": "デフォルトの音声",
+ "Format": "フォーマット",
+ "Model": "モデル",
+ "pool": "プール",
+ "Voice pool": "音声プール",
+ "Voice server: ": "音声サーバー: ",
+ "Voice server (OpenAI-compatible)": "音声サーバー (OpenAI 互換)"
 }

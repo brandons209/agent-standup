@@ -177,5 +177,15 @@
  "npm not found: install Node.js to enable this option.": "找不到 npm：請安裝 Node.js 才能啟用此選項。",
  "The engine stopped: system voices are used instead.": "引擎已停止：改用系統語音。",
  "Very natural voices (installs on demand)": "超自然語音（需要時才安裝）",
- "Voices ready.": "語音已就緒。"
+ "Voices ready.": "語音已就緒。",
+ " (set OPENAI_API_KEY where the server runs)": " (請在伺服器執行的位置設定 OPENAI_API_KEY)",
+ "API key: set OPENAI_API_KEY where the server runs.": "API 金鑰:請在伺服器執行的位置設定 OPENAI_API_KEY。",
+ "comma-separated voices": "以逗號分隔的語音",
+ "Default voice": "預設語音",
+ "Format": "格式",
+ "Model": "模型",
+ "pool": "語音池",
+ "Voice pool": "語音池",
+ "Voice server: ": "語音伺服器: ",
+ "Voice server (OpenAI-compatible)": "語音伺服器(相容 OpenAI)"
 }

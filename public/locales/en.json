@@ -172,5 +172,15 @@
  "You": "You",
  "Your agents are done 🎉": "Your agents are done 🎉",
  "Your Claude Code agents as a live team call": "Your Claude Code agents as a live team call",
- "your turn": "your turn"
+ "your turn": "your turn",
+ " (set OPENAI_API_KEY where the server runs)": " (set OPENAI_API_KEY where the server runs)",
+ "API key: set OPENAI_API_KEY where the server runs.": "API key: set OPENAI_API_KEY where the server runs.",
+ "comma-separated voices": "comma-separated voices",
+ "Default voice": "Default voice",
+ "Format": "Format",
+ "Model": "Model",
+ "pool": "pool",
+ "Voice pool": "Voice pool",
+ "Voice server: ": "Voice server: ",
+ "Voice server (OpenAI-compatible)": "Voice server (OpenAI-compatible)"
 }

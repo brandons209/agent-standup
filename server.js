@@ -481,7 +481,49 @@ function synthesize(voice, wpm, text, out) {
     p.on('error', reject); p.on('close', (code) => (code === 0 && fs.existsSync(out) ? resolve() : reject(new Error('tts failed'))));
   });
 }
-function tts(text, voice, rate, engine) {
+// ---- OpenAI-compatible speech server (URL/model/format from the saved settings, key only from the environment)
+let lastTtsError = '';
+function ttsSettings() {
+  const t = (readPrefs() || {}).tts;
+  if (!t || typeof t.url !== 'string' || !t.url.trim()) { lastTtsError = ''; return null; }
+  let url = t.url.trim().replace(/\/+$/, '');
+  try { if (!/^https?:$/.test(new URL(url).protocol)) throw 0; } catch { lastTtsError = 'invalid voice server URL'; return null; }
+  return { url, model: (typeof t.model === 'string' && t.model.trim().slice(0, 100)) || 'tts-1', format: ['wav', 'mp3', 'flac', 'opus', 'aac'].includes(t.format) ? t.format : 'wav' };
+}
+async function synthOpenAI(cfg, voice, rate, text, out) {
+  const fail = (m) => { lastTtsError = m; throw new Error(m); }, MAX = 20 * 1024 * 1024, key = process.env.OPENAI_API_KEY || '';
+  if (typeof fetch !== 'function') fail('needs Node 18+');
+  let r;
+  try {
+    r = await fetch(cfg.url + '/audio/speech', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30000), headers: { 'content-type': 'application/json', ...(key ? { authorization: 'Bearer ' + key } : {}) },
+      body: JSON.stringify({ model: cfg.model, input: text, voice, response_format: cfg.format, speed: kokoro.speedFor(rate) }) });
+  } catch (e) { lastTtsError = String((e.cause && e.cause.code) || e.name || e.message); throw e; }
+  if (!r.ok) { let b = ''; try { b = (await r.text()).slice(0, 200); } catch {} if (key) b = b.split(key).join('***'); fail('HTTP ' + r.status + ': ' + b); }
+  if (/^(text\/|application\/json)/.test(r.headers.get('content-type') || '')) fail('the voice server did not return audio (check the URL ends in /v1)');
+  if (+r.headers.get('content-length') > MAX) fail('audio too large');
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > MAX) fail('audio too large'); if (!buf.length) fail('empty audio');
+  fs.writeFileSync(out, buf); lastTtsError = '';
+}
+function ttsOpenAI(text, voice, rate, lang) {
+  const cfg = ttsSettings(); if (!cfg) return Promise.reject(new Error('voice server not configured'));
+  voice = String(voice || '');
+  if (!/^[\w.\-+(),:\/*@ ]{1,100}$/.test(voice)) { lastTtsError = 'invalid voice name'; return Promise.reject(new Error('unknown voice')); }
+  text = String(text).slice(0, 1500); rate = Math.max(90, Math.min(360, Math.round(+rate || 180)));
+  const key = crypto.createHash('sha1').update(['openai', cfg.url, cfg.model, cfg.format, voice, rate, text].join('|')).digest('hex'), file = path.join(ttsDir, key + '.' + cfg.format), tmp = path.join(ttsDir, key + '.part.' + cfg.format);
+  if (fs.existsSync(file)) return Promise.resolve(file);
+  if (ttsJobs.has(key)) return ttsJobs.get(key);
+  fs.mkdirSync(ttsDir, { recursive: true });
+  const job = synthOpenAI(cfg, voice, rate, text, tmp).then(() => { fs.renameSync(tmp, file); return file; }, (e) => {   // on failure speak the line with a system voice, uncached
+    try { fs.unlinkSync(tmp); } catch {}
+    const v = listVoices().voices.find((x) => x.locale.startsWith((lang === 'fr' ? 'fr' : 'en') + '_')); if (!v) throw e;
+    const fb = path.join(ttsDir, key + '.fail.' + crypto.randomBytes(4).toString('hex') + '.wav');
+    return synthesize(v.name, rate, text, fb).then(() => fb, (e2) => { try { fs.unlinkSync(fb); } catch {} throw e2; });
+  }).finally(() => ttsJobs.delete(key));
+  ttsJobs.set(key, job); return job;
+}
+function tts(text, voice, rate, engine, lang) {
+  if (engine === 'openai') return ttsOpenAI(text, voice, rate, lang);
   const kk = engine === 'kokoro';
   if (kk) { if (!kokoro.hasVoice(voice)) return Promise.reject(new Error('unknown voice')); }
   else { const vs = listVoices(); if (!vs.available || !vs.voices.some((v) => v.name === voice)) return Promise.reject(new Error('unknown voice')); }
@@ -522,7 +564,7 @@ function start(port = PORT) {
   const json = (o, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
   // Endpoints with side effects (they spawn programs or claim the sound), and the one that serves pictures from a session, refuse requests that a browser marks as coming from another site, e.g. an <img> on a web page.
   const sfs = req.headers['sec-fetch-site'];
-  if (sfs && sfs !== 'same-origin' && sfs !== 'none' && ['/api/translate', '/api/quips', '/api/warm', '/api/audio', '/api/tts', '/api/prefs', '/api/voices', '/api/kokoro', '/api/kokoro/install', '/api/media'].includes(url.pathname)) { res.writeHead(403); return res.end('forbidden'); }
+  if (sfs && sfs !== 'same-origin' && sfs !== 'none' && ['/api/translate', '/api/quips', '/api/warm', '/api/audio', '/api/tts', '/api/prefs', '/api/prefs.js', '/api/voices', '/api/kokoro', '/api/kokoro/install', '/api/media'].includes(url.pathname)) { res.writeHead(403); return res.end('forbidden'); }
   const readBody = (cb) => {   // request bodies are small JSON: stop reading beyond 256 KB and give up after 10 s
     let body = '', over = false; req.setTimeout(10000, () => req.destroy());
     req.on('data', (d) => { if (over) return; body += d; if (body.length > 262144) { over = true; res.writeHead(413); res.end('too large'); req.destroy(); } });
@@ -544,17 +586,23 @@ function start(port = PORT) {
       if (audioOwner.id && Date.now() - audioOwner.seen > 6000) audioOwner = { id: null, seen: 0 };
       return json({ owner: audioOwner.id });
     }
-    if (url.pathname === '/api/health') return json({ claude: findClaude(), apiKey: !!process.env.ANTHROPIC_API_KEY, trError: lastTrError, platform: process.platform });
+    if (url.pathname === '/api/health') return json({ claude: findClaude(), apiKey: !!process.env.ANTHROPIC_API_KEY, trError: lastTrError, ttsError: lastTtsError, ttsKey: !!process.env.OPENAI_API_KEY, platform: process.platform });
     if (url.pathname === '/api/warm') { trWorkers.forEach((w) => { if (!w.p) w.start(); }); return json({ ok: true }); }
     if (url.pathname === '/api/voices') {
+      if (url.searchParams.get('engine') === 'openai') return json({ available: !!ttsSettings(), engine: 'openai', platform: process.platform });
       if (url.searchParams.get('engine') === 'kokoro') { const st = kokoro.status(); if (st.installed && !st.gaveUp) kokoro.warm(); return json({ available: st.installed && !st.gaveUp, ready: st.ready, voices: kokoro.voices(), platform: process.platform, engine: 'kokoro' }); }
       return json(listVoices());
     }
     if (url.pathname === '/api/kokoro/install' && req.method === 'POST') return json(kokoro.install());
     if (url.pathname === '/api/kokoro') return json(kokoro.status());
     if (url.pathname === '/api/tts') {
-      return tts(url.searchParams.get('text') || '', url.searchParams.get('voice'), url.searchParams.get('rate'), url.searchParams.get('engine'))
-        .then((f) => { res.writeHead(200, { 'content-type': 'audio/wav', 'cache-control': 'max-age=86400' }); fs.createReadStream(f).pipe(res); })
+      const eng = url.searchParams.get('engine');
+      return tts(url.searchParams.get('text') || '', url.searchParams.get('voice'), url.searchParams.get('rate'), eng, url.searchParams.get('lang'))
+        .then((f) => {
+          res.writeHead(200, { 'content-type': { mp3: 'audio/mpeg', flac: 'audio/flac', opus: 'audio/ogg', aac: 'audio/aac' }[path.extname(f).slice(1)] || 'audio/wav', 'cache-control': eng === 'openai' ? 'no-store' : 'max-age=86400' });
+          fs.createReadStream(f).pipe(res);
+          if (f.includes('.fail.')) setTimeout(() => fs.unlink(f, () => {}), 60000).unref();   // shared by deduped requests, so removed later
+        })
         .catch((e) => json({ error: String(e.message) }, 400));
     }
     if (url.pathname === '/api/prefs.js') { res.writeHead(200, { 'content-type': 'application/javascript', 'cache-control': 'no-store' }); return res.end('window.SAVED_PREFS = ' + JSON.stringify(readPrefs()).replace(/</g, '\\u003c') + ';'); }

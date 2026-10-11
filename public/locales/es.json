@@ -177,5 +177,15 @@
  "npm not found: install Node.js to enable this option.": "No se encontró npm: instala Node.js para activar esta opción.",
  "The engine stopped: system voices are used instead.": "El motor se detuvo: se usan las voces del sistema.",
  "Very natural voices (installs on demand)": "Voces muy naturales (se instalan bajo demanda)",
- "Voices ready.": "Voces listas."
+ "Voices ready.": "Voces listas.",
+ " (set OPENAI_API_KEY where the server runs)": " (defina OPENAI_API_KEY donde se ejecuta el servidor)",
+ "API key: set OPENAI_API_KEY where the server runs.": "Clave API: defina OPENAI_API_KEY donde se ejecuta el servidor.",
+ "comma-separated voices": "voces separadas por comas",
+ "Default voice": "Voz predeterminada",
+ "Format": "Formato",
+ "Model": "Modelo",
+ "pool": "grupo",
+ "Voice pool": "Grupo de voces",
+ "Voice server: ": "Servidor de voz: ",
+ "Voice server (OpenAI-compatible)": "Servidor de voz (compatible con OpenAI)"
 }

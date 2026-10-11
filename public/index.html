@@ -190,7 +190,7 @@
   .mi { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; text-align:left; padding:8px 10px; border-radius:8px } .mi:hover { background:var(--panel2) }
   .sw { width:30px; height:17px; border-radius:99px; background:#3a3e50; position:relative; flex:none; transition:background .15s } .sw::after { content:''; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:#fff; transition:transform .15s }
   .sw.on { background:var(--accent) } .sw.on::after { transform:translateX(13px) }
-  #menu select { width:100%; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:2px 0 6px } #menu .box { padding:0 10px }
+  #menu select, #menu input[type=text] { width:100%; box-sizing:border-box; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:2px 0 6px } #menu .box { padding:0 10px }
   #menu .hint { font-size:11.5px; color:#ffb347; padding:0 10px 6px }
   #card { position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center; text-align:center; background:radial-gradient(circle at 50% 40%,#2a3a66,#05060c); color:#fff }
   #card.on { display:flex; animation:fadein .4s } @keyframes fadein { from { opacity:0 } }
@@ -244,6 +244,7 @@
   <div class="box" id="musicBox" style="display:none"><select id="station"></select><input id="musicVol" type="range" min="0" max="1" step="0.05" style="width:100%" aria-label="Music volume"></div>
   <div class="box" id="vstyleBox"><select id="vstyle"></select></div>
   <div class="box" id="kokoroBox" style="display:none"><button class="btn" id="kokoroInstall" style="width:100%"></button><div class="hint" id="kokoroHint" style="padding:2px 0 6px"></div></div>
+  <div class="box" id="ttsBox"></div>
   <button class="mi" data-t="roster"><span data-fr="Liste des agents (à gauche)" data-en="Agents list (left)">Liste des agents (à gauche)</span><i class="sw"></i></button>
   <button class="mi" data-t="reactions"><span data-fr="Barre de réactions (👍 👏 ☕)" data-en="Reactions bar (👍 👏 ☕)">Barre de réactions (👍 👏 ☕)</span><i class="sw"></i></button>
   <button class="mi" data-t="banter"><span data-fr="Petites répliques et animations" data-en="Little lines & animations">Petites répliques et animations</span><i class="sw"></i></button>
@@ -303,12 +304,15 @@ const EMBED = Q.get('embed') === '1' || window.parent !== window;
 if (Q.get('pin')) S.pin = Q.get('pin');
 
 let prefs = { lang: 'en', voice: true, roster: true, banter: true, reactions: false, office: false, officeVol: 0.8, vstyle: 'cartoon', notify: false, epi: false, vanish: true, music: false, station: 'fip', musicVol: 0.35, view: 'call', hideCode: false };
+const TTS_DEFAULTS = { url: '', model: 'tts-1', format: 'wav', voice: '', pool: '', voices: {} };
 { let loc = {}; try { loc = JSON.parse(localStorage.getItem('cc.prefs') || '{}') || {}; } catch {}   // the settings file (shared by every window) and this origin's copy: the more recent one wins
   const sv = window.SAVED_PREFS && typeof window.SAVED_PREFS === 'object' ? window.SAVED_PREFS : {}; Object.assign(prefs, (sv._t || 0) > (loc._t || 0) ? sv : loc); }
+{ const t = prefs.tts && typeof prefs.tts === 'object' ? prefs.tts : {}; prefs.tts = { ...TTS_DEFAULTS, ...t, voices: t.voices && typeof t.voices === 'object' && !Array.isArray(t.voices) ? { ...t.voices } : {} }; }
 if (prefs.vstyle === 'babble') prefs.vstyle = 'animal', prefs.vstyleChosen = true;
 if (!prefs.vstyleChosen && (prefs.vstyle === 'animal' || prefs.vstyle === 'sims')) prefs.vstyle = 'cartoon';   // the gibberish styles are opt-in: understandable voices by default
 let prefsTimer = null;
 const savePrefs = () => { prefs._t = Date.now(); try { localStorage.setItem('cc.prefs', JSON.stringify(prefs)); } catch {} clearTimeout(prefsTimer); prefsTimer = setTimeout(() => { fetch('/api/prefs', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(prefs) }).catch(() => {}); }, 400); };
+const flushPrefs = () => { clearTimeout(prefsTimer); prefs._t = Date.now(); try { localStorage.setItem('cc.prefs', JSON.stringify(prefs)); } catch {} return fetch('/api/prefs', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(prefs) }).catch(() => {}); };
 // Languages: French and English live in the code as pairs L(french, english); every other language is a catalogue public/locales/<code>.json mapping the English text to its translation.
 // A missing string falls back to English, so a half-translated language still works. See public/locales/README.md to add one.
 const LANGS = [['en', 'English', 'en'], ['fr', 'Français', 'fr'], ['zh-TW', '繁體中文', 'zh-Hant-TW'], ['zh-CN', '简体中文', 'zh-Hans-CN'], ['es', 'Español', 'es'], ['de', 'Deutsch', 'de'], ['pt-BR', 'Português (Brasil)', 'pt-BR'], ['ja', '日本語', 'ja']];
@@ -363,7 +367,7 @@ function reassignChars() {   // swap only the drawn avatar, so spotlight, bubble
 function renderCharInfo() {
   const el = $('#charInfo'); if (!el) return;
   el.innerHTML = CHARS.n ? `✓ ${CHARS.n} ${esc(L('personnage(s) personnalisé(s) chargé(s)', 'custom character(s) loaded'))}` : `${esc(L('Déposez vos images (PNG ou SVG) dans ce dossier pour remplacer les personnages :', 'Drop your pixel art (PNG or SVG) in this folder to replace the characters:'))}<br><code style="word-break:break-all">${esc(CHARS.dir)}</code><br>${esc(L('lead.png = le chef · you.png = vous · les autres = les sous-agents · nom-talk.png = bouche ouverte', 'lead.png = the lead · you.png = you · others = the sub-agents · name-talk.png = open mouth'))}`;
-  $('#charOpen').style.display = EMBED ? '' : 'none';
+  $('#charOpen').style.display = EMBED ? '' : 'none'; renderTtsBox();
 }
 function persona(a) { const p = persona0(a); p.custom = customFor(a.id); return p; }
 function persona0(a) {
@@ -532,9 +536,9 @@ function trProblem() {   // why translation can't work, with what to do about it
   return L('Traduction indisponible pour l’instant : vérifiez que « claude » fonctionne dans un terminal.', 'Translation unavailable right now: check that “claude” works in a terminal.');
 }
 function updateHint() {
-  const h = $('#trHint'), noFr = FR() && TTS.server && !TTS.pool.fr.length, noTts = prefs.voice && !TTS.server && TTS.platform !== '', noRadio = prefs.music && RADIO.err, other = elsewhere(), bad = (FR() && !S.trOk) || noFr || noTts || noRadio || other;
+  const h = $('#trHint'), oa = TTS.engine === 'openai', noFr = !oa && FR() && TTS.server && !TTS.pool.fr.length, noTts = !oa && prefs.voice && !TTS.server && TTS.platform !== '', ttsError = (S.health || {}).ttsError, ttsBad = prefs.voice && prefs.tts.url.trim() && ttsError, noRadio = prefs.music && RADIO.err, other = elsewhere(), bad = (FR() && !S.trOk) || noFr || noTts || ttsBad || noRadio || other;
   h.style.display = bad ? '' : 'none';
-  h.textContent = other ? L('Le son est joué dans une autre fenêtre Agent Standup. Cliquez sur 🔈 pour le reprendre ici.', 'Sound is playing in another Agent Standup window. Click 🔈 to take it over here.') : noRadio ? L('Radio injoignable : vérifiez votre connexion ou changez de station.', 'Radio unreachable: check your connection or pick another station.') : noFr ? L('Aucune voix française installée (Windows : Paramètres › Heure et langue › Voix).', 'No French voice installed (Windows: Settings › Time & language › Speech).') : noTts ? L('Aucune voix système trouvée : les agents marmonneront.', 'No system voice found: agents will mumble.') : trProblem();
+  h.textContent = other ? L('Le son est joué dans une autre fenêtre Agent Standup. Cliquez sur 🔈 pour le reprendre ici.', 'Sound is playing in another Agent Standup window. Click 🔈 to take it over here.') : noRadio ? L('Radio injoignable : vérifiez votre connexion ou changez de station.', 'Radio unreachable: check your connection or pick another station.') : ttsBad ? L('Serveur de voix : ', 'Voice server: ') + ttsError + (/^HTTP 401/.test(ttsError) && !S.health.ttsKey ? L(' (définissez OPENAI_API_KEY là où tourne le serveur)', ' (set OPENAI_API_KEY where the server runs)') : '') : noFr ? L('Aucune voix française installée (Windows : Paramètres › Heure et langue › Voix).', 'No French voice installed (Windows: Settings › Time & language › Speech).') : noTts ? L('Aucune voix système trouvée : les agents marmonneront.', 'No system voice found: agents will mumble.') : trProblem();
 }
 
 // =====================================================================
@@ -671,24 +675,37 @@ function rankVoices(list) {   // list of names → best distinct voices first
   [...list].sort((a, b) => voiceScore(b) - voiceScore(a)).forEach((n) => { const base = n.replace(/\s*\(.*$/, ''); if (voiceScore(n) > -100 && !seen.has(base)) { seen.add(base); out.push(n); } });
   return out.slice(0, 5);
 }
+const ttsVoiceOf = (key) => { const v = prefs.tts.voices; return key && Object.hasOwn(v, key) && typeof v[key] === 'string' ? v[key].trim() : ''; };
 const TTS = {
-  server: false, engine: 'system', platform: '', pool: { fr: [], en: [] }, cache: new Map(),
+  server: false, engine: 'system', platform: '', pool: { fr: [], en: [] }, cache: new Map(), oaGen: 0, oaReported: false,
+  pick(p) {   // OpenAI engine: a voice chosen for this character, else the pool, else the default voice
+    const key = p.id === 'main' ? 'lead' : p.id === 'user' ? 'you' : (p.custom && p.custom.name ? p.custom.name.toLowerCase() : ''), v = ttsVoiceOf(key);
+    if (v) return { voice: v, picked: true };
+    const pool = prefs.tts.pool.split(',').map((s) => s.trim()).filter(Boolean);
+    return pool.length ? { voice: pool[(p.vi >>> 2) % pool.length], picked: false } : prefs.tts.voice.trim() ? { voice: prefs.tts.voice.trim(), picked: false } : null;
+  },
   async init() {
+    const gen = ++this.oaGen; this.oaReported = false;
     this.engine = 'system'; this.server = false; this.pool = { fr: [], en: [] }; this.cache.clear();
     try {
+      if (prefs.tts.url.trim() && (prefs.tts.voice.trim() || prefs.tts.pool.trim())) {
+        await flushPrefs(); if (gen !== this.oaGen) return;
+        const o = await (await fetch('/api/voices?engine=openai')).json(); if (gen !== this.oaGen) return;
+        if (o.available) { this.server = true; this.engine = 'openai'; this.platform = o.platform || ''; return; }
+      }
       if (prefs.vstyle === 'kokoro') {   // natural voices installed on demand; until they are, the system voices stay in use
-        const k = await (await fetch('/api/voices?engine=kokoro')).json();
+        const k = await (await fetch('/api/voices?engine=kokoro')).json(); if (gen !== this.oaGen) return;
         if (k.available && k.ready) { this.server = true; this.engine = 'kokoro'; this.platform = k.platform || ''; for (const l of ['fr', 'en']) this.pool[l] = k.voices.filter((v) => v.locale.startsWith(l + '_')).map((v) => v.name); return; }
       }
-      const d = await (await fetch('/api/voices')).json(); this.platform = d.platform || ''; if (!d.available) return; this.server = true;
+      const d = await (await fetch('/api/voices')).json(); if (gen !== this.oaGen) return; this.platform = d.platform || ''; if (!d.available) return; this.server = true;
       for (const l of ['fr', 'en']) this.pool[l] = rankVoices(d.voices.filter((v) => v.locale.startsWith(l + '_')).map((v) => v.name)); } catch {}
   },
-  voiceFor(p, fr = FR()) { const pool = this.pool[fr ? 'fr' : 'en']; return pool.length ? (p.id === 'main' ? pool[0] : pool[(p.vi >>> 2) % pool.length]) : null; },
+  voiceFor(p, fr = FR()) { if (this.engine === 'openai') return (this.pick(p) || {}).voice || null; const pool = this.pool[fr ? 'fr' : 'en']; return pool.length ? (p.id === 'main' ? pool[0] : pool[(p.vi >>> 2) % pool.length]) : null; },
   rate() { return Math.round(Math.max(120, Math.min(330, 178 * (S.live ? 1.12 : +$('#speed').value))) / 10) * 10; },
-  buf(text, voice, rate) {
-    const key = this.engine + '|' + voice + '|' + rate + '|' + text;
+  buf(text, voice, rate, fr = FR()) {
+    const key = this.engine + '|' + voice + '|' + fr + '|' + rate + '|' + text;
     if (!this.cache.has(key)) {
-      this.cache.set(key, fetch(`/api/tts?engine=${this.engine}&voice=${encodeURIComponent(voice)}&rate=${rate}&text=${encodeURIComponent(text)}`).then((r) => { if (!r.ok) throw new Error('tts'); return r.arrayBuffer(); }).then((b) => AUD.ctx.decodeAudioData(b)));
+      this.cache.set(key, fetch(`/api/tts?engine=${this.engine}&voice=${encodeURIComponent(voice)}&rate=${rate}&text=${encodeURIComponent(text)}&lang=${fr ? 'fr' : 'en'}`).then((r) => { if (!r.ok) throw new Error('tts'); return r.arrayBuffer(); }).then((b) => AUD.ctx.decodeAudioData(b)));
       if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value);
       this.cache.get(key).catch(() => this.cache.delete(key));
     }
@@ -699,7 +716,7 @@ function warmTTS(i) {   // synthesize the next few lines ahead of time
   if (!TTS.server || !AUD.ctx || !prefs.voice || prefs.vstyle === 'animal' || prefs.vstyle === 'sims') return;
   let n = 0; for (let k = i; k < S.events.length && n < 4; k++) {
     const e = S.events[k]; if (quiet(e)) continue; n++;
-    const p = S.agents[e.agent], v = p && TTS.voiceFor(p, FR() && trMem.has(baseText(e))); if (v) TTS.buf(speakable(spoken(e)), v, TTS.rate()).catch(() => {});
+    const p = S.agents[e.agent], fr = FR() && trMem.has(baseText(e)), v = p && TTS.voiceFor(p, fr); if (v) TTS.buf(speakable(spoken(e)), v, TTS.rate(), fr).catch(() => {});
   }
 }
 
@@ -768,10 +785,11 @@ async function speakBabble(text, p, gain, token) {
 }
 async function speakServer(text, p, gain, token, fr = FR()) {
   const voice = TTS.voiceFor(p, fr); if (!voice) throw new Error('no voice');
-  const buf = await TTS.buf(speakable(text), voice, TTS.rate()); if (token !== S.token) return;
+  let buf; try { buf = await TTS.buf(speakable(text), voice, TTS.rate(), fr); } catch (e) { if (TTS.engine === 'openai' && !TTS.oaReported) { TTS.oaReported = true; loadHealth(); } throw e; }
+  if (token !== S.token) return;
   const c = AUD.ctx, src = c.createBufferSource(); src.buffer = buf;
   const an = c.createAnalyser(); an.fftSize = 256; const g = c.createGain(); g.gain.value = gain; let stops = [];
-  if (prefs.vstyle === 'natural' || prefs.vstyle === 'kokoro') src.connect(an); else { const ch = fxChain(c, src, fxFor(p)); stops = ch.stops; ch.node.connect(an); }
+  if (prefs.vstyle === 'natural' || prefs.vstyle === 'kokoro' || (TTS.engine === 'openai' && (TTS.pick(p) || {}).picked)) src.connect(an); else { const ch = fxChain(c, src, fxFor(p)); stops = ch.stops; ch.node.connect(an); }
   an.connect(g); g.connect(AUD.voice);
   const data = new Uint8Array(an.fftSize);
   S.level[p.id] = () => { an.getByteTimeDomainData(data); let s = 0; for (const v of data) { const x = (v - 128) / 128; s += x * x; } return Math.sqrt(s / data.length); };   // drives the mouth
@@ -1738,7 +1756,7 @@ function setView(v) { prefs.view = v; savePrefs(); document.body.classList.toggl
 
 $('#viewSeg').onclick = (e) => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); };
 $('#langSel').onchange = () => setLang($('#langSel').value, true);
-$('#charReload').onclick = async () => { await loadChars(); reassignChars(); renderCharInfo(); };
+$('#charReload').onclick = async () => { await loadChars(); reassignChars(); renderCharInfo(); await TTS.init(); };
 $('#charOpen').onclick = () => window.parent.postMessage({ agentStandup: 'openCharacters' }, '*');
 $('#modeSeg').onclick = (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m); };
 $('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b) return; prefs[b.dataset.t] = !prefs[b.dataset.t]; savePrefs(); if (prefs[b.dataset.t] && ['voice', 'office', 'music', 'notify'].includes(b.dataset.t)) claimAudio(); b.querySelector('.sw').classList.toggle('on', prefs[b.dataset.t]); AUD.apply(); if (b.dataset.t === 'office') $('#officeBox').style.display = prefs.office ? '' : 'none'; if (b.dataset.t === 'reactions') document.body.classList.toggle('react', prefs.reactions); if (b.dataset.t === 'roster') { document.body.classList.toggle('rost', prefs.roster); paintStates(); } if (b.dataset.t === 'notify' && prefs.notify) askNotify(); if (b.dataset.t === 'vanish' && !prefs.vanish) { S.gone.clear(); paintStatus(); } if (b.dataset.t === 'charRotate') reassignChars();
@@ -1747,6 +1765,23 @@ $('#station').innerHTML = STATIONS.map((s) => `<option value="${s.id}">📻 ${s.
 $('#station').value = prefs.station; $('#musicVol').value = prefs.musicVol; $('#musicBox').style.display = prefs.music ? '' : 'none';
 $('#station').onchange = (e) => { prefs.station = e.target.value; savePrefs(); AUD.init(); RADIO.sync(); };
 $('#vstyle').innerHTML = [['animal', 'Animal Crossing (babillage)', 'Animal Crossing (babble)'], ['sims', 'Simlish (babillage)', 'Simlish (babble)'], ['cartoon', 'Voix cartoon (voix réelle)', 'Cartoon voices (real voice)'], ['natural', 'Voix naturelles', 'Natural voices'], ['kokoro', 'Voix très naturelles (à installer)', 'Very natural voices (installs on demand)']].map(([v, fr, en]) => `<option value="${v}" data-fr="${fr}" data-en="${en}">${L(fr, en)}</option>`).join(''); $('#vstyle').value = prefs.vstyle; $('#vstyle').onchange = () => { prefs.vstyle = $('#vstyle').value; prefs.vstyleChosen = true; savePrefs(); TTS.init().then(kokoroUI); kokoroUI(); };
+// ---- ⚙ → voice server (OpenAI-compatible): settings box, rebuilt with the characters
+function renderTtsBox() {
+  const box = $('#ttsBox'); if (!box) return; box.textContent = '';
+  const t = prefs.tts, apply = () => { TTS.init().then(() => loadHealth()); };
+  const lab = (txt) => { const d = document.createElement('div'); d.className = 'dim'; d.style.cssText = 'font-size:11.5px;margin:4px 0 0'; d.textContent = txt; box.appendChild(d); };
+  const inp = (txt, val, ph, set) => { lab(txt); const i = document.createElement('input'); i.type = 'text'; i.value = val; i.placeholder = ph; i.spellcheck = false; i.onchange = () => { set(i.value.trim()); apply(); }; box.appendChild(i); };
+  lab(L('Serveur de voix (compatible OpenAI)', 'Voice server (OpenAI-compatible)'));
+  inp('URL', t.url, 'http://localhost:8880/v1', (v) => (t.url = v));
+  inp(L('Modèle', 'Model'), t.model, 'tts-1', (v) => (t.model = v));
+  lab(L('Format', 'Format')); const fs = document.createElement('select'); for (const f of ['wav', 'mp3', 'flac', 'opus', 'aac']) fs.add(new Option(f, f)); fs.value = t.format; fs.onchange = () => { t.format = fs.value; apply(); }; box.appendChild(fs);
+  inp(L('Voix par défaut', 'Default voice'), t.voice, '', (v) => (t.voice = v));
+  inp(L('Voix en rotation', 'Voice pool'), t.pool, L('voix séparées par des virgules', 'comma-separated voices'), (v) => (t.pool = v));
+  const ph = L('pool', 'pool');
+  for (const [key, name] of [['lead', L('Chef', 'Lead')], ['you', L('Vous', 'You')], ...CHARS.pool.map((c) => [c.name.toLowerCase(), c.name])])
+    inp(name, ttsVoiceOf(key), ph, (v) => { if (v) t.voices[key] = v; else delete t.voices[key]; });
+  const n = document.createElement('div'); n.className = 'dim'; n.style.cssText = 'font-size:11.5px;margin:6px 0'; n.textContent = L('Clé API : définissez OPENAI_API_KEY là où tourne le serveur.', 'API key: set OPENAI_API_KEY where the server runs.'); box.appendChild(n);
+}
 // ---- ⚙ → very natural voices (Kokoro): install box and status, polled while installing
 let kokoroTimer = null;
 async function kokoroUI() {
