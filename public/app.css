@@ -123,12 +123,12 @@
   #logGrip { position:absolute; z-index:2; touch-action:none; top:0; bottom:0; left:-3px; width:6px; cursor:col-resize } #logGrip:hover { background:var(--accent); opacity:.4 }
   body.logb #logGrip { top:-3px; bottom:auto; left:0; right:0; width:auto; height:6px; cursor:row-resize }
   aside h2 { display:flex; align-items:center; justify-content:space-between; margin:0; padding:11px 14px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); border-bottom:1px solid var(--line) }
-  #log { flex:1; overflow:auto }
-  .row { padding:7px 14px; border-bottom:1px solid var(--line); font-size:12.5px }
+  #log { flex:1; overflow:auto; font-size:var(--logf, 12.5px) }
+  .row { padding:.55em 14px; border-bottom:1px solid var(--line) }
   body.replay .row { cursor:pointer } body.replay .row:hover { background:var(--panel2) }
-  .row.now { background:#283052 } .row .who { font-weight:600 } .row .arrow, .row .k { color:var(--dim); font-size:11px }
+  .row.now { background:#283052 } .row .who { font-weight:600 } .row .arrow, .row .k { color:var(--dim); font-size:.88em }
   .row .txt { color:#c3c6d4; word-break:break-word } .row .who { color:var(--c) } .row { border-left:3px solid transparent } .row.say, .row.report, .row.order, .row.user { border-left-color:color-mix(in srgb, var(--c, transparent) 70%, transparent) }
-  .row.chat { padding-top:4px; padding-bottom:4px; font-size:11.5px; opacity:.72 } .row.chat .txt { display:inline; font-style:italic } .row.tools { padding-top:3px; padding-bottom:3px; font-size:11px; opacity:.6 } .row.speaking { background:color-mix(in srgb, var(--accent) 16%, transparent) }
+  .row.chat { padding-top:.3em; padding-bottom:.3em; font-size:.92em; opacity:.72 } .row.chat .txt { display:inline; font-style:italic } .row.tools { padding-top:.25em; padding-bottom:.25em; font-size:.88em; opacity:.6 } .row.speaking { background:color-mix(in srgb, var(--accent) 16%, transparent) }
   footer { display:none; height:44px; flex:none; align-items:center; gap:12px; padding:0 14px; border-top:1px solid var(--line) }
   body.replay footer { display:flex }
   input[type=range] { accent-color:var(--accent) } #seek { flex:1; min-width:40px } #pos, footer label.dim { white-space:nowrap; flex:none } @media (max-width:520px) { footer { gap:8px; padding:0 8px } footer label.dim { display:none } }   /* narrow: the 1× 2× 4× 8× buttons are the speed control */
@@ -142,7 +142,8 @@
   .tile { position:relative; height:100%; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,.1); background:#222; box-shadow:0 2px 12px rgba(0,0,0,.35); cursor:pointer; transition:opacity .3s, border-color .2s, box-shadow .2s; animation:join .35s ease }
   @keyframes join { from { opacity:0; transform:scale(.88) } }
   .tile svg { width:100%; height:100%; display:block }
-  .tile.lead { order:-2 } .tile.focus { order:-3; grid-column:span var(--fcols,2); grid-row:span var(--fr,2) } .tile.speaking { border-color:var(--ac,var(--accent)); box-shadow:0 0 0 4px var(--ac,var(--accent)), 0 0 26px 6px color-mix(in srgb, var(--ac,var(--accent)) 55%, transparent), 0 10px 30px rgba(0,0,0,.55); animation:ring 1.4s ease-in-out infinite } @keyframes ring { 50% { box-shadow:0 0 0 4px var(--ac,var(--accent)), 0 0 34px 10px color-mix(in srgb, var(--ac,var(--accent)) 40%, transparent), 0 10px 30px rgba(0,0,0,.55) } }   /* who is talking: a glowing ring in their own colour */
+  .tile.lead { order:-2 } .tile.focus { order:-3; grid-column:span var(--fcols,2); grid-row:span var(--fr,2) } .tile.speaking { border-color:var(--ac,var(--accent)); box-shadow:0 0 0 4px var(--ac,var(--accent)), 0 10px 30px rgba(0,0,0,.55) }
+  .tile.speaking::before { content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:5; box-shadow:0 0 26px 6px color-mix(in srgb, var(--ac,var(--accent)) 55%, transparent); animation:ring 1.4s ease-in-out infinite } @keyframes ring { 50% { opacity:.45 } }   /* who is talking: a glowing ring in their own colour; the glow pulses on its own layer, so the tile's own animation (its entrance) is never restarted */
   .tile.lead.speaking { border-color:var(--gold); box-shadow:0 0 0 3px rgba(245,192,74,.4), 0 10px 30px rgba(0,0,0,.55) }
   body.presenting .tile.focus.presenter, body.presenting .tile.focus:not(.speaking) { order:0; grid-column:auto; grid-row:auto } .tile.focus .bubble { font-size:16px; max-width:72% }
   .tile.working { border-color:rgba(240,160,32,.8) } .tile.done svg { filter:saturate(.75) brightness(.93) }
@@ -170,7 +171,7 @@
   .ticker { display:none; position:absolute; left:6px; right:6px; bottom:30px; font:10.5px/1.3 ui-monospace,Menlo,monospace; color:#fff; background:rgba(15,20,35,.8); border-radius:5px; padding:2px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   .ticker.on { display:block } .ticker i { font-style:normal; color:#ffd24a } .ticker.flash { animation:flash .25s } @keyframes flash { from { background:#3b5bdb } }
   /* character animation: all state-driven from the tile's classes */
-  .cimg { display:none } svg:not([data-f]) .f-idle, svg[data-f=idle] .f-idle, svg[data-f=talk] .f-talk, svg[data-f=think] .f-think, svg[data-f=celebrate] .f-celebrate { display:inline }   /* a custom character's picture: the one setFrame picks */
+  .cimg { visibility:hidden } svg:not([data-f]) .f-idle, svg[data-f=idle] .f-idle, svg[data-f=talk] .f-talk, svg[data-f=think] .f-think, svg[data-f=celebrate] .f-celebrate { visibility:visible }   /* a custom character's picture: the one setFrame picks. Hidden, not undisplayed: every picture is decoded up front, so a change of picture never blinks */
   .fig { transform-origin:50px 76px; animation:bob 4.4s ease-in-out infinite; animation-delay:var(--d,0s) } @keyframes bob { 50% { transform:translateY(-.9px) } }
   .tile.speaking .fig { animation:talk .46s ease-in-out infinite } @keyframes talk { 50% { transform:scale(1.025,.985) translateY(-.5px) } }
   .tile.vanishing { pointer-events:none; z-index:3; animation:vanish 1.2s cubic-bezier(.45,0,.75,.35) forwards }

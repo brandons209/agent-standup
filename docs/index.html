@@ -71,7 +71,7 @@ details { margin:14px 0 0; color:var(--dim) } details summary { cursor:pointer; 
 .langs { color:var(--dim); font-size:15px }
 p a, .fine a, li a { color:var(--accent) } p a:hover, .fine a:hover, li a:hover { text-decoration:underline }
 /* character animation: all state-driven from the tile's classes */
-  .cimg { display:none } svg:not([data-f]) .f-idle, svg[data-f=idle] .f-idle, svg[data-f=talk] .f-talk, svg[data-f=think] .f-think, svg[data-f=celebrate] .f-celebrate { display:inline }   /* a custom character's picture: the one setFrame picks */
+  .cimg { visibility:hidden } svg:not([data-f]) .f-idle, svg[data-f=idle] .f-idle, svg[data-f=talk] .f-talk, svg[data-f=think] .f-think, svg[data-f=celebrate] .f-celebrate { visibility:visible }   /* a custom character's picture: the one setFrame picks. Hidden, not undisplayed: every picture is decoded up front, so a change of picture never blinks */
   .fig { transform-origin:50px 76px; animation:bob 4.4s ease-in-out infinite; animation-delay:var(--d,0s) } @keyframes bob { 50% { transform:translateY(-.9px) } }
   .tile.speaking .fig { animation:talk .46s ease-in-out infinite } @keyframes talk { 50% { transform:scale(1.025,.985) translateY(-.5px) } }
   .tile.vanishing { pointer-events:none; z-index:3; animation:vanish 1.2s cubic-bezier(.45,0,.75,.35) forwards }
