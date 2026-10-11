@@ -2,7 +2,7 @@
 const vscode = require('vscode');
 const http = require('http'), fs = require('fs');
 
-let panel = null, status = null, started = null;
+const panels = new Map(); let status = null, started = null;
 
 const cfg = () => vscode.workspace.getConfiguration('agentStandup');
 const tt = (s, ...a) => (vscode.l10n && vscode.l10n.t ? vscode.l10n.t(s, ...a) : s.replace(/\{(\d+)\}/g, (_, i) => a[i]));   // runtime strings: bundles in ./l10n, the English text is the key
@@ -35,25 +35,30 @@ async function url() {
   return `http://localhost:${port}/${q}`;
 }
 
-async function openPanel(pin) {   // pin: { id, proj } of the session to follow (from the status bar)
-  if (panel) { try { panel.reveal(); if (pin && pin.id) panel.webview.postMessage({ agentStandup: 'pin', id: pin.id, proj: pin.proj }); return; } catch { panel = null; } }   // a disposed panel falls through and is recreated
+async function openPanel(pin) {   // pin: { id, proj } of the session to lock the tab to; none: the tab that follows the latest activity
+  pin = pin && typeof pin.id === 'string' ? pin : null;
+  const key = pin ? `${pin.proj || ''}/${pin.id}` : 'follow', old = panels.get(key);
+  if (old) { try { old.reveal(); return; } catch { panels.delete(key); } }   // a disposed panel falls through and is recreated
   let u;
   try { u = await url(); } catch (e) { return vscode.window.showErrorMessage(e.message); }
-  if (pin && pin.id) u = u.replace(/([?&])proj=[^&]*&?/, '$1').replace(/[?&]$/, '') + `&pin=${encodeURIComponent(pin.id)}&proj=${encodeURIComponent(pin.proj || '')}`;   // one proj parameter only: the pinned session's project
+  if (pin) u = u.replace(/([?&])proj=[^&]*&?/, '$1').replace(/[?&]$/, '') + `&pin=${encodeURIComponent(pin.id)}&proj=${encodeURIComponent(pin.proj || '')}`;   // one proj parameter only: the pinned session's project
   const ext = await vscode.env.asExternalUri(vscode.Uri.parse(u + '&embed=1'));
-  panel = vscode.window.createWebviewPanel('agentStandup', 'Agent Standup', vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
-  relay(panel.webview); panel.webview.html = frameHtml(ext.toString(true));
-  panel.onDidDispose(() => (panel = null));
+  const row = pin && require('./server.js').boardRows().find((r) => r.id === pin.id), title = pin ? ('Standup: ' + ((row && row.title) || tt('Untitled session'))).slice(0, 40) : 'Agent Standup';
+  const panel = vscode.window.createWebviewPanel('agentStandup', title, vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
+  panels.set(key, panel); relay(panel.webview); panel.webview.html = frameHtml(ext.toString(true));
+  panel.onDidDispose(() => panels.delete(key));
+  panel.onDidChangeViewState((e) => { if (e.webviewPanel.active) e.webviewPanel.webview.postMessage({ agentStandup: 'claim' }); });   // the tab you look at is the one that talks
 }
 const frameHtml = (src) => `<!doctype html><html><head><meta charset="utf-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
     <style>html,body{margin:0;height:100%;background:#12131a}iframe{border:0;width:100%;height:100vh}</style></head>
     <body><iframe src="${src}" allow="autoplay; clipboard-write"></iframe>
-    <script>const vs = acquireVsCodeApi(); const fr = document.querySelector('iframe'); addEventListener('message', (e) => { if (e.source === fr.contentWindow) { if (e.data && e.data.agentStandup) vs.postMessage(e.data); } else if (e.data && e.data.agentStandup === 'pin') fr.contentWindow.postMessage(e.data, '*'); });</script></body></html>`;
+    <script>const vs = acquireVsCodeApi(); const fr = document.querySelector('iframe'); addEventListener('message', (e) => { if (e.source === fr.contentWindow) { if (e.data && e.data.agentStandup) vs.postMessage(e.data); } else if (e.data && e.data.agentStandup === 'claim') fr.contentWindow.postMessage(e.data, '*'); });</script></body></html>`;
 // Messages from the page: open it in the browser, or open a donation link (https only, known donation sites only).
 const DONATE_HOSTS = /^(www\.)?(buymeacoffee\.com|ko-fi\.com|paypal\.me|paypal\.com|github\.com)$/;
 const relay = (webview) => webview.onDidReceiveMessage((m) => {
   if (!m) return;
+  if (m.agentStandup === 'openSession' && typeof m.id === 'string') openPanel({ id: m.id, proj: typeof m.proj === 'string' ? m.proj : '' });
   if (m.agentStandup === 'openBrowser') openBrowser();
   if (m.agentStandup === 'openCharacters') openCharacters();
   if (m.agentStandup === 'notify' && typeof m.text === 'string') vscode.window.showInformationMessage('Agent Standup: ' + m.text.slice(0, 120));
@@ -99,6 +104,11 @@ function activate(ctx) {
   applyPath(); ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((ev) => { if (ev.affectsConfiguration('agentStandup.claudePath') || ev.affectsConfiguration('agentStandup.charactersPath')) applyPath(); }));
   ctx.subscriptions.push(
     vscode.commands.registerCommand('agentStandup.open', openPanel),
+    vscode.commands.registerCommand('agentStandup.openSession', async () => {
+      const rows = require('./server.js').boardRows().filter((r) => !projKey() || r.proj === projKey());
+      const pick = await vscode.window.showQuickPick(rows.map((r) => ({ label: r.title, description: r.state, detail: r.proj, r })), { placeHolder: tt('Open a session in its own tab') });
+      if (pick) openPanel({ id: pick.r.id, proj: pick.r.proj });
+    }),
     vscode.commands.registerCommand('agentStandup.openInBrowser', openBrowser),
     vscode.commands.registerCommand('agentStandup.openCharacters', openCharacters),
     vscode.commands.registerCommand('agentStandup.focus', () => vscode.commands.executeCommand('workbench.view.extension.agentStandup')),

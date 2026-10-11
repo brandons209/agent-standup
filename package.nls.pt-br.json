@@ -2,6 +2,7 @@
   "extension.description": "Acompanhe sua sessão do Claude Code como uma chamada de vídeo animada ao vivo: o agente principal dá ordens, os subagentes entram, compartilham a tela e reportam — com vozes, árvore de subagentes, linha do tempo, resumo e exportação de vídeo.",
   "command.open.title": "Agent Standup: Abrir chamada ao vivo",
   "command.openInBrowser.title": "Agent Standup: Abrir no navegador (voz + som)",
+  "command.openSession.title": "Agent Standup: Abrir uma sessão em sua própria aba",
   "command.focus.title": "Agent Standup: Mostrar barra lateral",
   "command.openCharacters.title": "Agent Standup: Abrir pasta de personagens (sua própria pixel art)",
   "view.name": "Chamada ao vivo",

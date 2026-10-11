@@ -2,6 +2,7 @@
   "extension.description": "Verfolge deine Claude Code-Sitzung als lebendigen, animierten Team-Videoanruf: Der Hauptagent gibt Aufträge, Subagenten treten bei, teilen ihren Bildschirm und berichten zurück — mit Stimmen, Subagenten-Baum, Zeitleiste, Zusammenfassung und Videoexport.",
   "command.open.title": "Agent Standup: Live-Videoanruf öffnen",
   "command.openInBrowser.title": "Agent Standup: Im Browser öffnen (Stimme + Ton)",
+  "command.openSession.title": "Agent Standup: Sitzung in eigenem Tab öffnen",
   "command.focus.title": "Agent Standup: Seitenleiste anzeigen",
   "command.openCharacters.title": "Agent Standup: Figuren-Ordner öffnen (deine eigene Pixel-Art)",
   "view.name": "Live-Videoanruf",

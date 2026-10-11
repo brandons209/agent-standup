@@ -2,6 +2,7 @@
   "extension.description": "把你的 Claude Code 会话变成一场实时动画团队视频通话：主代理下达指令，子代理加入、共享屏幕并汇报——配有语音、子代理树状图、时间线、回顾和视频导出。",
   "command.open.title": "Agent Standup: 打开实时视频通话",
   "command.openInBrowser.title": "Agent Standup: 在浏览器中打开（语音 + 声音）",
+  "command.openSession.title": "Agent Standup:在独立标签页中打开会话",
   "command.focus.title": "Agent Standup: 显示侧边栏",
   "command.openCharacters.title": "Agent Standup: 打开角色文件夹（你自己的像素画）",
   "view.name": "实时视频通话",

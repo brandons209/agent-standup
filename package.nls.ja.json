@@ -2,6 +2,7 @@
   "extension.description": "Claude Code のセッションを、ライブのアニメーション付きチーム通話として眺められます。メインエージェントが指示を出し、サブエージェントが参加して画面を共有し、報告します。音声、サブエージェントのツリー、タイムライン、まとめ、動画書き出しにも対応。",
   "command.open.title": "Agent Standup: ライブ通話を開く",
   "command.openInBrowser.title": "Agent Standup: ブラウザで開く（音声・サウンド対応）",
+  "command.openSession.title": "Agent Standup: セッションを専用タブで開く",
   "command.focus.title": "Agent Standup: サイドバーを表示",
   "command.openCharacters.title": "Agent Standup: キャラクターフォルダを開く（自作のドット絵）",
   "view.name": "ライブ通話",

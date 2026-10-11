@@ -2,6 +2,7 @@
   "extension.description": "Suivez votre session Claude Code comme un appel d’équipe animé en direct : le chef donne ses ordres, les sous-agents rejoignent l’appel, partagent leur écran et rendent compte — avec des voix, un arbre des sous-agents, une frise, un récap et l’export vidéo.",
   "command.open.title": "Agent Standup : ouvrir l’appel en direct",
   "command.openInBrowser.title": "Agent Standup : ouvrir dans le navigateur (voix + son)",
+  "command.openSession.title": "Agent Standup : ouvrir une session dans son propre onglet",
   "command.focus.title": "Agent Standup : afficher la barre latérale",
   "command.openCharacters.title": "Agent Standup : ouvrir le dossier des personnages (votre propre pixel art)",
   "view.name": "Appel en direct",

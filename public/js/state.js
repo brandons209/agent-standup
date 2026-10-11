@@ -78,4 +78,4 @@ function updateHint() {
   h.textContent = other ? L('Le son est joué dans une autre fenêtre Agent Standup. Cliquez sur 🔈 pour le reprendre ici.', 'Sound is playing in another Agent Standup window. Click 🔈 to take it over here.') : noRadio ? L('Radio injoignable : vérifiez votre connexion ou changez de station.', 'Radio unreachable: check your connection or pick another station.') : ttsBad ? L('Serveur de voix : ', 'Voice server: ') + ttsError + (/^HTTP 401/.test(ttsError) && !S.health.ttsKey ? L(' (définissez OPENAI_API_KEY là où tourne le serveur)', ' (set OPENAI_API_KEY where the server runs)') : '') : noFr ? L('Aucune voix française installée (Windows : Paramètres › Heure et langue › Voix).', 'No French voice installed (Windows: Settings › Time & language › Speech).') : noTts ? L('Aucune voix système trouvée : les agents marmonneront.', 'No system voice found: agents will mumble.') : trProblem();
 }
 
-if (Q.get('pin')) S.pin = Q.get('pin');
+const PIN = Q.get('pin') ? { id: Q.get('pin'), proj: Q.get('proj') || '' } : null; S.pin = PIN;

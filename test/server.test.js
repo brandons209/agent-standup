@@ -164,6 +164,16 @@ test('compaction summaries, workflow agents, titles and a transcript rewritten i
     const again = await load(port, q); assert.notEqual(again.ep, tl.ep); assert.deepEqual(again.events.filter((e) => e.agent === 'main' || e.agent === 'user').filter((e) => e.kind !== 'order').map((e) => e.kind + (e.end ? ' end' : '')), ['user', 'say', 'say end']);
   } finally { stop(); }
 });
+test('a pinned session is that session or nothing, whatever was written later elsewhere', async () => {
+  const a = path.join(tmp, 'projects', '-pa'), b = path.join(tmp, 'projects', '-pb'); fs.mkdirSync(a, { recursive: true }); fs.mkdirSync(b, { recursive: true });
+  fs.writeFileSync(path.join(a, 'old.jsonl'), line(typed(0, 'first'))); await wait(30); fs.writeFileSync(path.join(b, 'new.jsonl'), line(typed(0, 'later, elsewhere')));
+  const { port, stop } = await serve(), cur = async (q) => JSON.parse((await get(port, '/api/current?' + q)).body);
+  try {
+    assert.equal((await cur('proj=-pa&id=old')).id, 'old'); assert.equal((await cur('proj=-pa&id=old')).proj, '-pa');
+    assert.deepEqual(await cur('proj=-pa&id=gone'), { missing: true }); assert.deepEqual(await cur('proj=&id=old'), { missing: true }); assert.deepEqual(await cur('proj=..&id=old'), { missing: true });
+    assert.equal((await cur('proj=')).id, 'new');   // not pinned: the newest one
+  } finally { stop(); }
+});
 test('no request stops the server; another site cannot read the settings', async () => {
   const dir = path.join(tmp, 'projects', '-l'); fs.mkdirSync(path.join(dir, 's', 'subagents'), { recursive: true }); fs.writeFileSync(path.join(dir, 's.jsonl'), line(typed(0, 'hello')));
   let links = true; try { fs.symlinkSync(path.join(dir, 'gone.jsonl'), path.join(dir, 'dead.jsonl')); fs.symlinkSync(path.join(dir, 'gone.jsonl'), path.join(dir, 's', 'subagents', 'agent-dead.jsonl')); } catch { links = false; }   // links that point nowhere (not allowed on every Windows account)
