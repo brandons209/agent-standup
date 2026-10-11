@@ -3,9 +3,8 @@
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..');
 const js = fs.readFileSync(path.join(root, 'public/js/cast.js'), 'utf8'), app = fs.readFileSync(path.join(root, 'public/app.css'), 'utf8');
-const cssStart = app.indexOf('/* character animation'), cssEndMark = '@media (prefers-reduced-motion:reduce) { .tile *, .tile { animation:none !important } }';
-const css = app.slice(cssStart, app.indexOf(cssEndMark) + cssEndMark.length);
-if (!js.includes('//  cast: soft mascots') || cssStart < 0) throw new Error('art markers not found in public/js/cast.js or public/app.css');
+const cssStart = app.indexOf('/* character animation'), cssEndMark = '@media (prefers-reduced-motion:reduce)', cssEnd = app.indexOf(cssEndMark, cssStart), css = app.slice(cssStart, app.indexOf('\n', cssEnd));
+if (!js.includes('//  cast: soft mascots') || cssStart < 0 || cssEnd < 0) throw new Error('art markers not found in public/js/cast.js or public/app.css');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const out = fs.readFileSync(path.join(root, 'landing/template.html'), 'utf8')
   .replace('/*ART_CSS*/', () => css).replace('/*ART_JS*/', () => js).replace(/__VERSION__/g, version);

@@ -70,7 +70,34 @@ footer a { color:inherit }
 details { margin:14px 0 0; color:var(--dim) } details summary { cursor:pointer; color:var(--ink); font-weight:600 }
 .langs { color:var(--dim); font-size:15px }
 p a, .fine a, li a { color:var(--accent) } p a:hover, .fine a:hover, li a:hover { text-decoration:underline }
-
+/* character animation: all state-driven from the tile's classes */
+  .cimg { display:none } svg:not([data-f]) .f-idle, svg[data-f=idle] .f-idle, svg[data-f=talk] .f-talk, svg[data-f=think] .f-think, svg[data-f=celebrate] .f-celebrate { display:inline }   /* a custom character's picture: the one setFrame picks */
+  .fig { transform-origin:50px 76px; animation:bob 4.4s ease-in-out infinite; animation-delay:var(--d,0s) } @keyframes bob { 50% { transform:translateY(-.9px) } }
+  .tile.speaking .fig { animation:talk .46s ease-in-out infinite } @keyframes talk { 50% { transform:scale(1.025,.985) translateY(-.5px) } }
+  .tile.vanishing { pointer-events:none; z-index:3; animation:vanish 1.2s cubic-bezier(.45,0,.75,.35) forwards }
+  @keyframes vanish { 0% { filter:none; transform:none; opacity:1 } 16% { filter:brightness(1.7) saturate(1.5); transform:scale(1.05) } 55% { filter:brightness(2.3) blur(1.5px); transform:scale(.88) rotate(-3deg); opacity:.85 } 100% { filter:brightness(3.4) blur(11px); transform:scale(.12) rotate(11deg); opacity:0 } }
+  .tile.vanishing::after { content:''; position:absolute; inset:0; background:radial-gradient(circle,#fff 0,rgba(255,255,255,0) 68%); opacity:0; animation:flash2 .7s ease-out .15s }
+  @keyframes flash2 { 40% { opacity:.9 } }
+  .puff { position:fixed; left:0; top:0; z-index:9; pointer-events:none; border-radius:50% }
+  #toasts { position:absolute; left:12px; bottom:12px; z-index:6; display:flex; flex-direction:column; gap:6px; pointer-events:none }
+  .toast { background:rgba(27,29,39,.92); border:1px solid var(--line); border-radius:99px; padding:5px 12px; font-size:12px; animation:toast 3s ease forwards } @keyframes toast { 0% { opacity:0; transform:translateY(6px) } 10%, 80% { opacity:1; transform:none } 100% { opacity:0 } }
+  .eye { transform-box:fill-box; transform-origin:center; animation:blink 4.6s infinite; animation-delay:var(--d,0s) } @keyframes blink { 0%,94%,100% { transform:scaleY(1) } 97% { transform:scaleY(.08) } }
+  .brow { transform-box:fill-box; transform-origin:center; transition:transform .25s } .tile.speaking .brow { animation:brow .7s ease-in-out infinite } @keyframes brow { 50% { transform:translateY(-1.1px) } }
+  .tile.working .brow.l { transform:rotate(13deg) translateY(.5px) } .tile.working .brow.r { transform:rotate(-13deg) translateY(.5px) } .tile.working .pupil { transform:translateY(1.2px) }
+  .arm.l { transform-origin:27px 48px } .arm.r { transform-origin:73px 48px } .tile.speaking .arm.r { animation:wave .7s ease-in-out infinite } @keyframes wave { 50% { transform:rotate(-34deg) } }
+  .tile.working .arm { display:none } .tile .laptop, .tile .hands, .tile .sparks, .tile .grin, .tile .eyes-happy, .tile .mouth { display:none }
+  .tile.working .laptop, .tile.working .hands, .tile.done .sparks, .tile.done .eyes-happy { display:inline } .tile.done .eyes-open { display:none }
+  .tile.speaking .mouth { display:inline } .tile.speaking .smile, .tile.speaking .grin { display:none } .tile.done:not(.speaking) .smile { display:none } .tile.done:not(.speaking) .grin { display:inline }
+  .hand { animation:type .34s ease-in-out infinite } .hand.r { animation-delay:-.17s } @keyframes type { 50% { transform:translateY(-1.3px) } }
+  .tw { animation:tw 3.2s ease-in-out infinite } .pulse { animation:tw 1.7s ease-in-out infinite } @keyframes tw { 50% { opacity:.25 } }
+  .drift { animation:drift 24s ease-in-out infinite alternate } @keyframes drift { to { transform:translateX(9px) } }
+  .steam { animation:steam 2.6s ease-in-out infinite } @keyframes steam { 50% { transform:translateY(-1.4px); opacity:.25 } }
+  .tile.done .sparks path { animation:tw 1.6s ease-in-out infinite }
+  .tile.thinking .hand { animation:none } .tile.thinking .pupil { transform:translate(.8px,-1.6px) } .tile.thinking .brow.l { transform:translateY(-1.3px) } .tile.thinking .brow.r { transform:rotate(-8deg) translateY(.3px) }   /* thinking: hands still on the keys, eyes up, one brow raised */
+  .tile.thinking:not(.speaking) .fig { animation:ponder 3.6s ease-in-out infinite } @keyframes ponder { 50% { transform:rotate(-2.5deg) translateY(-.5px) } } .prop.thinking { animation:tw 3.2s ease-in-out infinite }
+  .tile.celebrate:not(.speaking) .fig { animation:hop .6s ease-out 3 } @keyframes hop { 35% { transform:translateY(-4px) scale(1.02,.99) } 70% { transform:translateY(0) scale(.99,1.02) } }   /* done: three little jumps */
+  .tile.celebrate .arm { display:inline; transform:rotate(-140deg) } .tile.celebrate .arm.l { transform:rotate(140deg) } .tile.celebrate .laptop, .tile.celebrate .hands { display:none } .tile.celebrate .sparks, .tile.celebrate .eyes-happy { display:inline } .tile.celebrate .eyes-open { display:none }
+  @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important } .confetti, .fly { display:none !important } }
 </style>
 </head>
 <body>
@@ -160,7 +187,7 @@ const nameBook = {};   // agent id → unique first name within the session
 const namePool = () => { const own = String((typeof prefs !== 'undefined' && prefs.names) || '').split('\n').map((x) => x.trim()).filter(Boolean); return own.length ? own : NAMES; };   // ⚙ your own list, one name per line (the landing page shares this file and has no prefs)
 const charName = (stem) => stem.replace(/[-_]+/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());   // rainbow-dash → Rainbow Dash
 function uniqueName(id, h, want) {   // want: the name of the agent's character; else one from the pool. Never two agents with the same name in a session
-  if (nameBook[id]) return nameBook[id]; const taken = new Set(Object.values(nameBook));
+  if (nameBook[id]) return nameBook[id]; const taken = new Set(Object.entries(nameBook).filter(([k]) => !(typeof S !== 'undefined' && S.gone.has(k))).map(([, n]) => n));   // an agent that left the call frees its name
   if (want) { for (let k = 1; ; k++) { const n = k === 1 ? want : `${want} ${k}`; if (!taken.has(n)) return (nameBook[id] = n); } }
   const P = namePool(); for (let k = 0; k < P.length; k++) { const n = P[(h + k) % P.length]; if (!taken.has(n)) return (nameBook[id] = n); }
   return (nameBook[id] = P[h % P.length] + ' ' + (taken.size + 1));
@@ -184,11 +211,13 @@ async function loadChars() {
   } catch {}
   CHARS = next;
 }
-const customFor = (id) => {   // sub-agents: the best-hashed image no other agent holds; the whole pool again only once every image is taken
+const customFor = (id) => {   // sub-agents take the pool in turn, skipping pictures held by an agent still on the call; with more agents than pictures, the one held least
   if (id === 'main') return CHARS.lead; if (id === 'user') return CHARS.you; if (!CHARS.pool.length) return null;
-  const used = new Set(Object.keys(S.agents).filter((k) => k !== id && S.agents[k].custom).map((k) => S.agents[k].custom.name));
-  const free = CHARS.pool.filter((c) => !used.has(c.name)), from = free.length ? free : CHARS.pool;
-  return from.reduce((b, c) => (hash(id + '|' + (c.idle || '')) > hash(id + '|' + (b.idle || '')) ? c : b));
+  const held = new Map(CHARS.pool.map((c) => [c.name, 0]));
+  for (const k in S.agents) { const c = S.agents[k].custom; if (k !== id && c && held.has(c.name) && !S.gone.has(k)) held.set(c.name, held.get(c.name) + 1); }
+  const start = (S.castN = (S.castN || 0) + 1) - 1, n = CHARS.pool.length; let best = null;
+  for (let k = 0; k < n; k++) { const c = CHARS.pool[(start + k) % n]; if (!best || held.get(c.name) < held.get(best.name)) best = c; }
+  return best;
 };
 function renderCharInfo() {
   const el = $('#charInfo'); if (!el) return;
@@ -302,7 +331,7 @@ function avatarSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance:
       ${fig}
     </g>
     <rect y="62" width="100" height="13" fill="url(#${uid}dk${p.scene})"/><rect y="62" width="100" height="1.3" fill="#fff" opacity=".38"/><rect y="63.3" width="100" height="2.6" fill="#000" opacity=".1"/>
-    ${prop}${p.custom ? (prefs.customLaptop ? V('laptop', working, lapDark) : '') : V('laptop', working, lap) + V('hands', working, hands)}${V('sparks', done, `<g class="sparks">${sparks}</g>`)}
+    ${prop}${p.custom ? (prefs.customLaptop ? lapDark : '') : V('laptop', working, lap) + V('hands', working, hands)}${V('sparks', done, `<g class="sparks">${sparks}</g>`)}
   </svg>`;
 }
 
