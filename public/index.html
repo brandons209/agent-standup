@@ -19,7 +19,7 @@
   header { height:48px; flex:none; display:flex; align-items:center; gap:10px; padding:0 12px; border-bottom:1px solid var(--line); background:var(--bg) }
   .brand { display:flex; align-items:center; gap:9px; min-width:0; overflow:hidden } .brand .logo { flex:none } .brand > div { min-width:0 } .brand b { overflow:hidden; text-overflow:ellipsis }
   header > * { flex-shrink:0 } header .brand { flex-shrink:100 } header #board { flex-shrink:50 } .tok, .ctxp { flex-shrink:2; min-width:0; overflow:hidden; text-overflow:ellipsis } #pill { flex-shrink:.05; min-width:0; overflow:hidden; text-overflow:ellipsis }   /* in a narrow window the buttons (the gear above all) stay whole: the name gives way first, then the counters */
-  @media (max-width:480px) { header { gap:6px; padding:0 8px } .ctxp { display:none !important } } @media (max-width:420px) { .tok { display:none !important } }
+  @media (max-width:720px) { .ctxp { display:none !important } } @media (max-width:620px) { .tok { display:none !important } } @media (max-width:560px) { #bCoffee { display:none !important } } @media (max-width:480px) { header { gap:6px; padding-left:8px; padding-right:8px } }   /* narrow: the coffee link stays in ⚙ › Tools */
   .logo { width:26px; height:26px; border-radius:8px; background:#d97757; display:grid; place-items:center; font-size:15px; flex:none }
   .brand b { font:700 14px "Comic Sans MS","Chalkboard SE",system-ui,sans-serif; white-space:nowrap }
   .brand small { display:block; color:var(--dim); font-size:11px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
@@ -31,9 +31,13 @@
   .tile.quiet { opacity:.72 }
   .tag .tk { color:#aab2c5; font-size:10px } .tag .tk:empty { display:none }
   .keys { padding:6px 10px 4px; color:var(--dim); font-size:10.5px; line-height:1.5 }
-  #pill { font-size:11px; font-weight:600; letter-spacing:.04em; padding:3px 9px; border-radius:99px; background:var(--panel2); color:var(--dim); white-space:nowrap }
-  #pill.live { color:#fff; background:#c0392b } #pill.live::before { content:'● '; animation:pulse 1.4s infinite }
-  #pill.wait { color:var(--ok) } #pill.wait::before { content:'● '; opacity:.7 }
+  /* the status of the session: a pill in the header of a wide window, a line of its own under the header from 1080 px down (#sline), where it stays readable in the narrowest side panel. Two lines at most, the whole text in the tooltip */
+  #pill, #sline { font-weight:600; background:var(--panel2); color:var(--dim); cursor:default; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2 }
+  #pill { display:-webkit-box; font-size:11px; letter-spacing:.04em; line-height:1.3; padding:3px 9px; border-radius:12px; max-width:min(34vw,440px) } #sline { display:none; flex:none; font-size:12px; line-height:1.4; padding:5px 12px; border-bottom:1px solid var(--line) }
+  :is(#pill, #sline).go { cursor:pointer } :is(#pill, #sline).go:hover { filter:brightness(1.15) } :is(#pill, #sline).off { color:#fff; background:#b3261e; box-shadow:inset 0 0 0 1.5px #ff8a80 } :is(#pill, #sline).blocked { color:#fff; background:#c0392b } :is(#pill, #sline).stalled { color:#1b1d27; background:#ffb347 }
+  :is(#pill, #sline).working { color:var(--gold) } :is(#pill, #sline).turn { color:#0b1020; background:var(--accent) } #pill:is(.working, .blocked, .stalled, .turn, .idle) { letter-spacing:0 } :is(#pill, #sline):focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
+  @media (max-width:1080px) { #pill { display:none } #sline { display:-webkit-box } } @media (max-width:760px) { #sline::after { content:attr(data-sub); font-weight:400; opacity:.8 } } @media (max-width:400px) { #sline { -webkit-line-clamp:3 } }
+  @media (min-width:1081px) { header .brand { min-width:150px } #pill { flex-shrink:20 } .tok, .ctxp { flex-shrink:0 } }   /* wide: a long status gives way before the name and the counters */
   @keyframes pulse { 50% { opacity:.3 } }
   .seg { display:flex; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:2px }
   .seg button { padding:4px 11px; border-radius:6px; color:var(--dim); font-size:12.5px }
@@ -57,7 +61,7 @@
   .rr .st { font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .rr.k-working { border-left-color:var(--gold) } .rr.k-working .st { color:var(--gold) } .rr.k-waiting { border-left-color:#8fd3ff } .rr.k-waiting .st { color:#8fd3ff }
   .rr.k-blocked { border-left-color:#ff5252; background:rgba(192,57,43,.28) } .rr.k-blocked .st { color:#fff; font-weight:700 } .rr.k-stalled { border-left-color:#ffb347 } .rr.k-stalled .st { color:#ffb347; font-weight:700 }
-  .rr.k-done { opacity:.82 } .rr.k-done .st { color:var(--ok) } .rr.k-idle .st { color:var(--dim) } .rr.speaking { box-shadow:0 0 0 2px rgba(124,156,255,.5) }
+  .rr.k-done { opacity:.82 } .rr.k-done .st { color:var(--ok) } .rr.turn { opacity:1; border-left-color:var(--accent) } .rr.turn .st { color:var(--accent); font-weight:700 } .rr.k-idle .st { color:var(--dim) } .rr.speaking { box-shadow:0 0 0 2px rgba(124,156,255,.5) }
   #boardv { flex:1; overflow:auto; padding:16px 18px; display:none }
   .bsum { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; font-size:12.5px } .bsum span { padding:3px 10px; border-radius:99px; background:var(--panel2); border:1px solid var(--line) }
   .bgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:10px }
@@ -108,8 +112,8 @@
   .status { max-width:84%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   #pbadge { margin-left:auto; flex:none; background:rgba(240,160,32,.94); color:#201400; font-weight:600; font-size:11px; padding:1px 10px; border-radius:99px; white-space:nowrap }
   #present.has-todo #pcam { right:270px } #pcam { position:absolute; right:28px; bottom:22px; width:158px; height:118px; z-index:2; cursor:default; box-shadow:0 8px 24px rgba(0,0,0,.6) }
-  #pcap { display:none; position:absolute; left:24px; right:200px; bottom:20px; z-index:2; background:rgba(10,11,16,.84); backdrop-filter:blur(6px); border-radius:10px; padding:6px 12px; font-size:13px } #pcap:not(:empty) { display:block }
-  body.narrow #present { height:clamp(150px,36vh,260px) } body.narrow #pcam { width:110px; height:82px } body.narrow #pcap { right:150px }
+  #pcap { display:none; position:absolute; left:24px; right:200px; bottom:20px; z-index:2; background:rgba(10,11,16,.84); backdrop-filter:blur(6px); border-radius:10px; padding:6px 12px; font-size:13px; max-height:calc(100% - 34px); overflow-y:auto; scrollbar-width:thin } #pcap:not(:empty) { display:block }
+  body.narrow #present { height:clamp(150px,36vh,260px) } body.narrow #pcam { width:110px; height:82px } body.narrow #pcap { left:14px; right:146px; font-size:12.5px }
   body.narrow #ptodo { display:none } body.narrow #present.has-todo #pcam { right:28px }   /* too narrow for a terminal and a task list side by side: the terminal keeps the room */
   #gantt { display:none; flex:none; width:100%; background:#0f1118; border-top:1px solid var(--line); cursor:pointer }
   body.replay #gantt { display:block }
@@ -123,10 +127,11 @@
   .row .txt { color:#c3c6d4; word-break:break-word } .row.order .who { color:var(--gold) } .row.report .who { color:var(--ok) }
   footer { display:none; height:44px; flex:none; align-items:center; gap:12px; padding:0 14px; border-top:1px solid var(--line) }
   body.replay footer { display:flex }
-  input[type=range] { accent-color:var(--accent) } #seek { flex:1 }
-  @media (max-width:760px) { aside { position:absolute; right:0; top:0; bottom:0; z-index:6; box-shadow:-10px 0 30px rgba(0,0,0,.5) } .brand small, #viewSeg { display:none } }
-  @media (max-width:540px) { .brand b { display:none } }
-  @media (max-width:360px) { .logo { display:none } }
+  input[type=range] { accent-color:var(--accent) } #seek { flex:1; min-width:40px } #pos, footer label.dim { white-space:nowrap; flex:none } @media (max-width:520px) { footer { gap:8px; padding:0 8px } footer label.dim { display:none } }   /* narrow: the 1× 2× 4× 8× buttons are the speed control */
+  @media (max-width:760px) { aside { position:absolute; right:0; top:0; bottom:0; z-index:6; box-shadow:-10px 0 30px rgba(0,0,0,.5) } .brand small { display:none } }
+  @media (max-width:720px) { .brand b { display:none } }
+  @media (max-width:480px) { #viewSeg button { font-size:0; padding:4px 6px } #viewSeg button::before { content:attr(data-ic); font-size:14px } }   /* Call / Tree / Sessions stay one click away in a side panel, as icons */
+  @media (max-width:360px) { .brand { display:none } header { gap:4px } }
   @media (max-height:640px) { #gantt { display:none !important } }
 
   /* ---------- tiles (paper cut-out) ---------- */
@@ -142,7 +147,7 @@
   .tag b, .tag span { background:rgba(14,15,24,.78); backdrop-filter:blur(6px); padding:2px 9px; border-radius:99px; font-size:11.5px; white-space:nowrap }
   .tag span { color:#e3e6f0; font-size:10.5px; overflow:hidden; text-overflow:ellipsis; min-width:0 }
   .status { position:absolute; top:6px; right:6px; font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:99px; background:rgba(14,15,24,.8); backdrop-filter:blur(6px) }
-  .status.working { color:var(--gold) } .status.done { color:var(--ok) }
+  .status.working { color:var(--gold) } .status.done { color:var(--ok) } .status.turn { color:#0b1020; background:var(--accent) }
   .status.waiting { color:#8fd3ff } .status.blocked { color:#fff; background:#c0392b; font-weight:700 } .status.stalled { color:#1b1d27; background:#ffb347; font-weight:700 }
   .tile.waiting { border-color:rgba(110,190,255,.85) } .tile.blocked { border-color:#ff5252 !important; animation:slowp 1.2s ease-in-out infinite } .tile.stalled { border-color:#ffb347 !important }
   /* the header's status chips are styled by id: "board" is also the class the Sessions view puts on <body>, and a rule on .board used to hide the whole page in a narrow window */
@@ -150,8 +155,14 @@
   #board .working { color:var(--gold) } #board .waiting { color:#8fd3ff } #board .blocked { color:#fff; background:#c0392b; border-color:#c0392b } #board .stalled { color:#1b1d27; background:#ffb347; border-color:#ffb347 } #board .done { color:var(--ok) }
   @media (max-width:1180px) { #board em { display:none } .meet { display:none } }
   @media (max-width:640px) { #board { display:none } }
-  .bubble { display:none; position:absolute; top:6px; left:6px; right:62px; background:#fff; color:#1b1d27; border-radius:11px; padding:6px 10px; font-size:12.5px; line-height:1.35; box-shadow:0 4px 14px rgba(0,0,0,.35); max-height:58%; overflow:hidden }
-  .tile.bye .bubble { display:block; font-size:13.5px; animation:fadein .25s } .tile.speaking .bubble { display:block; font-size:14.5px; max-height:50% } .bubble small { display:block; color:#6a6f85; font-size:10.5px }
+  /* what is said sits above everything else on the tile (badge, prop, ticker) and is never cut: a line longer than its tile grows over the tiles below */
+  .bubble { display:none; position:absolute; z-index:6; top:6px; left:6px; width:max-content; max-width:calc(100% - 12px); background:#fff; color:#1b1d27; border-radius:11px; padding:6px 10px; font-size:12.5px; line-height:1.35; box-shadow:0 4px 14px rgba(0,0,0,.35); overflow-wrap:anywhere }
+  .tile.speaking, .tile.bye { overflow:visible; z-index:4 } .tile > svg:first-child { border-radius:13px } .tile.speaking .prop { left:auto; right:8px; top:52px }
+  .tile.focus.speaking:has(.status:not(:empty)) .bubble { top:32px }   /* the spotlight has room: there the badge stays visible above the bubble */
+  body:not(.tiny) #center:has(#pcap:not(:empty)) .tile.presenter:not(.bye) .bubble { display:none }   /* the presenter's line is the caption of the shared screen: not said twice */
+  .tile.musing:not(.speaking):not(.bye) .bubble { display:block; top:auto; bottom:36px; max-width:min(80%, 320px); font-size:12px; font-style:italic; color:#40455c; background:rgba(255,255,255,.88); border-radius:14px; box-shadow:0 2px 8px rgba(0,0,0,.28); animation:fadein .5s }   /* an inner thought: not said, so lower, lighter, and never over the status at the top */
+  .tile.focus.musing:not(.speaking):not(.bye) .bubble { bottom:46px; font-size:13px } .tile.musing:not(.speaking):not(.bye) .bubble small { display:inline; margin-right:5px; font-style:normal }
+  .tile.bye .bubble { display:block; font-size:13.5px; animation:fadein .25s } .tile.speaking .bubble { display:block; font-size:13px } .tile.focus.speaking .bubble { font-size:14.5px } .bubble small { display:block; color:#6a6f85; font-size:10.5px }
   .ticker { display:none; position:absolute; left:6px; right:6px; bottom:30px; font:10.5px/1.3 ui-monospace,Menlo,monospace; color:#fff; background:rgba(15,20,35,.8); border-radius:5px; padding:2px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   .ticker.on { display:block } .ticker i { font-style:normal; color:#ffd24a } .ticker.flash { animation:flash .25s } @keyframes flash { from { background:#3b5bdb } }
   /* character animation: all state-driven from the tile's classes */
@@ -182,32 +193,33 @@
 
   /* ---------- overlays ---------- */
   #gate, #empty { position:absolute; inset:0; z-index:4; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; padding:24px; background:rgba(18,19,26,.82); backdrop-filter:blur(3px) }
-  #gate.on, #empty.on { display:flex } #empty { background:var(--bg) }
-  #gate h2, #empty h2 { margin:0; font:800 22px "Comic Sans MS","Chalkboard SE",system-ui,sans-serif } #gate p, #empty p { margin:0; color:var(--dim); max-width:380px }
-  .cta { background:var(--accent); color:#0b1020; font-weight:700; padding:10px 22px; border-radius:99px; font-size:14px } .cta:hover { filter:brightness(1.1) }
+  #gate.on, #empty.on { display:flex } #empty { background:var(--bg) } #empty.on ~ #gate { display:none }   /* no session at all: nothing to join, the empty state and its demo button are what there is to see */
+  #gate h2, #empty h2 { margin:0; font:800 22px "Comic Sans MS","Chalkboard SE",system-ui,sans-serif } #gate p, #empty p { margin:0; color:var(--dim); max-width:380px } #eP b { color:var(--text) }
+  .cta { background:var(--accent); color:#0b1020; font-weight:700; padding:10px 22px; border-radius:99px; font-size:14px } .cta:hover { filter:brightness(1.1) } .cta:empty { display:none }
   .btn { background:var(--panel2); border:1px solid var(--line); padding:6px 12px; border-radius:8px } .btn:hover { border-color:var(--accent) }
   #menu { position:absolute; top:52px; right:10px; z-index:12; width:280px; background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.55); padding:6px; display:none; max-height:calc(100vh - 62px); max-height:calc(100dvh - 62px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin }   /* never taller than the window: it scrolls instead of being cut off */
   .coffee-btn { color:#ffd24a !important; background:rgba(255,210,74,.12); box-shadow:inset 0 0 0 1px rgba(255,210,74,.35) } .coffee-btn:hover { background:rgba(255,210,74,.22) !important }
   .glink { color:var(--dim); font-size:12.5px; text-decoration:underline; text-underline-offset:3px } .glink:hover { color:#ffd24a }
   #mCoffee { background:rgba(255,210,74,.10); box-shadow:inset 0 0 0 1px rgba(255,210,74,.3); margin-top:4px } #mCoffee:hover { background:rgba(255,210,74,.2) }
-  #menuQ { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 9px; font:inherit; font-size:12.5px; outline:none } #menuQ:focus { border-color:var(--accent) }
+  #menuQ, #logQ { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 9px; font:inherit; font-size:12.5px; outline:none } #menuQ:focus, #logQ:focus { border-color:var(--accent) }
   #switcher { position:fixed; inset:0; z-index:20; background:rgba(5,6,12,.7); display:flex; align-items:flex-start; justify-content:center; padding-top:12vh } #switcher .sbox { width:min(560px,92vw); background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.6); overflow:hidden }
   #swq { width:100%; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--text); font:inherit; font-size:15px; padding:14px 16px; outline:none } #swl { max-height:50vh; overflow:auto } .swr { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; padding:9px 14px; cursor:pointer; align-items:center } .swr.on, .swr:hover { background:var(--panel2) } .swr b { font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .swr i { grid-column:2; font-style:normal; font-size:11px; color:var(--dim) }
-  #sps { display:none; gap:2px } body.replay #sps { display:inline-flex } #sps button { background:var(--panel2); color:var(--dim); border:1px solid var(--line); border-radius:6px; padding:1px 6px; font:inherit; font-size:11px; cursor:pointer } #sps button.on { color:var(--text); border-color:var(--accent) } body.compact #sps { display:none !important }
+  #sps { display:none; gap:2px; flex:none } body.replay #sps { display:inline-flex } #sps button { background:var(--panel2); color:var(--dim); border:1px solid var(--line); border-radius:6px; padding:1px 6px; font:inherit; font-size:11px; cursor:pointer } #sps button.on { color:var(--text); border-color:var(--accent) }
   #menu .mfold, #menu .mhide { display:none !important } #menu h4.fold { cursor:pointer; user-select:none } #menu h4.fold::before { content:'▾ ' } #menu h4.fold.closed::before { content:'▸ ' }
-  /* compact: a very narrow panel (the VS Code side bar) shows one row per agent instead of tiles */
-  body.compact #stage { display:flex; flex-direction:column; gap:6px; padding:8px; overflow:auto }
-  body.compact .tile, body.compact .tile.focus { height:54px !important; flex:none; border-radius:10px; display:flex; align-items:center; overflow:visible; animation:none; order:0 } body.compact .tile.lead { order:-2 }
-  body.compact .tile > svg:first-child { width:54px; height:54px; flex:none; border-radius:9px 0 0 9px }
-  body.compact .tile .bubble, body.compact .tile .thought, body.compact .tile .ticker, body.compact .tile .tbadge { display:none !important }
-  body.compact .tile .tag { position:static; flex:1; min-width:0; padding:0 8px; flex-direction:column; gap:2px; align-items:flex-start } body.compact .tile .tag b, body.compact .tile .tag span { background:none; backdrop-filter:none; padding:0; max-width:100%; overflow:hidden; text-overflow:ellipsis }
-  body.compact .tile .tag span:not(.tk):not(.cx) { display:none }
-  body.compact .tile .status { position:static; max-width:none; margin-right:6px; font-size:10.5px; padding:2px 7px; flex:none; max-width:46% }
-  body.compact .tile .prop { top:2px; left:34px; font-size:16px }
-  body.compact .tile .status:empty { display:none }
-  body.compact .tile .tag { order:1 } body.compact .tile .status { order:2 } body.compact .tile .prop { order:3 }
-  body.compact footer { gap:6px; padding-left:8px; padding-right:8px } body.compact footer label.dim { display:none } body.compact #speed { width:70px; min-width:0 }
-  body.compact #present { display:none !important } body.compact #hl { display:none } body.compact #gantt { display:none } body.compact #roster { display:none }
+  /* compact: a narrow panel (the VS Code side bar, under 480 px) shows one row per agent instead of tiles: who needs you comes first, and what is said shows under the row of who says it */
+  body.compact:not(.tree):not(.board) #stage { display:flex; flex-direction:column; gap:6px; padding:8px; overflow:auto }
+  body.compact #stage .tile, body.compact #stage .tile.focus { height:auto !important; min-height:54px; flex:none; flex-wrap:wrap; border-radius:10px; display:flex; align-items:center; overflow:visible; animation:none; order:0 } body.compact #stage .tile.lead { order:-2 } body.compact #stage .tile.stalled { order:-3 } body.compact #stage .tile.blocked { order:-4 }
+  body.compact #stage .tile > svg:first-child { width:54px; height:54px; flex:none; border-radius:9px 0 0 9px }
+  body.compact #stage .tile .thought, body.compact #stage .tile .ticker, body.compact #stage .tile .tbadge { display:none !important }
+  body.compact #stage .tile .bubble { position:static; order:9; flex:1 0 calc(100% - 12px); width:auto; max-width:none; margin:0 6px 6px; font-size:13px !important; box-shadow:none }
+  body.compact #stage .tile .tag { position:static; flex:1; min-width:0; padding:0 8px; flex-direction:column; gap:2px; align-items:flex-start } body.compact #stage .tile .tag b, body.compact #stage .tile .tag span { background:none; backdrop-filter:none; padding:0; max-width:100%; overflow:hidden; text-overflow:ellipsis }
+  body.compact #stage .tile .tag span:not(.tk):not(.cx) { display:none }
+  body.compact #stage .tile .status { position:static; max-width:none; margin-right:6px; font-size:10.5px; padding:2px 7px; flex:none; max-width:46% }
+  body.compact #stage .tile .prop { top:2px; left:34px; right:auto; font-size:16px }
+  body.compact #stage .tile .status:empty { display:none }
+  body.compact #stage .tile .tag { order:1 } body.compact #stage .tile .status { order:2 } body.compact #stage .tile .prop { order:3 }
+  @media (max-width:899px) { #menu .mi[data-t=roster] { display:none } }   /* the agents list only exists from 900 px: no switch for it under that */
+  body.tiny #present { display:none !important } body.tiny #hl { display:none } body.tiny #gantt { display:none }   /* under 300 px: the rows only */
   #menu.on { display:block } #menu h4 { margin:8px 10px 4px; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); font-weight:600 }
   .mi { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; text-align:left; padding:8px 10px; border-radius:8px } .mi:hover { background:var(--panel2) }
   .sw { width:30px; height:17px; border-radius:99px; background:#3a3e50; position:relative; flex:none; transition:background .15s } .sw::after { content:''; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:#fff; transition:transform .15s }
@@ -245,16 +257,18 @@
   <div class="brand"><div class="logo">🎥</div><div><b>Agent Standup</b><small id="subtitle"></small></div></div>
   <span id="pill">REPLAY</span><button id="tok" class="tok" style="display:none"></button><button id="ctxp" class="ctxp" style="display:none"></button><span id="board" aria-live="polite"></span><span id="meet" class="meet"></span>
   <div class="sp"></div>
-  <div class="seg" id="viewSeg"><button data-v="call" class="on" data-fr="Appel" data-en="Call">Appel</button><button data-v="tree" data-fr="Arbre" data-en="Tree">Arbre</button><button data-v="board" data-fr="Sessions" data-en="Sessions">Sessions</button></div>
+  <div class="seg" id="viewSeg"><button data-v="call" class="on" data-ic="👥" data-fr="Appel" data-en="Call">Appel</button><button data-v="tree" data-ic="🌳" data-fr="Arbre" data-en="Tree">Arbre</button><button data-v="board" data-ic="🗂" data-fr="Sessions" data-en="Sessions">Sessions</button></div>
   <button class="ic" id="bPlay" title="Pause / Lecture (espace)">⏸</button>
   <button class="ic" id="bLog" title="Transcript">☰</button>
   <button class="ic" id="bMute" title="Son (M)">🔊</button>
   <button class="ic coffee-btn" id="bCoffee" style="display:none">☕</button>
   <button class="ic" id="bMenu" title="Réglages">⚙</button>
 </header>
+<div id="sline"></div>
 
 <div id="menu">
   <input id="menuQ" type="search" placeholder="Search settings…" aria-label="Search settings" style="margin:4px 8px 2px;width:calc(100% - 16px)">
+  <div class="hint" id="menuNone" style="display:none;padding-top:6px;color:var(--dim)" data-fr="Aucun réglage trouvé" data-en="No setting found">Aucun réglage trouvé</div>
   <h4 data-fr="Langue" data-en="Language">Langue</h4>
   <div class="box"><select id="langSel" aria-label="Language"></select></div>
   <div class="hint" id="trHint" style="display:none"></div>
@@ -265,7 +279,7 @@
   <button class="mi" data-t="notify"><span data-fr="Me prévenir quand les agents ont fini" data-en="Notify me when agents finish">Me prévenir quand les agents ont fini</span><i class="sw"></i></button>
   <button class="mi" data-t="music"><span data-fr="Musique d’ambiance (radio FIP)" data-en="Office music (FIP radio)">Musique d’ambiance (radio FIP)</span><i class="sw"></i></button>
   <div class="box" id="musicBox" style="display:none"><select id="station"></select><input id="musicVol" type="range" min="0" max="1" step="0.05" style="width:100%" aria-label="Music volume"></div>
-  <div class="box" id="vstyleBox"><select id="vstyle"></select></div>
+  <div class="box" id="vstyleBox"><label class="lbl" for="vstyle" data-fr="Style des voix" data-en="Voice style">Style des voix</label><select id="vstyle"></select></div>
   <div class="box" id="kokoroBox" style="display:none"><button class="btn" id="kokoroInstall" style="width:100%"></button><div class="hint" id="kokoroHint" style="padding:2px 0 6px"></div></div>
   <div class="box" id="ttsBox"></div>
   <h4 data-fr="Affichage" data-en="Display">Affichage</h4>
@@ -304,10 +318,10 @@
     <canvas id="gantt" height="90"></canvas>
     <div id="toasts" role="status" aria-live="polite"></div>
     <div id="empty"><h2 id="eT"></h2><p id="eP"></p><button class="cta" id="eDemo"></button></div>
-    <div id="gate"><h2 id="gT"></h2><p id="gP"></p><button class="cta" id="gB"></button><button class="glink" id="gCoffee" style="display:none"></button></div>
+    <div id="gate"><h2 id="gT"></h2><p id="gP"></p><button class="cta" id="gB"></button></div>
     <div id="detail"><div class="hd"><b id="dname"></b><button class="ic" id="dclose">✕</button></div><div id="dbody"></div></div>
   </section>
-  <aside><h2 id="logH">Transcript</h2><input id="logQ" type="search" placeholder="Search…" aria-label="Search the transcript" style="margin:0 10px 8px;width:calc(100% - 20px)"><div id="log"></div></aside>
+  <aside><h2 id="logH">Transcript</h2><input id="logQ" type="search" placeholder="Search…" aria-label="Search the transcript" style="margin:8px 10px;width:calc(100% - 20px)"><div id="log"></div></aside>
 </main>
 <footer>
   <input id="seek" type="range" min="0" max="0" value="0"><span class="dim" id="pos">0 / 0</span>
@@ -514,13 +528,14 @@ function avatarSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance:
 // =====================================================================
 const S = { owner: null, errRun: {}, exQ: [], agents: {}, events: [], idx: 0, playing: false, token: 0, status: {}, tc: {}, cur: null, live: true, userPaused: false, boost: 1, stopAt: 0,
             speakers: new Set(), say: {}, lastTool: {}, level: {}, detail: null, collapsed: new Set(), title: '', idle: false, locked: true, logTo: 0, trOk: true,
-            clock: 0, doneAt: {}, gone: new Set(), leaving: new Set(), demo: false, hold: false };
+            clock: 0, doneAt: {}, gone: new Set(), leaving: new Set(), demo: false, hold: false, late: [], byK: new Map(), pos: 0 };
 const VANISH_MS = 120000;   // a finished agent leaves the call after 2 minutes (playback time)
 // Live: how far the call is behind the real session, and what to do about it (speak faster, say less, skip decoration) so it keeps the rhythm of the real conversation
 const lagMs = (i = S.idx) => {   // how much newer the newest event of the session is than the one being played: 0 when the call is up to date, however long the session has been idle
-  if (!S.live || !S.events.length) return 0; const e = S.events[Math.max(0, Math.min(i, S.events.length - 1))]; let last = S.events.length - 1; while (last > 0 && !S.events[last].ts) last--;
-  return e && e.ts && S.events[last].ts ? Math.max(0, S.events[last].ts - e.ts) : 0;
+  if (!S.live || !S.events.length) return 0; const e = S.events[Math.max(0, Math.min(i, S.events.length - 1))];
+  return Math.max(0, S.events[S.events.length - 1]._t - e._t);
 };
+function stampT(from) { for (let k = from; k < S.events.length; k++) S.events[k]._t = Math.max(S.events[k].ts || 0, k ? S.events[k - 1]._t : 0); }   // the time of an event as the call got it: one that arrives late with an older stamp (an order typed while the lead was busy) is not "far behind"
 const lagFactor = () => { const l = lagMs() / 1000; return l < 6 ? 1 : l < 15 ? 1.15 : l < 30 ? 1.3 : 1.5; };   // steps, so the cached audio of a line is reused
 const caughtUp = () => !S.live || lagMs() < 6000;
 const nearLive = () => !S.live || lagMs() < 30000;   // an answer to what was just said (a word after an order, a thank-you after a report) still fits here: reading the line took longer than 6 s and the session went on meanwhile
@@ -535,7 +550,14 @@ function short(t, max = 230) {
   return end > 80 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, '') + '…';
 }
 // make code-ish text pronounceable
-const speakable = (t) => t.replace(/(?:[\w.-]+\/)+([\w.-]+)/g, (m, f) => f.replace(/[._-]/g, ' ')).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_`*#<>{}\[\]|\\=~^]/g, ' ')
+const PER = /^(?:s|sec|ms|min|h|hr|j|jour|d|day|mois|mo|month|an|yr|year)$/i;
+function slashSay(m, pre, lead, body) {   // word/word (pre: the character before it, put back as it is): only a file path is named by its last part; anything else keeps every word, so the voice says what the caption shows ("and/or", "client/server", "2/3")
+  const tail = (body.match(/[.-]+$/) || [''])[0], core = body.slice(0, body.length - tail.length), segs = core.split('/').filter(Boolean), last = segs[segs.length - 1] || '';
+  if (segs.every((s) => /^\d+(?:[.,]\d+)?$/.test(s))) return m;   // a fraction, a date, 24/7: the voice reads those by itself
+  if (lead || segs.length > 2 || core.endsWith('/') || /\.[A-Za-z][A-Za-z0-9]{0,9}$/.test(last)) return pre + last.replace(/[._-]/g, ' ') + tail;   // it looks like a path: a leading ./ ~/ or /, two slashes or more, a folder/, or an extension
+  return PER.test(last) ? m : pre + segs.join(' ') + tail;   // km/h, req/s: a unit, left to the voice
+}
+const speakable = (t) => t.replace(/https?:\/\/(?:www\.)?([\w-]+(?:\.[\w-]+)*)\S*?(?=[.,;:!?)\]]*(?:\s|$))/g, '$1').replace(/(^|[^\wÀ-ÿ/.~@+-])((?:~|\.\.?|[A-Za-z]:)?\/)?((?:[\wÀ-ÿ.@+-]+\/)+[\wÀ-ÿ.+-]*)/g, slashSay).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_`*#<>{}\[\]|\\=~^]/g, ' ')
   .replace(/\s*[—–]\s*/g, ', ').replace(/\(([^)]{0,40})\)/g, ', $1,').replace(/\s+/g, ' ').trim();
 
 // ---------- translation (local claude CLI) ----------
@@ -618,12 +640,12 @@ const AUD = {
   },
   join() { this.tone(523, .14, 'triangle', .1); this.tone(784, .2, 'triangle', .1, .12); },
   ding() { this.tone(988, .5, 'triangle', .14); this.tone(1318, .5, 'sine', .06, .02); },
-  murmur(pitch, dur) {   // cartoon mumble, used when there is no real voice
+  murmur(pitch, dur, vol = 1) {   // cartoon mumble, used when there is no real voice (vol: lower for a thought that escapes)
     if (!this.ctx || !prefs.voice) return; const c = this.ctx, t = c.currentTime, o = c.createOscillator(); o.type = 'sawtooth';
     const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 3; const g = c.createGain();
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.08, t + 0.05); g.gain.setValueAtTime(0.08, t + dur - 0.1); g.gain.linearRampToValueAtTime(0, t + dur);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.08 * vol, t + 0.05); g.gain.setValueAtTime(0.08 * vol, t + dur - 0.1); g.gain.linearRampToValueAtTime(0, t + dur);
     const base = 85 + pitch * 70; for (let x = 0; x < dur; x += 0.11) { o.frequency.setValueAtTime(base * (0.8 + Math.random() * 0.55), t + x); bp.frequency.setValueAtTime(500 + Math.random() * 900, t + x); }
-    o.connect(bp).connect(g).connect(this.voice); o.start(t); o.stop(t + dur + 0.05); this.live.add(o); o.onended = () => this.live.delete(o);
+    o.connect(bp).connect(g).connect(this.voice); o.start(t); o.stop(t + dur + 0.05); this.live.add(o); o.onended = () => this.live.delete(o); return o;
   },
   stopAll() { for (const s of this.live) { try { s.stop(); } catch {} } this.live.clear(); },
 };
@@ -717,7 +739,7 @@ function rankVoices(list) {   // list of names → best distinct voices first
 }
 const ttsVoiceOf = (key) => { const v = prefs.tts.voices; return key && Object.hasOwn(v, key) && typeof v[key] === 'string' ? v[key].trim() : ''; };
 const TTS = {
-  server: false, engine: 'system', platform: '', pool: { fr: [], en: [] }, cache: new Map(), oaGen: 0, oaReported: false,
+  server: false, engine: 'system', platform: '', pool: { fr: [], en: [] }, cache: new Map(), made: new Map(), q: [], busy: false, now: 0, oaGen: 0, oaReported: false,
   pick(p) {   // OpenAI engine: a voice chosen for this character, else the pool, else the default voice
     const key = p.id === 'main' ? 'lead' : p.id === 'user' ? 'you' : (p.custom && p.custom.name ? p.custom.name.toLowerCase() : ''), v = ttsVoiceOf(key);
     if (v) return { voice: v, picked: true };
@@ -726,7 +748,7 @@ const TTS = {
   },
   async init() {
     const gen = ++this.oaGen; this.oaReported = false;
-    this.engine = 'system'; this.server = false; this.pool = { fr: [], en: [] }; this.cache.clear();
+    this.engine = 'system'; this.server = false; this.pool = { fr: [], en: [] }; this.cache.clear(); this.made.clear(); this.q = [];
     try {
       if (prefs.tts.url.trim() && (prefs.tts.voice.trim() || prefs.tts.pool.trim())) {
         await flushPrefs(); if (gen !== this.oaGen) return;
@@ -742,22 +764,48 @@ const TTS = {
   },
   voiceFor(p, fr = FR()) { if (this.engine === 'openai') return (this.pick(p) || {}).voice || null; const pool = this.pool[fr ? 'fr' : 'en']; return pool.length ? (p.id === 'main' ? pool[0] : pool[(p.vi >>> 2) % pool.length]) : null; },
   rate() { return Math.round(Math.max(120, Math.min(330, 178 * (S.live ? 1.12 * lagFactor() * (S.boost > 1 ? 1.25 : 1) : +$('#speed').value))) / 10) * 10; },
-  buf(text, voice, rate, fr = FR()) {
-    const key = this.engine + '|' + voice + '|' + fr + '|' + rate + '|' + text;
+  rateAt(k, boost) { const i = S.idx, b = S.boost; S.idx = k; S.boost = boost; const r = this.rate(); S.idx = i; S.boost = b; return r; },   // the rate rate() will give once playback is at event k
+  buf(text, voice, rate, ahead, fr = FR()) {   // ahead: made in advance (see warmTTS); otherwise the line is wanted now
+    const vt = this.engine + '|' + voice + '|' + fr + '|' + text, K = (r) => this.engine + '|' + voice + '|' + fr + '|' + r + '|' + text, key = K(rate), got = this.made.get(vt) || [];   // got: the rates at which this text is ready in this voice
+    if (!ahead && S.live && !got.includes(rate)) { const r = got.find((x) => Math.abs(x - rate) <= rate * 0.2 && this.cache.has(K(x))); if (r) return this.cache.get(K(r)); }   // made ahead at the rate of a moment ago (the call fell behind or caught up since): played as it is, a second of silence is worse than a slightly different pace
     if (!this.cache.has(key)) {
       this.cache.set(key, fetch(`/api/tts?engine=${this.engine}&voice=${encodeURIComponent(voice)}&rate=${rate}&text=${encodeURIComponent(text)}&lang=${fr ? 'fr' : 'en'}`).then((r) => { if (!r.ok) throw new Error('tts'); return r.arrayBuffer(); }).then((b) => AUD.ctx.decodeAudioData(b)));
       if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value);
-      this.cache.get(key).catch(() => this.cache.delete(key));
+      this.cache.get(key).then(() => { this.made.set(vt, [...(this.made.get(vt) || []), rate]); if (this.made.size > 120) this.made.delete(this.made.keys().next().value); }, () => this.cache.delete(key));
+      if (!ahead) { this.now++; const end = () => { this.now--; this.pump(); }; this.cache.get(key).then(end, end); }   // a line wanted now never waits behind the ones made ahead: they stop being started until it is ready
     }
     return this.cache.get(key);
   },
+  pump() {   // the lines made ahead: one at a time, in the order they will be said
+    if (this.busy || this.now || !this.q.length) return; const j = this.q.shift(); this.busy = true;
+    const end = () => { this.busy = false; this.pump(); }; this.buf(j.text, j.voice, j.rate, true, j.fr).then(end, end);
+  },
 };
-function warmTTS(i) {   // synthesize the next few lines ahead of time
-  if (!TTS.server || !AUD.ctx || !prefs.voice || prefs.vstyle === 'animal' || prefs.vstyle === 'sims') return;
-  let n = 0; for (let k = i; k < S.events.length && n < 4; k++) {
-    const e = S.events[k]; if (quiet(e)) continue; n++;
-    const p = S.agents[e.agent], txt = speakable(spoken(e)), fr = frVoice(txt), v = p && TTS.voiceFor(p, fr); if (v) TTS.buf(txt, v, TTS.rate(), fr).catch(() => {});
+// The lines to come are synthesized ahead of time, so that a voice starts with its line and not a second later. What is made must be what will be asked for: the same text (the lead-in, the part
+// that is read when the call is behind), the same voice and the same rate. So this follows what run() will do with the next events if nothing else arrives before then: how it groups them
+// (sub-agents back to back, orders in a row) and how it sets the pace. Keep the two in step: a difference costs nothing but the benefit (the line is then made when it is said).
+function paceAt(k) {
+  if (!S.live) return { pace: 0, boost: 1 };
+  const q = aheadSpeakable(k, 14), lg = lagMs(k) / 1000, hurry = q > 12 || lg > 45;   // hurry: the line is shown without a voice
+  return { hurry, pace: Math.min(q > 7 ? 70 : q > 3 ? 130 : 260, lg > 30 ? 70 : lg > 15 ? 130 : lg > 6 ? 200 : 260), boost: hurry || S.events.length - k > 60 ? 3 : 1 };
+}
+function warmTTS(i) {   // called by run() before each line (i is that line) and when new events arrive (i is the first of them)
+  if (!TTS.server || !AUD.ctx || AUD.off() || !prefs.voice || prefs.vstyle === 'animal' || prefs.vstyle === 'sims') return;
+  const fresh = i <= S.idx, from = fresh ? i : S.idx + 1, len = S.events.length, jobs = []; let n = 0; if (!fresh && !S.playing) return;   // new events while a line is being read: the lines after it are planned again, they may now be read shorter and faster
+  for (let k = from; k < Math.min(len, from + 400) && n < 4;) {
+    const e = S.events[k]; if (quiet(e)) { k++; continue; }
+    if (S.live && len - k > 300) break;   // a backlog that run() skips
+    const group = [e]; let j = k + 1;
+    if (e.kind === 'order') { while (j < Math.min(len, k + 40) && group.length < 8) { const e2 = S.events[j]; if (e2.kind === 'usage' || e2.kind === 'compact') j++; else if (e2.kind === 'order' && e2.agent === e.agent) { group.push(e2); j++; } else break; } }
+    else if (isSub(e.agent)) { while (j < Math.min(len, k + 28) && group.length < 3) { const e2 = S.events[j]; if (quiet(e2)) j++; else if (e2.kind !== 'order' && isSub(e2.agent) && !group.some((g) => g.agent === e2.agent)) { group.push(e2); j++; } else break; } }
+    const pl = paceAt(k), many = e.kind === 'order' && group.length > 1, rate = TTS.rateAt(many || !S.live ? k : j - 1, pl.boost);
+    for (const g of many ? [e] : group) {   // orders in a row: only the first is read out
+      n++; const p = S.agents[g.agent], bt = baseText(g); if ((pl.hurry && g.kind !== 'user') || !p || (FR() && !trMem.has(bt) && langOf(bt) !== 'fr')) continue;   // not translated yet: what will be said is not known
+      const said = clipSpeech(talkLine(g), pl.pace), text = speakable(said), fr = sessFr(said, g), voice = TTS.voiceFor(p, fr); if (text && voice) jobs.push({ k, text, voice, rate, fr });
+    }
+    k = j;
   }
+  TTS.q = (fresh ? [] : TTS.q.filter((x) => x.k < from)).concat(jobs); TTS.pump();   // the lines of the group being read keep their place at the front
 }
 
 // ---- Cartoon voices: the same system voice, given a character by a small WebAudio chain (pitch, vibrato, robot, radio…), or syllable "babble" in the spirit of Animal Crossing.
@@ -785,7 +833,7 @@ async function speakBabble(text, p, gain, token) {
   const base = p.lead ? 150 : p.id === 'user' ? 190 : 200 + ((p.vi >>> 2) % 9) * 30, an = c.createAnalyser(); an.fftSize = 256;
   const g = c.createGain(); g.gain.value = gain * (sims ? 0.4 : 0.6); an.connect(g); g.connect(AUD.voice);
   const clauses = clean.match(/[^.!?;:]+[.!?;:]*/g) || [clean], nodes = []; let t = c.currentTime + 0.03; const end = t + dur;
-  const track = (o) => { AUD.live.add(o); nodes.push(o); };
+  let tail = 0; const track = (o) => { AUD.live.add(o); nodes.push(o); tail = t; };   // tail: when the last sound starts
   const vowelGroups = (w) => w.match(new RegExp(`[^${VOW}]*[${VOW}]+(?:[^${VOW}]+(?![${VOW}]))?`, 'g')) || [w];
   const nSyl = clauses.reduce((n, cl) => n + (cl.match(/[a-zà-ÿ0-9]+/g) || []).reduce((m, w) => m + vowelGroups(w).length, 0) + 1.5, 0) || 1, unit = Math.max(0.08, Math.min(0.2, dur / nSyl));
   const letterStep = Math.max(0.045, Math.min(0.085, dur / Math.max(8, clean.length)));
@@ -820,12 +868,13 @@ async function speakBabble(text, p, gain, token) {
     t += unit * (sims ? 1.2 : 2.4);
   }
   const data = new Uint8Array(an.fftSize); S.level[p.id] = () => { an.getByteTimeDomainData(data); let s = 0; for (const v of data) { const x = (v - 128) / 128; s += x * x; } return Math.sqrt(s / data.length) * 2.2; };
-  await new Promise((res) => setTimeout(res, Math.max(100, (Math.min(t, end) - c.currentTime) * 1000 + 80)));
+  const lastN = nodes[nodes.length - 1]; if (lastN) captionRun(p.id, text, (tail - c.currentTime) * 1000 + 150);   // the subtitles follow the real length of the babble, not the estimate it was cut from
+  await new Promise((res) => { if (lastN) lastN.onended = res; setTimeout(res, lastN ? (t - c.currentTime) * 1000 + 600 : Math.max(100, (Math.min(t, end) - c.currentTime) * 1000 + 80)); });   // the line ends when its last sound does (a long last word used to go on after it), or when Pause stops it
   nodes.forEach((o) => AUD.live.delete(o)); delete S.level[p.id];
 }
 async function speakServer(text, p, gain, token, fr = FR()) {
   const voice = TTS.voiceFor(p, fr); if (!voice) throw new Error('no voice');
-  let buf; try { buf = await TTS.buf(speakable(text), voice, TTS.rate(), fr); } catch (e) { if (TTS.engine === 'openai' && !TTS.oaReported) { TTS.oaReported = true; loadHealth(); } throw e; }
+  let buf; try { buf = await TTS.buf(speakable(text), voice, TTS.rate(), false, fr); } catch (e) { if (TTS.engine === 'openai' && !TTS.oaReported) { TTS.oaReported = true; loadHealth(); } throw e; }
   if (token !== S.token) return;
   const c = AUD.ctx, src = c.createBufferSource(); src.buffer = buf;
   const an = c.createAnalyser(); an.fftSize = 256; const g = c.createGain(); g.gain.value = gain; let stops = [];
@@ -834,22 +883,24 @@ async function speakServer(text, p, gain, token, fr = FR()) {
   const data = new Uint8Array(an.fftSize);
   S.level[p.id] = () => { an.getByteTimeDomainData(data); let s = 0; for (const v of data) { const x = (v - 128) / 128; s += x * x; } return Math.sqrt(s / data.length); };   // drives the mouth
   AUD.live.add(src);
-  captionRun(p.id, text, buf.duration * 1000); await new Promise((res) => { src.onended = res; setTimeout(res, buf.duration * 1000 + 800); src.start(); });
-  AUD.live.delete(src); delete S.level[p.id]; stops.forEach((o) => { try { o.stop(); } catch {} });
+  const ms = buf.duration * 1000 / (src.playbackRate.value || 1);   // how long it really lasts: the character's effect plays the clip slower or faster than it was made
+  captionRun(p.id, text, ms); await new Promise((res) => { src.onended = res; setTimeout(res, ms + 1000); src.start(); });   // the line ends when its sound ends (or when Pause stops it); the timer only covers a sound that never starts
+  try { src.stop(); } catch {} AUD.live.delete(src); delete S.level[p.id]; stops.forEach((o) => { try { o.stop(); } catch {} });
 }
 function speakBrowser(text, p, token, fr = FR()) {   // fallback where no server voice exists (Windows/Linux)
   return new Promise((resolve) => {
     const vs = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith(fr ? 'fr' : 'en')); if (!vs.length) return resolve(false);
     const ranked = rankVoices(vs.map((v) => v.name)), voice = vs.find((v) => v.name === (p.id === 'main' ? ranked[0] : ranked[(p.vi >>> 2) % ranked.length])) || vs[0];
-    const parts = speakable(text).match(/[^.!?;:]+[.!?;:]*/g) || [text]; synth.cancel(); let i = 0, done = false, started = false;
+    const parts = speakable(text).match(/[^.!?;:]+[.!?;:]*/g) || [text]; synth.cancel(); let i = 0, done = false, started = false, t0 = 0, said = 0; const all = parts.reduce((n, x) => n + x.length, 0);
     const fin = (ok) => { if (!done) { done = true; resolve(ok); } };
-    setTimeout(() => { if (!started) { synth.cancel(); fin(false); } }, 2500);   // engine never started (e.g. inside a webview)
-    setTimeout(() => fin(true), 45000);
+    setTimeout(() => { if (!started && !done) { synth.cancel(); fin(false); } }, 2500);   // engine never started (e.g. inside a webview)
+    setTimeout(() => { if (!done) { synth.cancel(); fin(true); } }, Math.max(45000, text.length * 160));   // a voice that never reports its end is cut, not left talking over the next line
     const next = () => {
       if (i >= parts.length || done || token !== S.token) return fin(true);
-      const part = parts[i++].trim(); if (!part) return next();
+      if (t0 && said >= 20) { const el = performance.now() - t0; captionRun(p.id, text, el * all / said, el); }   // the length of the audio is not known in advance here: the subtitles are set again on the pace the voice really has, after each sentence
+      said += parts[i].length; const part = parts[i++].trim(); if (!part) return next();
       const u = new SpeechSynthesisUtterance(part); u.lang = fr ? 'fr-FR' : 'en-US'; u.voice = voice; u.pitch = prefs.vstyle === 'natural' ? 0.95 + ((p.vi >>> 5) % 5) * 0.03 : p.id === 'main' ? 0.8 : [1.5, 0.6, 1.2, 1.7, 0.9, 0.5, 1.35][(p.vi >>> 3) % 7]; u.rate = Math.min(1.7, 0.97 * spd());
-      u.onstart = () => (started = true); u.onend = () => setTimeout(next, 120); u.onerror = () => fin(started); synth.speak(u);
+      u.onstart = () => { started = true; if (!t0) { t0 = performance.now(); captionRun(p.id, text, estMs(text)); } }; u.onend = () => setTimeout(next, 120); u.onerror = () => fin(started); synth.speak(u);
     };
     next();
   });
@@ -872,21 +923,43 @@ function setCaption(id, text) {
   const t = $('#t-' + id), b = t && t.querySelector('.bubble'), say = S.say[id]; if (!b || !say) return;
   b.innerHTML = (say.label ? `<small>${esc(say.label)}</small>` : '') + esc(text); if (S.present === id) $('#pcap').textContent = text;
 }
-function captionRun(id, text, totalMs) {
+function captionRun(id, text, totalMs, from = 0) {   // from: how far into the line the voice already is, when the timing is corrected along the way
   captionClear(id); const ps = pieces(text); if (ps.length < 2 || !(totalMs > 0)) return;
-  const n = ps.reduce((a, x) => a + x.length, 0), timers = []; let at = 0; setCaption(id, ps[0]); at += totalMs * ps[0].length / n;
-  for (let i = 1; i < ps.length; i++) { const x = ps[i], when = at; timers.push(setTimeout(() => setCaption(id, x), when)); at += totalMs * x.length / n; }
-  capTimers.set(id, timers);
+  const n = ps.reduce((a, x) => a + x.length, 0), timers = []; let at = 0, cur = ps[0];
+  for (const x of ps) { const when = at - from; if (when <= 0) cur = x; else timers.push(setTimeout(() => setCaption(id, x), when)); at += totalMs * x.length / n; }
+  setCaption(id, cur); capTimers.set(id, timers);
 }
 const frVoice = (t) => (langOf(t) ?? (FR() ? 'fr' : 'en')) === 'fr';   // a French line gets a French voice whatever the interface language, and the other way round
-async function speakLine(text, p, primary, token, fr = frVoice(text)) {
+// A line of the session that is too short to tell ("OK.", a file name) does not follow the interface language: in a French session watched in English, the lead would change voice for that
+// one line and change back. It follows, in this order: the whole line it is cut from, what the same character said just before (its voice goes on) or says next, the language of the session so far.
+// The session's language is counted once per line as the events arrive; in French, a line counts for what is said, i.e. its translation once it is there.
+const SL = { ev0: null, ui: null, n: 0, fr: 0, en: 0, pend: [] };
+function sessLang() {   // 'fr' or 'en': the majority among the lines of the session that langOf can decide; null when there is none
+  const ev = S.events, ui = FR(), add = (t) => { const lo = langOf(t); if (lo) SL[lo]++; };
+  if (ev[0] !== SL.ev0 || ui !== SL.ui || ev.length < SL.n) Object.assign(SL, { ev0: ev[0], ui, n: 0, fr: 0, en: 0, pend: [] });   // another session, or another interface language
+  for (; SL.n < ev.length; SL.n++) { const e = ev[SL.n]; if (quiet(e) || typeof e.text !== 'string') continue; const t = baseText(e); if (!ui) add(t); else if (trMem.has(t)) add(trMem.get(t)); else if (langOf(t) === 'fr') SL.fr++; else SL.pend.push(t); }
+  if (SL.pend.length) SL.pend = SL.pend.filter((t) => !trMem.has(t) || add(trMem.get(t)));   // translations that have arrived since
+  return SL.fr > SL.en ? 'fr' : SL.en > SL.fr ? 'en' : null;
+}
+function sessFr(text, ev) {   // for the lines that come from the session (ev: the event, when there is one); the little built-in lines keep frVoice, they are written in the interface language
+  let lo = langOf(text);
+  if (!lo && ev) {
+    const now = (e) => { const t = baseText(e); return langOf(FR() && trMem.has(t) ? trMem.get(t) : t); }, at = S.events.indexOf(ev, Math.max(0, S.idx - 60)); lo = now(ev);
+    for (let k = at - 1, n = 0; !lo && k >= 0 && k > at - 5000 && n < 6; k--) { const e = S.events[k]; if (e.agent === ev.agent && !quiet(e) && typeof e.text === 'string') { lo = now(e); n++; } }
+    for (let k = at + 1, n = 0; !lo && at >= 0 && k < S.events.length && k < at + 5000 && n < 6; k++) { const e = S.events[k]; if (e.agent === ev.agent && !quiet(e) && typeof e.text === 'string') { lo = now(e); n++; } }   // its first words: what it says next, when that is already there
+  }
+  return (lo ?? sessLang() ?? (FR() ? 'fr' : 'en')) === 'fr';
+}
+async function speakLine(text, p, primary, token, fr = frVoice(text), always = false) {   // always: your own lines are voiced even when the call is behind
   captionRun(p.id, text, estMs(text));
   if (AUD.off() || !prefs.voice) { if (!AUD.off() && prefs.office) AUD.murmur(0.5 + (p.vi % 5) / 10, estMs(text) / 1000); return sleep(estMs(text)); }
-  if (S.hurry) return sleep(estMs(text));
+  if (S.hurry && !always) return sleep(estMs(text));
   if ((prefs.vstyle === 'animal' || prefs.vstyle === 'sims') && AUD.ctx) { try { await speakBabble(text, p, primary ? 1 : 0.5, token); return; } catch {} }
   if (TTS.server && AUD.ctx) { try { await speakServer(text, p, primary ? 1 : 0.5, token, fr); return; } catch {} }
   if (primary && synth && !EMBED && (await speakBrowser(text, p, token, fr))) return;
-  AUD.murmur(0.5 + (p.vi % 5) / 10, estMs(text) / 1000); return sleep(estMs(text));
+  if (token !== S.token) return;   // paused while a voice was being tried: no mumble after the fact
+  const ms = estMs(text), o = AUD.murmur(0.5 + (p.vi % 5) / 10, ms / 1000); captionRun(p.id, text, ms);
+  return o ? new Promise((res) => { o.addEventListener('ended', res); setTimeout(res, ms + 500); }) : sleep(ms);   // the mumble that stands in for a voice: the line ends with it, also when Pause stops it
 }
 
 // =====================================================================
@@ -914,19 +987,22 @@ const layout = () => {
   if (nar) { k = cols; fr = cols > 1 ? 2 : 1; }   // side panel: small tiles, a banner-sized spotlight
   else if (best < 0) { k = Math.min(2, cols); fr = Math.min(2, maxRows); }
   st.style.setProperty('--fcols', k); st.style.setProperty('--fr', fr); st.classList.toggle('one', cols === 1);
-  document.body.classList.toggle('narrow', $('#center').clientWidth < 480); document.body.classList.toggle('compact', $('#center').clientWidth < 300); drawGantt();
+  document.body.classList.toggle('narrow', $('#center').clientWidth <= 480); document.body.classList.toggle('compact', $('#center').clientWidth <= 480 && !$('#roster').offsetWidth); document.body.classList.toggle('tiny', $('#center').clientWidth < 300); drawGantt();
 };
 new ResizeObserver(layout).observe($('#center'));
 
+function logRow(i) {
+  const e = S.events[i], arrow = e.to ? ` <span class="arrow">→</span> <span class="who">${esc(nameOf(e.to))}</span>` : '';
+  const body = e.kind === 'tools' ? e.tools.map((t) => t.name).join(', ') : spoken(e), k = { order: L('tâche', 'task'), report: L('rapport', 'report'), say: '', user: L('brief', 'brief'), tools: L('outils', 'tools') }[e.kind];
+  return `<div class="row ${e.kind}" data-i="${i}"><span class="who">${esc(nameOf(e.agent))}</span>${arrow} <span class="k">${k}</span><div class="txt">${esc(body)}</div></div>`;
+}
 function renderLog(full) {
   const log = $('#log'), from = S.live ? Math.max(0, S.events.length - 300) : 0;
   if (full || S.logTo < from || S.logTo > S.events.length) { log.innerHTML = ''; S.logTo = from; }
   const html = [];
   for (let i = S.logTo; i < S.events.length; i++) {
     if (S.events[i].kind === 'results' || S.events[i].kind === 'usage' || S.events[i].kind === 'finish' || S.events[i].kind === 'compact') continue;
-    const e = S.events[i], arrow = e.to ? ` <span class="arrow">→</span> <span class="who">${esc(nameOf(e.to))}</span>` : '';
-    const body = e.kind === 'tools' ? e.tools.map((t) => t.name).join(', ') : spoken(e), k = { order: L('tâche', 'task'), report: L('rapport', 'report'), say: '', user: L('brief', 'brief'), tools: L('outils', 'tools') }[e.kind];
-    html.push(`<div class="row ${e.kind}" data-i="${i}"><span class="who">${esc(nameOf(e.agent))}</span>${arrow} <span class="k">${k}</span><div class="txt">${esc(body)}</div></div>`);
+    html.push(logRow(i));
   }
   log.insertAdjacentHTML('beforeend', html.join('')); S.logTo = S.events.length;
   if (S.live) while (log.children.length > 320) log.firstChild.remove();
@@ -950,9 +1026,10 @@ const applyStatus = (ev) => {
   if (ev.kind === 'order') { (S.waitOn[ev.agent] = S.waitOn[ev.agent] || new Set()).add(ev.to); S.orderTs[ev.to] = ev.ts || 0; S.status[ev.to] = 'working'; delete S.doneAt[ev.to]; S.gone.delete(ev.to); S.leaving.delete(ev.to); if (!ev.bg && ev.toolId) S.run[ev.agent] = { id: ev.toolId, ts: ev.ts, start: performance.now(), name: 'Agent' }; const t = $('#t-' + ev.to); if (t) t.classList.remove('vanishing'); }
   if (ev.kind === 'finish') { if (S.waitOn[ev.to]) S.waitOn[ev.to].delete(ev.agent); if (S.status[ev.agent] !== 'done') { S.status[ev.agent] = 'done'; S.doneAt[ev.agent] = S.clock; } delete S.run[ev.agent]; const lr = S.run[ev.to]; if (lr && /^(Task|Agent)$/.test(lr.name) && !(S.waitOn[ev.to] && S.waitOn[ev.to].size)) delete S.run[ev.to]; }
   if (ev.kind === 'report') { if (S.waitOn[ev.to]) S.waitOn[ev.to].delete(ev.agent); S.status[ev.agent] = 'done'; S.doneAt[ev.agent] = S.clock; delete S.run[ev.agent]; }
+  if (ev.kind === 'user' || (ev.agent === 'main' && (ev.kind === 'say' || ev.kind === 'tools' || (ev.kind === 'order' && !ev.wf)))) S.turnOver = !!ev.end;   // Claude Code marks the message that closes the lead's turn; anything after it opens the next one (not the agents a workflow launches by itself)
 };
 function recomputeStatus(upTo) {
-  S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.lastTool = {}; S.mainBusyAt = 0; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.recomputing = true; document.querySelectorAll('.tile').forEach((t) => { clearTimeout(t._byeT); t.classList.remove('bye'); }); hidePresent();
+  S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.lastTool = {}; S.mainBusyAt = 0; S.turnOver = false; S.th = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.recomputing = true; document.querySelectorAll('.tile').forEach((t) => { clearTimeout(t._byeT); t.classList.remove('bye'); }); hidePresent();
   S.status = {}; S.tc = {}; S.doneAt = {}; S.gone.clear(); S.leaving.clear(); document.querySelectorAll('.tile.vanishing').forEach((t) => t.classList.remove('vanishing')); const doneIdx = {}; document.querySelectorAll('.ticker').forEach((x) => { x.classList.remove('on'); x.innerHTML = ''; });
   for (let i = 0; i < upTo; i++) {
     const e = S.events[i]; applyStatus(e); tally(e); if (e.kind === 'tools') S.tc[e.agent] = (S.tc[e.agent] || 0) + e.tools.length;
@@ -965,9 +1042,7 @@ function recomputeStatus(upTo) {
 }
 function syncUI() {
   $('#bPlay').textContent = S.playing ? '⏸' : '▶';
-  const pill = $('#pill'); pill.className = '';
-  if (S.offline) { pill.textContent = L('HORS LIGNE', 'OFFLINE'); }
-  else if (!S.live) { pill.textContent = 'REPLAY'; } else if (S.locked) { pill.textContent = L('PRÊT', 'READY'); } else if (!S.playing) { pill.textContent = L('PAUSE', 'PAUSED'); } else if (S.idle) { pill.textContent = L('EN ATTENTE', 'WAITING'); pill.className = 'wait'; } else { pill.textContent = 'LIVE'; pill.className = 'live'; }
+  paintPill();
   document.body.classList.toggle('replay', !S.live);
 }
 
@@ -994,6 +1069,8 @@ function tally(ev) {   // numbers that pile up over a session: token usage, erro
   if (ev.kind === 'usage') { const c = ev.u.i + ev.u.r + ev.u.w; if (c > 0 && ev.model !== '<synthetic>') { S.ctx[ev.agent] = c; S.model[ev.agent] = ev.model; later('tok', renderCtx, 300); } const u = (S.usage[ev.agent] = S.usage[ev.agent] || { i: 0, o: 0, r: 0, w: 0 }); u.i += ev.u.i; u.o += ev.u.o; u.r += ev.u.r; u.w += ev.u.w; later('tok', renderTokens, 300); }
   else if (ev.kind === 'results') ev.items.forEach((it) => { if (it.err) { S.errs[ev.agent] = (S.errs[ev.agent] || 0) + 1; later('badges', renderBadges, 300); oops(ev.agent); noteTrouble(ev.agent, false); } else noteTrouble(ev.agent, true); });
   else if (ev.kind === 'tools' || ev.kind === 'say') S.lastAct[ev.agent] = ev.ts;
+  if (ev.th) S.th[ev.agent] = { text: ev.th, ts: ev.ts }; else if (ev.kind === 'user') delete S.th.main;   // your order starts a new chain of thought: what the lead thought before is no longer what it is on
+  if (ev.kind === 'results') S.lastAct[ev.agent] = ev.ts; else if (ev.kind === 'user') S.lastAct.main = ev.ts;   // a result coming back and your own order are signs of life too: the lead is thinking about them
 }
 const tokTip = (u) => `${L('Jetons enregistrés par Claude Code (comptés une fois par message, ce n’est pas une facture)', 'Tokens recorded by Claude Code (counted once per message, not a bill)')}\n${L('entrée', 'input')} ${fmtTok(u.i)} · ${L('sortie', 'output')} ${fmtTok(u.o)} · ${L('écriture cache', 'cache write')} ${fmtTok(u.w)} · ${L('lecture cache', 'cache read')} ${fmtTok(u.r)}`;
 const ctxInfo = (id) => { const c = S.ctx[id]; if (!c) return null; const w = ctxWin(S.model[id], c), p = Math.round((c / w) * 100); return { c, w, p, lvl: p >= 88 ? 'hi' : p >= 70 ? 'mid' : 'lo' }; };
@@ -1017,7 +1094,10 @@ const NEEDS_OK = /^(Edit|Write|MultiEdit|NotebookEdit|AskUserQuestion|ExitPlanMo
 const atTail = () => S.idx >= S.events.length - 3;   // only trust wall-clock ages when playback has caught up with the live end
 function agentState(id, now) {
   let s = S.status[id]; const r = S.run[id], w = S.waitOn[id], la = S.lastAct[id];
-  if (id === 'main' && !s) { if (r || (w && w.size) || (S.live && la && now - la < 25000)) s = 'working'; else if (S.live && la) return { k: 'done', txt: '✓ ' + L('à vous', 'your turn') }; }
+  if (id === 'main' && !s) {   // the lead is at work until the message that closes its turn, even while it thinks; a transcript without that mark falls back on "quiet for 25 s", and a turn cut short on 3 minutes of silence
+    const open = S.live && la && (S.sawEnd ? !S.turnOver && now - la < 180000 : now - la < 25000);
+    if (r || (w && w.size) || open) s = 'working'; else if (S.live && la) return { k: 'done', txt: '✓ ' + L('à vous', 'your turn') };
+  }
   if (s === 'done') return { k: 'done', txt: '✓ ' + L('terminé', 'done') };
   if (!s) return { k: 'idle', txt: '' };
   if (S.live && atTail() && r && r.ts && r.name && NEEDS_OK.test(r.name)) { const age = now - r.ts; if (age > (ASKS.test(r.name) ? 4000 : 15000)) return { k: 'blocked', txt: '✋ ' + L('attend vous ? ', 'needs you? ') + fmtShort(age) }; }
@@ -1037,7 +1117,7 @@ function paintStates() {
     if (p.id === 'user') continue; const t = $('#t-' + p.id); if (!t) continue;
     const st = agentState(p.id, now), shown = t.style.display !== 'none'; if (shown && n[st.k] !== undefined && !S.gone.has(p.id)) { n[st.k]++; if (st.k === 'blocked' || st.k === 'stalled') attn.push(p.id); }
     STATE_CLASSES.forEach((c) => t.classList.toggle(c, st.k === c));
-    const el = t.querySelector('.status'); if (el.textContent !== st.txt) el.textContent = st.txt; el.className = 'status ' + st.k;
+    const el = t.querySelector('.status'); if (el.textContent !== st.txt) el.textContent = st.txt; el.className = 'status ' + st.k + (isTurn(p.id, st) ? ' turn' : '');
     const pr = t.querySelector('.prop'), want = { blocked: '✋', stalled: '😰', waiting: '⌛' }[st.k] || '', was = S.prevState[p.id];   // a raised hand, a sweat drop, an hourglass: the call metaphor for "needs you / stuck / waiting"
     if (st.k === 'done' && was && was !== 'done' && was !== 'idle') { pr.textContent = '🎉'; pr.className = 'prop cheer'; setTimeout(() => { if (pr.classList.contains('cheer')) { pr.textContent = ''; pr.className = 'prop'; } }, 1200); }
     else if (!pr.classList.contains('cheer')) { if (pr.textContent !== want) pr.textContent = want; pr.className = 'prop ' + (want ? st.k : ''); }
@@ -1046,15 +1126,16 @@ function paintStates() {
     if (p.id === 'main') { if (st.k === 'working' || st.k === 'waiting') S.mainBusyAt = S.mainBusyAt || Date.now(); else if (st.k === 'done') S.mainBusyAt = 0; }
     S.prevState[p.id] = st.k; const tip = `${p.name} — ${p.role}${st.txt ? '\n' + st.txt : ''}${S.lastTool[p.id] ? '\n' + S.lastTool[p.id] : ''}`; if (t.title !== tip) t.title = tip;
   }
+  paintPill();
   const b = $('#board'), parts = [['working', '⚙', L('au travail', 'working')], ['waiting', '🔗', L('en attente', 'waiting')], ['blocked', '✋', L('vous attendent', 'need you')], ['stalled', '⚠', L('bloqués', 'stalled')], ['done', '✓', L('terminés', 'done')]]
-    .filter(([k]) => n[k]).map(([k, i, l]) => `<span class="${k}" title="${n[k]} ${l}">${i} ${n[k]}<em> ${l}</em></span>`).join('');
+    .filter(([k]) => n[k] && !S.pillSess).map(([k, i, l]) => `<span class="${k}" title="${n[k]} ${l}">${i} ${n[k]}<em> ${l}</em></span>`).join('');
   if (b.innerHTML !== parts) b.innerHTML = parts; S.nBlocked = n.blocked + n.stalled; S.attn = attn; paintRoster(ros); return n;
 }
 const RORDER = { blocked: 0, stalled: 1, working: 2, waiting: 3, idle: 4, done: 5 };
 function paintRoster(ros) {   // a fixed list beside the call: who is doing what, urgent first, readable even with dozens of agents
   const box = $('#roster'); if (!box || !document.body.classList.contains('rost')) return;
   ros.sort((a, b) => (a.p.id === 'main' ? -1 : b.p.id === 'main' ? 1 : (RORDER[a.st.k] - RORDER[b.st.k]) || (S.lastAct[b.p.id] || 0) - (S.lastAct[a.p.id] || 0)));
-  const rows = ros.slice(0, 60).map(({ p, st }) => `<div class="rr k-${st.k}${S.focus === p.id ? ' sel' : ''}${S.speakers.has(p.id) ? ' speaking' : ''}" data-id="${esc(p.id)}" tabindex="0" role="button" aria-label="${esc(p.name)}, ${esc(st.txt || '')}"><div class="n"><span class="dot" style="background:${p.shirt}"></span><b>${esc(p.name)}</b><span class="ro">${esc(p.role)}</span></div><div class="st">${esc(st.txt || L('en veille', 'standing by'))}${S.loops[p.id] ? ' 🔁' : ''}</div></div>`).join('');
+  const rows = ros.slice(0, 60).map(({ p, st }) => `<div class="rr k-${st.k}${isTurn(p.id, st) ? ' turn' : ''}${S.focus === p.id ? ' sel' : ''}${S.speakers.has(p.id) ? ' speaking' : ''}" data-id="${esc(p.id)}" tabindex="0" role="button" aria-label="${esc(p.name)}, ${esc(st.txt || '')}"><div class="n"><span class="dot" style="background:${p.shirt}"></span><b>${esc(p.name)}</b><span class="ro">${esc(p.role)}</span></div><div class="st">${esc(st.txt || L('en veille', 'standing by'))}${S.loops[p.id] ? ' 🔁' : ''}</div></div>`).join('');
   const html = `<h3>${L('Agents', 'Agents')} · ${ros.length}</h3>${rows}${ros.length > 60 ? `<div class="ro" style="padding:4px 8px">+${ros.length - 60}</div>` : ''}`;
   if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
 }
@@ -1095,6 +1176,7 @@ function setFav(color) {
 function updateTitle() {
   paintStates(); if (S.live && S.nBlocked && !S.wasBlocked && prefs.notify) { AUD.alert(); const msg = L('Un agent attend peut-être votre feu vert ✋', 'An agent may be waiting for you ✋'); if (EMBED) window.parent.postMessage({ agentStandup: 'notify', text: msg }, '*'); else { try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') new Notification('Agent Standup', { body: msg }); } catch {} } } S.wasBlocked = S.nBlocked > 0;
   let n = 0; for (const id in S.status) if (S.status[id] === 'working' && !S.gone.has(id)) n++;
+  if (S.live && S.agents.main && /^(working|waiting)$/.test(agentState('main', Date.now()).k)) n++;   // the lead counts too: a session without sub-agents also ends
   watchDone(n); setFav(S.live && S.nBlocked ? '#ff4d4d' : null);
   document.title = S.live && S.nBlocked ? `✋ ${S.nBlocked} ${L('à voir', 'need you')} · Agent Standup` : S.doneUntil > Date.now() && !n ? '✓ ' + L('Terminé', 'Done') + ' · Agent Standup' : S.live && S.playing && n ? `● ${n} ${L('au travail', 'working')} · Agent Standup` : 'Agent Standup';
 }
@@ -1137,7 +1219,7 @@ function setTicker(id, e) {   // the strip on the tile: spinner while running, t
   tk.classList.add('on'); if (running) { tk.classList.remove('flash'); void tk.offsetWidth; tk.classList.add('flash'); }
 }
 function tickTools(ev) {
-  const t = $('#t-' + ev.agent); if (!t) return; t.style.display = '';
+  ev._n = ev.tools.length; const t = $('#t-' + ev.agent); if (!t) return; t.style.display = '';
   ev.tools.forEach((tool) => pushTerm(ev.agent, tool));
   const buf = S.term[ev.agent], k = ev.tools[ev.tools.length - 1];
   S.tc[ev.agent] = (S.tc[ev.agent] || 0) + ev.tools.length; S.lastTool[ev.agent] = k.name + ' ' + (k.arg || '').slice(-38);
@@ -1261,7 +1343,7 @@ setInterval(() => {
 // ---------- speaking tiles ----------
 const mouths = new Map();
 function startTalk(id, text, label) {
-  const t = $('#t-' + id); if (!t) return;
+  const t = $('#t-' + id); if (!t) return; endThought(id); stopMumble(); TH.next[id] = Date.now() + 8000;   // a spoken line takes the bubble and the floor
   if (S.present && S.present !== id) hidePresent();
   S.spokeAt = performance.now(); S.fill = 0; S.mused = false;
   if (!S.speakers.size && !(S.focusLock > Date.now())) setFocus(id); S.gone.delete(id); if (S.doneAt[id] != null) S.doneAt[id] = S.clock; t.style.display = ''; t.classList.add('speaking'); S.speakers.add(id); S.say[id] = { text, label }; AUD.duck(true);
@@ -1297,6 +1379,73 @@ function stopTalk(id) {
   const pc = $('#pcam .cimg-talk'), pi = $('#pcam .cimg'); if (pc && pi && S.present === id) { pc.style.display = 'none'; pi.style.display = ''; }
 }
 const clearSpeaking = () => [...S.speakers].forEach(stopTalk);
+// =====================================================================
+//  inner thoughts: an agent that has been at work for a while thinks to itself, in a bubble it does not say. What it thinks is real: its own reasoning when the session kept it
+//  (rarely: Claude Code mostly stores a signature), otherwise what it is on right now (the command it waits for, the files it goes between, its to-do item, a failure, its task).
+//  One time in five the thought escapes as a mumble: its own voice, low and muffled. Live only, never while it speaks, off with the little lines or in Quiet.
+// =====================================================================
+const TH = { since: {}, next: {}, said: {}, last: 0, voice: null };
+const THINK = {
+  en: { run: ['Still running… {x}.', 'Come on… {x}.', '{x}. Any second now.'], err: ['Why did that fail?', 'That error again… what am I missing?', 'Not what I expected from “{x}”.'], two: ['{a}, then {b}… what links them?', '{a} and {b}. It has to be in one of them.'], one: ['Something in {a} does not add up.', '{a}… where was that part again?'], again: ['Back to {a}. Again.', '{a}, once more. I am missing something.'],
+    todo: ['One thing at a time: {x}.', '{x}… then the next one.'], next: ['After this: {x}.'], grep: ['Where is “{x}” hiding?', '“{x}”… it has to be somewhere.'], web: ['“{x}”… let’s see what comes up.'], task: ['{x}. Stay on it.', '{x}… getting there, I think.'], many: ['{n} calls in. What do I know so far?'] },
+  fr: { run: ['Toujours en cours… {x}.', 'Allez… {x}.', '{x}. Ça arrive.'], err: ['Pourquoi ça a planté ?', 'Encore cette erreur… qu’est-ce que je rate ?', 'Pas ce que j’attendais de « {x} ».'], two: ['{a}, puis {b}… quel est le lien ?', '{a} et {b}. C’est forcément dans l’un des deux.'], one: ['Il y a un truc dans {a} qui ne colle pas.', '{a}… c’était où, déjà ?'], again: ['Retour à {a}. Encore.', '{a}, une fois de plus. Je rate quelque chose.'],
+    todo: ['Une chose à la fois : {x}.', '{x}… puis la suite.'], next: ['Après ça : {x}.'], grep: ['Où se cache « {x} » ?', '« {x} »… c’est forcément quelque part.'], web: ['« {x} »… voyons ce que ça donne.'], task: ['{x}. On reste dessus.', '{x}… j’y arrive, je crois.'], many: ['{n} appels. Qu’est-ce que je sais, à ce stade ?'] },
+};
+function thoughtFor(id) {
+  const now = Date.now(), W = THINK[FR() ? 'fr' : 'en'], seen = (TH.said[id] = TH.said[id] || []), cut = (x, n) => { x = String(x || '').replace(/\s+/g, ' ').trim(); return (x.length > n ? x.slice(0, n).replace(/\s+\S*$/, '') + '…' : x).replace(/[.\s]+$/, ''); };
+  const real = realThought(id); if (real) return real;   // its own words first, always: the rest is only for when there are none (left)
+  const buf = (S.term[id] || []).slice(-8), last = buf[buf.length - 1], r = S.run[id], hot = [], out = [], add = (to, k, v) => { for (const tpl of W[k]) to.push(tpl.replace(/\{(\w+)\}/g, (m, key) => v[key])); };
+  const what = (e) => { const d = e.tool.d || {}; return cut(d.note || (d.kind === 'cmd' ? String(d.text || '').trim().split(/\s+/).slice(0, 3).join(' ') : base(d.file) || e.tool.name), 60); };
+  if (last && last.k === 'cmd' && r && r.id === last.id && now - (r.ts || now) > 20000) add(hot, 'run', { x: what(last) });   // a command that takes its time
+  if (last && last.err) add(hot, 'err', { x: what(last) });
+  const files = buf.filter((e) => /^(read|edit|write)$/.test(e.k)).map((e) => base((e.tool.d || {}).file)).filter(Boolean), uniq = [...new Set(files)], f = uniq[uniq.length - 1];
+  if (f && files.filter((x) => x === f).length >= 3) add(out, 'again', { a: f }); else if (uniq.length > 1) add(out, 'two', { a: uniq[uniq.length - 2], b: f }); else if (f) add(out, 'one', { a: f });
+  const td = S.todos[id] || [], cur = td.find((x) => x.s === 'in_progress'), nx = td.find((x) => x.s === 'pending'); if (cur) add(out, 'todo', { x: cut(cur.c, 70) }); if (nx) add(out, 'next', { x: cut(nx.c, 70) });
+  const g = buf.slice(-3).reverse().find((e) => e.k === 'grep' && (e.tool.d || {}).pattern); if (g) add(out, 'grep', { x: cut(g.tool.d.pattern, 30) });
+  const w = buf.slice(-3).reverse().find((e) => e.k === 'web' && (e.tool.d || {}).query); if (w) add(out, 'web', { x: cut(w.tool.d.query, 50) });
+  const p = S.agents[id]; if (isSub(id) && p && p.role && !/^agent$/i.test(p.role)) add(out, 'task', { x: cut(p.role, 60) });
+  if ((S.tc[id] || 0) >= 15) add(out, 'many', { n: S.tc[id] });
+  const fresh = (a) => a.filter((x) => !seen.includes(x)), h = fresh(hot), o = fresh(out), pool = h.length && (!o.length || Math.random() < 0.6) ? h : o; if (!pool.length) return null;
+  const line = pool[Math.floor(Math.random() * pool.length)]; seen.push(line); if (seen.length > 6) seen.shift(); return line;
+}
+function realThought(id, peek) {   // the next sentence of the agent's own reasoning for the work it is on (kept by the session for some of its steps); null when there is none, or when all of it has been shown
+  const th = S.th[id]; if (!th || Date.now() - th.ts > 600000) return null;
+  if (!th.ss) { th.ss = (th.text.match(/[^.!?]+(?:[.!?]+|$)/g) || []).map((x) => x.trim()).filter((x) => x.length >= 12).map((x) => (x.length > 150 ? x.slice(0, 150).replace(/\s+\S*$/, '') + '…' : x)); th.i = 0; }
+  return th.i < th.ss.length ? (peek ? th.ss[th.i] : th.ss[th.i++]) : null;
+}
+function showThought(id, text) {
+  const t = $('#t-' + id); if (!t || t.style.display === 'none' || S.speakers.has(id) || t.classList.contains('bye')) return false;
+  t.querySelector('.bubble').innerHTML = `<small>💭</small>${esc(text)}`; t.classList.add('musing'); clearTimeout(t._thT); t._thT = setTimeout(() => endThought(id), Math.min(9000, 3500 + text.length * 55)); return true;
+}
+function endThought(id) {
+  const t = $('#t-' + id); if (!t || !t.classList.contains('musing')) return; clearTimeout(t._thT); t.classList.remove('musing'); if (TH.voice && TH.voice.id === id) stopMumble();
+  if (!S.speakers.has(id) && !t.classList.contains('bye')) t.querySelector('.bubble').innerHTML = '';
+}
+const clearThoughts = () => { document.querySelectorAll('.tile.musing').forEach((t) => endThought(t.id.slice(2))); stopMumble(); };
+function stopMumble() { const v = TH.voice; if (v) { TH.voice = null; try { v.src.stop(); } catch {} } }
+async function mumble(id, text) {   // lips closed: the mouth does not move, the music does not make room, and anyone who starts to speak cuts it
+  const p = S.agents[id], t = $('#t-' + id); if (!p || !t || !prefs.voice || AUD.off() || !AUD.ctx || S.speakers.size || TH.voice) return;
+  if (!TTS.server || prefs.vstyle === 'animal' || prefs.vstyle === 'sims') { AUD.murmur(0.5 + (p.vi % 5) / 10, Math.min(2.2, estMs(text) / 1000), 0.4); return; }
+  const fr = frVoice(text), voice = TTS.voiceFor(p, fr), token = S.token; if (!voice) return; let buf; try { buf = await TTS.buf(speakable(text), voice, TTS.rate(), true, fr); } catch { return; }   // made like a line prepared ahead: it never delays a real one
+  if (token !== S.token || S.speakers.size || TH.voice || !t.classList.contains('musing')) return;   // someone spoke meanwhile, or the thought is gone
+  const c = AUD.ctx, src = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain(); src.buffer = buf; lp.type = 'lowpass'; lp.frequency.value = 1100; g.gain.value = 0.2; let stops = [];
+  if (prefs.vstyle === 'natural' || prefs.vstyle === 'kokoro') src.connect(lp); else { const ch = fxChain(c, src, fxFor(p)); stops = ch.stops; ch.node.connect(lp); }
+  lp.connect(g); g.connect(AUD.voice); AUD.live.add(src); TH.voice = { id, src };
+  src.onended = () => { AUD.live.delete(src); stops.forEach((o) => { try { o.stop(); } catch {} }); if (TH.voice && TH.voice.src === src) TH.voice = null; }; src.start();
+}
+setInterval(() => {   // who gets a thought: someone at work for a while and silent; two at most on screen, a few seconds apart, each agent every half minute or so
+  const now = Date.now(); if (!S.live || !S.playing || S.locked || S.recomputing || !prefs.banter || prefs.chat === 'quiet' || S.hurry || S.boost > 1 || (document.hidden && !S.exporting) || !atTail()) return;
+  const ready = [];
+  for (const p of Object.values(S.agents)) {
+    const id = p.id, t = $('#t-' + id); if (id === 'user' || !t) continue;
+    if (t.style.display === 'none' || S.gone.has(id) || agentState(id, now).k !== 'working') { delete TH.since[id]; continue; }
+    TH.since[id] = TH.since[id] || now; if (!S.speakers.has(id) && !t.classList.contains('musing') && now - TH.since[id] > 15000 && now > (TH.next[id] || 0)) ready.push(id);
+  }
+  if (!ready.length || now - TH.last < 5000 || document.querySelectorAll('.tile.musing').length >= 2) return;
+  const own = ready.filter((id) => realThought(id, true)), from = own.length ? own : ready;   // whoever has reasoning of its own to show goes first
+  const id = from[Math.floor(Math.random() * from.length)], text = thoughtFor(id); TH.next[id] = now + (text ? 28000 + Math.random() * 24000 : 8000) / chatMul(); if (!text || !showThought(id, text)) return;
+  TH.last = now; if (Math.random() < 0.2) mumble(id, text);
+}, 1500);
 
 // ---------- hierarchy tree ----------
 function renderTree() {
@@ -1369,9 +1518,8 @@ function openExternal(url) { if (EMBED) window.parent.postMessage({ agentStandup
 function renderCoffee() {
   const on = !!SUPPORT.url, b = $('#mCoffee'); b.style.display = on ? '' : 'none'; $('#mCoffeeT').textContent = L('☕ Offrir un café au développeur', '☕ Buy the (replaced) dev a coffee'); b.title = coffeeMsg();
   const h = $('#bCoffee'); h.style.display = on ? '' : 'none'; h.title = coffeeMsg(); h.setAttribute('aria-label', coffeeMsg());
-  const g = $('#gCoffee'); g.style.display = on ? '' : 'none'; g.textContent = L('☕ Ce développeur a été remplacé par ses agents — lui offrir un café', '☕ This dev was replaced by his agents — buy him a coffee');
 }
-$('#bCoffee').onclick = $('#gCoffee').onclick = () => openExternal(SUPPORT.url);
+$('#bCoffee').onclick = () => openExternal(SUPPORT.url);
 $('#mCoffee').onclick = () => { $('#menu').classList.remove('on'); openExternal(SUPPORT.url); };
 
 // =====================================================================
@@ -1467,7 +1615,7 @@ function ackLine(ev) {
 // =====================================================================
 //  conversation: short exchanges between agents at the right moments, built from what really happened in the session
 // =====================================================================
-const CHAT = { quiet: 0.45, normal: 1, lively: 1.8 }, chatMul = () => CHAT[prefs.chat] || CHAT.quiet;   // quiet unless chosen otherwise, so the call does not tire anyone
+const CHAT = { quiet: 0.45, normal: 1, lively: 1.8 }, chatMul = () => CHAT[prefs.chat] || 1;   // normal unless chosen otherwise
 const EXW = { en: { edit: ['edit', 'edits'], call: ['tool call', 'tool calls'], error: ['error', 'errors'] }, fr: { edit: ['modification', 'modifications'], call: ['appel d’outil', 'appels d’outils'], error: ['erreur', 'erreurs'] } };
 const P = (k, n) => { const w = EXW[FR() ? 'fr' : 'en'][k]; return `${n} ${n === 1 ? w[0] : w[1]}`; };
 const EXCH = {
@@ -1506,8 +1654,9 @@ function exchFacts(i, agent) {   // what this agent did since it received its or
   f.what = f.edits ? P('edit', f.edits) : f.tools ? P('call', f.tools) : L('rien à signaler', 'nothing to report'); return f;
 }
 const exVisible = (id) => S.agents[id] && !S.gone.has(id) && $('#t-' + id) && $('#t-' + id).style.display !== 'none';
+async function sayLine(id, line, label, token) { startTalk(id, line, label); await speakLine(line, S.agents[id], true, token); if (token === S.token) stopTalk(id); }   // a line cut short (pause, seek) must not close the bubble of whoever speaks next
 async function exSay(id, line, token) {   // one line of an exchange, then a short human pause
-  if (!exVisible(id) || token !== S.token) return false; startTalk(id, line, '💬'); await speakLine(line, S.agents[id], true, token); stopTalk(id);
+  if (!exVisible(id) || token !== S.token) return false; await sayLine(id, line, '💬', token);
   if (token !== S.token) return false; await sleep((150 + Math.random() * 250) / spd()); return token === S.token;
 }
 const exReady = () => prefs.banter && !S.hurry && S.boost <= 1 && !S.recomputing && !S.speakers.size && caughtUp() && performance.now() - (S.exAt || 0) > (S.live ? 22000 : 9000 / spd()) / chatMul();
@@ -1571,7 +1720,7 @@ async function react(ev, token) {
     else return;
   }
   else return;
-  if (!S.agents[who]) return; startTalk(who, line, thanks || (ev.kind === 'order' && prefs.banter) ? '💬' : '🎬'); await speakLine(line, S.agents[who], true, token); stopTalk(who);
+  if (!S.agents[who]) return; await sayLine(who, line, thanks || (ev.kind === 'order' && prefs.banter) ? '💬' : '🎬', token);
 }
 // Small talk: when nobody has said anything for a while, someone fills the silence the way people do in video calls. At most three per silence, further and further apart; any other line starts the count again.
 const FILL = {
@@ -1595,7 +1744,7 @@ const thinkerOf = (e) => (e.kind === 'results' ? e.agent : e.kind === 'user' ? '
 const before = (i) => { let k = i - 1; while (k >= 0 && (S.events[k].kind === 'usage' || S.events[k].kind === 'compact')) k--; return S.events[k]; };
 async function ponder(i, token) {   // replay: an agent that really took a long time (40 s or more) before this line or call says so first, about every other time
   const ev = S.events[i], p = before(i); if (!prefs.banter || prefs.chat === 'quiet' || S.boost > 1 || S.hurry || !p || !S.agents[ev.agent] || thinkerOf(p) !== ev.agent || ev.ts - p.ts < 40000 || hash('t' + ev.ts) % 100 > 55) return;
-  const line = varied('think', hash(String(ev.ts))); startTalk(ev.agent, line, '💭'); await speakLine(line, S.agents[ev.agent], true, token); stopTalk(ev.agent);
+  const line = varied('think', hash(String(ev.ts))); await sayLine(ev.agent, line, '💭', token);
 }
 // Live: you gave an order and the lead starts on its tools without a word (about one time in three): it says what it is starting with, from the tool call itself, so you know it heard you and what it is on
 const LEAD = {
@@ -1603,19 +1752,19 @@ const LEAD = {
   fr: { in: ['D’accord.', 'Compris.', 'Très bien.', 'Entendu.', 'Ça marche.'], read: 'Je regarde ', edit: 'Je modifie ', write: 'J’écris ', cmd: 'Je lance ', note: 'Je lance une commande : ', grep: 'Je cherche dans le code.', glob: 'Je regarde quels fichiers on a.', todo: 'Je fais mon plan.', web: 'Je vais voir sur le web.', question: 'J’ai une question pour vous.', any: 'Je m’y mets.', and: ' et ' },
 };
 async function leadAck(ev, token) {
-  S.owed = false; if (!prefs.banter || S.hurry || S.boost > 1 || !caughtUp() || S.speakers.size || !S.agents.main) return;
+  if (!prefs.banter || !S.agents.main) { S.owed = false; return; } if (S.hurry || S.boost > 1 || !nearLive() || S.speakers.size) return; S.owed = false;   // reading your order took a while: the first tool is rarely less than 6 s old; if now is a bad moment, the next tool will do
   const W = LEAD[FR() ? 'fr' : 'en'], d = ev.tools[0].d || {}, k = d.kind === 'text' ? d.what : d.kind; let what = W[k] || W.any;
   if (k === 'read' || k === 'edit' || k === 'write') { const files = [...new Set(ev.tools.filter((t) => (t.d || {}).kind === k).map((t) => base(t.d.file)).filter(Boolean))].slice(0, 2); what = files.length ? what + files.join(W.and) + '.' : W.any; }
   else if (k === 'cmd') { const note = (d.note || '').trim().replace(/[.\s]+$/, ''), cmd = String(d.text || '').trim().split(/\s+/).slice(0, 2).join(' ').slice(0, 26); what = note ? W.note + note + '.' : cmd ? what + cmd + '.' : W.any; }
-  const line = `${W.in[hash('k' + ev.ts) % W.in.length]} ${what}`; startTalk('main', line, '💬'); await speakLine(line, S.agents.main, true, token); stopTalk('main');
+  await sayLine('main', `${W.in[hash('k' + ev.ts) % W.in.length]} ${what}`, '💬', token);
 }
 async function wrapUp(token) {   // live, once the lead is done: the part of its last message that the clipped reading left out, so you know what was done
   if (!S.wrap || S.speakers.size || !prefs.voice && !prefs.banter) return false; S.wrap = false;
   let k = S.events.length - 1; while (k >= 0 && !(S.events[k].agent === 'main' && S.events[k].kind === 'say')) k--; if (k < 0) return false; const e = S.events[k], m = S.mainSaid;
-  if (S.wrapped === e) return false; S.wrapped = e;   // once per message: the lead's state can flip to done several times (a short command, a silence) without a new message
+  if (S.wrapped === e || e.ts <= (S.from || 0)) return false; S.wrapped = e;   // once per message: the lead's state can flip to done several times (a short command, a silence) without a new message
   const full = plain(e.text); let rest = m && m.ev === e ? full.slice(m.said).trim() : full; if (m && m.ev === e && m.full) return false; if (!m || m.ev !== e) rest = full;
   rest = rest.replace(/^[^\w\p{L}]+/u, ''); if (rest.length < 25) return false; const line = (m && m.ev === e ? L('Pour résumer : ', 'To sum up: ') : '') + short(rest, 520);
-  startTalk('main', line, '🎉'); await speakLine(line, S.agents.main, true, token); stopTalk('main'); return true;
+  await sayLine('main', line, '🎉', token); return true;
 }
 async function smallTalk(token) {
   if (prefs.chat === 'quiet') return;   // quiet: nothing to fill the silences, only the real exchanges
@@ -1643,14 +1792,16 @@ async function run(i) {
   const token = ++S.token; S.playing = true; S.idle = false; S.hurry = false; S.boost = 1; S.spokeAt = performance.now(); S.fill = 0; S.exQ = []; S.errRun = {}; S.wrap = false; S.mainSaid = null; S.owed = false; S.syncTs = (S.events[i] && S.events[i].ts) || Date.now(); syncUI(); AUD.init();
   if (i === 0 && prefs.epi && !S.live) { await card(L('ÉPISODE 1', 'EPISODE 1'), S.title); if (token !== S.token) return; }
   while (token === S.token) {
-    const lim = S.stopAt || S.events.length;
+    const lim = S.stopAt || S.events.length; S.pos = i;
+    if (S.live && S.late.length) { await converse(S.late.shift(), token); if (token !== S.token) return; continue; }   // a line that turned out to be a report after it was read
     if (i >= lim) { if (S.live && !S.stopAt) { if (!S.idle) { S.idle = true; syncUI(); } if (await wrapUp(token)) continue; await smallTalk(token); await sleep(350); continue; } break; }
     if (S.idle) { S.idle = false; syncUI(); }
     if (S.live) {   // way behind: skip ahead to stay current, but only count what is actually said: sub-agents produce thousands of silent tool events
       const rem = S.events.length - i;
       if (rem > 300 || aheadSpeakable(i, 16) > 16 || lagMs(i) > 60000) {   // only a really big backlog is skipped; before that, lines are shortened instead
         let k = S.events.length, back = 0; while (k > i && back < 8) { k--; if (SPK.has(S.events[k].kind)) back++; }
-        const to = rem > 300 ? Math.max(k, S.events.length - 14) : k; if (to > i) { i = to; recomputeStatus(i); paintStatus(); }
+        let to = rem > 300 ? Math.max(k, S.events.length - 14) : k; for (let u = i; u < to; u++) if (S.events[u].kind === 'user') { to = u; break; }   // never over a line of yours: what you asked is always said, shortened if need be
+        if (to > i) { i = to; recomputeStatus(i); paintStatus(); }
       }
     }
     const q = S.live ? aheadSpeakable(i, 14) : 0;   // lines waiting to be said: the more of them, the shorter each one is read, but it is always read
@@ -1681,19 +1832,19 @@ async function run(i) {
     if (FR() && !S.hurry) { prefetchTr(i); await Promise.race([ensureTr(group.map((g) => baseText(g))), sleep(S.live ? 7000 : 14000)]); if (token !== S.token) return; }
     prefetchQuips(i); warmTTS(i);
     const playOne = (g) => {
-      applyStatus(g); if (g.agent === 'user') S.owed = true; else if (g.agent === 'main') S.owed = false;   // your order waits for a word from the lead
+      applyStatus(g); g._as = g.kind; if (g.agent === 'user') S.owed = true; else if (g.agent === 'main') S.owed = false;   // your order waits for a word from the lead
       const label = g.kind === 'order' ? `${L('pour', 'to')} ${nameOf(g.to)}` : g.kind === 'report' ? `${L('rapport à', 'report to')} ${nameOf(g.to)}` : '', line = talkLine(g);
       startTalk(g.agent, line, label);
       if (g.kind === 'order') { S.status[g.to] = 'working'; AUD.join(); setTimeout(() => { paintStatus(); fly(g.agent, g.to, '📨'); popTile(g.to); }, 30); }
       if (g.kind === 'report') { AUD.ding(); setTimeout(() => { fly(g.agent, g.to, '✅'); popTile(g.agent); }, 30); }
       const said = clipSpeech(line, S.pace); if (g.agent === 'main' && g.kind === 'say') { const full = plain(g.text), key = said.replace(/…$/, '').trim().slice(-30), pos = key ? full.indexOf(key) : -1, n = pos >= 0 ? pos + key.length : said.length; S.mainSaid = { ev: g, said: n, full: n >= full.length - 5 }; }
-      return speakLine(said, S.agents[g.agent], true, token, frVoice(said)).then(() => stopTalk(g.agent));
+      return speakLine(said, S.agents[g.agent], true, token, sessFr(said, g), g.kind === 'user').then(() => { if (token === S.token) stopTalk(g.agent); });
     };
     let plays;
     if (ev.kind === 'order' && group.length > 1) {   // the first order in full, then "Also Remy on X, Iris on Y"
       const rest = group.slice(1), line = `${L('Et aussi ', 'Also ')}${rest.map((o) => `${nameOf(o.to)}${L(' sur ', ' on ')}${(o.title || short(o.text, 60)).replace(/[.。]\s*$/, '')}`).join(', ')}.`;
       setTimeout(() => rest.forEach((o, k) => setTimeout(() => { fly(o.agent, o.to, '📨'); popTile(o.to); }, k * 120)), 30);
-      plays = [playOne(ev).then(() => { if (token !== S.token) return; startTalk(ev.agent, line, ''); return speakLine(clipSpeech(line, S.pace), S.agents[ev.agent], true, token).then(() => stopTalk(ev.agent)); })];
+      plays = [playOne(ev).then(() => { if (token !== S.token) return; startTalk(ev.agent, line, ''); return speakLine(clipSpeech(line, S.pace), S.agents[ev.agent], true, token).then(() => { if (token === S.token) stopTalk(ev.agent); }); })];
     }
     else if (S.live) { plays = []; let chain = Promise.resolve(); for (const g of group) { chain = chain.then(() => (token === S.token ? playOne(g) : null)); plays.push(chain); } } else plays = group.map(playOne);   // live: one voice at a time so each can be heard; replay keeps the overlapping chatter
     S.idx = j - 1; paintStatus(); await Promise.all(plays); if (token !== S.token) return;
@@ -1710,10 +1861,10 @@ function clipSpeech(t, cap) {   // the bubble keeps the full text; the voice rea
   const m = t.slice(0, cap + 40).match(/^.{20,}?[.!?](?=\s|$)/); if (m && m[0].length <= cap + 30) return m[0];
   return t.slice(0, cap).replace(/\s+\S*$/, '') + '…';
 }
-function pause() { S.playing = false; S.hurry = false; S.boost = 1; S.token++; synth && synth.cancel(); AUD.stopAll(); clearSpeaking(); $('#card').classList.remove('on'); syncUI(); }
+function pause() { S.playing = false; S.hurry = false; S.boost = 1; S.token++; synth && synth.cancel(); AUD.stopAll(); clearSpeaking(); clearThoughts(); $('#card').classList.remove('on'); syncUI(); }
 function togglePlay() {
   if (S.locked) return;
-  if (S.playing) { S.userPaused = true; pause(); } else { claimAudio(); S.userPaused = false; run(S.idx >= S.events.length - 1 && !S.live ? (recomputeStatus(0), 0) : S.idx); }
+  if (S.playing) { S.userPaused = true; pause(); } else { claimAudio(); S.userPaused = false; run(S.idx >= S.events.length - 1 && !S.live ? (recomputeStatus(0), 0) : S.live ? S.pos : S.idx); }   // live: from the first line not said yet (the one that was cut, if any)
 }
 function seekTo(i) {
   pause(); i = Math.max(0, Math.min(S.events.length - 1, i)); S.idx = i; recomputeStatus(i); paintStatus(); S.userPaused = false; run(i);
@@ -1737,7 +1888,7 @@ async function loadSession(proj, id) {
   const data = await (await fetch(`/api/session?proj=${encodeURIComponent(proj)}&id=${id}`)).json();
   if (mine !== S.loadN || data.error) return false;
   S.term = {}; S.camFor = null; S.focus = null; S.agents = {}; for (const k in nameBook) delete nameBook[k]; [{ id: 'user' }, ...data.agents].forEach((a) => (S.agents[a.id] = persona(a)));
-  S.events = data.events; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
+  clearThoughts(); Object.assign(TH, { since: {}, next: {}, said: {}, last: 0 }); S.events = data.events; stampT(0); S.byK = new Map(data.events.map((e) => [e.k, e])); S.seq = data.seq || 0; S.ep = data.ep || ''; S.sawEnd = data.events.some((e) => e.end); S.late = []; S.pos = 0; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
   const opt = $('#sessions').selectedOptions[0]; S.title = (S.live ? niceProj(proj) : opt && opt.dataset.title) || '';
   if (proj === '_demo') S.events.forEach((e) => { if (e.fr) trMem.set(baseText(e), e.fr); });   // the demo ships its own French
   $('#subtitle').textContent = S.title; recomputeStatus(0); buildStage(); renderHighlights(); setFocus('main'); renderLog(true); computeGantt(); layout(); paintStatus(); prefetchTr(0); return true;
@@ -1766,7 +1917,16 @@ function midWork() {   // someone is in the middle of something: the session doe
 function liveStart() {
   const n = S.events.length; if (!S.locked && !S.since) S.since = Date.now() - (midWork() ? JOIN_BACK_MS : 0);   // S.since 0: joining now
   const since = S.locked ? Date.now() : S.since; let i = n; while (i > Math.max(0, n - 16) && S.events[i - 1].ts > since) i--;
-  recomputeStatus(i); S.idx = i; trNew(Math.max(0, n - 16)); paintStatus(); return i;
+  recomputeStatus(i); S.idx = S.pos = i; S.from = since; trNew(Math.max(0, n - 16)); paintStatus(); return i;
+}
+function amend(e, was) {   // the server corrected an event the call already has: another tool call in the same message, a last line that turns out to be a report, the mark that closes the lead's turn
+  const i = S.events.indexOf(e), row = $(`#log .row[data-i="${i}"]`); if (row) row.outerHTML = logRow(i);
+  if (e.end) S.sawEnd = true; if (S.locked || S.recomputing || !S.live) return; const past = i < S.pos;   // at the door everything is worked out again on Join
+  if (e.kind === 'tools') { const done = e._n != null ? e._n : past ? was.n : null; if (done != null && e.tools.length > done) { const more = { ...e, tools: e.tools.slice(done) }; e._n = e.tools.length; applyStatus(more); tickTools(more); } }
+  if (e.kind === 'report' && was.kind === 'say' && (e._as === 'say' || past)) {   // it was read as an ordinary line: the report still counts (the agent is done, a ding, perhaps a word of thanks), without reading it again
+    applyStatus(e); AUD.ding(); fly(e.agent, e.to, '✅'); popTile(e.agent); if (e._as === 'say') { e._as = 'report'; S.late.push(e); }
+  }
+  if (e.end && !was.end && (e._n != null || e._as || past)) { let k = S.events.length - 1; while (k > i && !(S.events[k].kind === 'user' || (S.events[k].agent === 'main' && /^(say|tools|order)$/.test(S.events[k].kind) && !S.events[k].wf))) k--; if (k === i) S.turnOver = true; }   // only if nothing came after it
 }
 let polling = false;
 setInterval(async () => {
@@ -1774,12 +1934,16 @@ setInterval(async () => {
   try {
     const switched = await followCurrent(); if (S.offline) { S.offline = false; syncUI(); }
     if (switched || !S.cur) return;
-    const d = await (await fetch(`/api/session?proj=${encodeURIComponent(S.cur.proj)}&id=${S.cur.id}&after=${S.events.length}`)).json();
-    if (d.error) return; if (d.total < S.events.length) { S.cur = null; return; }   // transcript was rewritten: reload next tick
-    if (!d.events || !d.events.length) return;
+    const cur = S.cur, d = await (await fetch(`/api/session?proj=${encodeURIComponent(cur.proj)}&id=${cur.id}&after=${S.seq}&ep=${encodeURIComponent(S.ep)}`)).json();
+    if (d.error || cur !== S.cur) return; if (d.resync) { S.cur = null; return; }   // the server no longer has our place (restarted, transcript rewritten): reload next tick
+    S.seq = d.seq; if (!d.events || !d.events.length) return;
     for (const a of d.agents) if (!S.agents[a.id]) { S.agents[a.id] = persona(a); addTile(S.agents[a.id]); }
-    const from = S.events.length; S.events = S.events.concat(d.events); $('#seek').max = S.events.length - 1; trNew(from); warmTTS(from); renderLog(false);
-    if (S.playing && !S.recomputing) for (const e of d.events) if (e.kind === 'order' && !S.status[e.to]) { S.status[e.to] = 'working'; S.orderTs[e.to] = e.ts || 0; S.gone.delete(e.to); }   // a new sub-agent shows up now, while the previous line is still being read
+    const from = S.events.length, fresh = [], changed = [];   // the session is not written in order: what is new goes at the end (the order the call got it in), what the server corrected is corrected in place
+    for (const e of d.events) { const old = S.byK.get(e.k); if (old) { changed.push([old, { kind: old.kind, n: old.tools ? old.tools.length : 0, end: old.end }]); Object.assign(old, e); } else { S.byK.set(e.k, e); fresh.push(e); } }
+    if (fresh.some((e) => e.end)) S.sawEnd = true;
+    if (fresh.length) { S.events = S.events.concat(fresh); stampT(from); $('#seek').max = S.events.length - 1; trNew(from); warmTTS(from); renderLog(false); }
+    if (S.playing && !S.recomputing) for (const e of fresh) if (e.kind === 'order' && !S.status[e.to]) { S.status[e.to] = 'working'; S.orderTs[e.to] = e.ts || 0; S.gone.delete(e.to); }   // a new sub-agent shows up now, while the previous line is still being read
+    for (const [e, was] of changed) amend(e, was);
     paintStatus();
   } catch { if (!S.offline) { S.offline = true; syncUI(); } } finally { polling = false; }
 }, 400);
@@ -1960,10 +2124,11 @@ function applyLang() {
   renderCharInfo();
   document.documentElement.lang = (LANGS.find((l) => l[0] === prefs.lang) || LANGS[0])[2];
   document.querySelectorAll('[data-fr]').forEach((el) => (el.textContent = FR() ? el.dataset.fr : tr(el.dataset.en)));
+  document.querySelectorAll('#viewSeg button').forEach((b) => { b.title = b.textContent; });   // in a narrow window they are icons: the name stays as a tooltip
   const sel = $('#langSel'); if (!sel.options.length) sel.innerHTML = LANGS.map(([c, n]) => `<option value="${c}">${n}</option>`).join(''); sel.value = prefs.lang;
   [['#bPlay', L('Pause / Lecture (espace)', 'Pause / Play (space)')], ['#bLog', 'Transcript'], ['#bMute', L('Son (touche M)', 'Sound (M key)')], ['#bMenu', L('Réglages', 'Settings')], ['#dclose', L('Fermer', 'Close')], ['#officeVol', L('Volume de l’ambiance', 'Ambience volume')], ['#musicVol', L('Volume de la musique', 'Music volume')], ['#liveProj', L('Projet à suivre', 'Project to follow')], ['#reactBar', L('Réactions', 'Reactions')], ['#logQ', L('Rechercher dans la transcription', 'Search the transcript')], ['#roster', L('Agents', 'Agents')]].forEach(([q, t]) => { const el = $(q); if (!el) return; el.title = t; el.setAttribute('aria-label', t); }); $('#logQ').placeholder = L('Rechercher…', 'Search…'); $('#menuQ').placeholder = L('Chercher un réglage…', 'Search settings…'); document.querySelectorAll('#reactBar button').forEach((b) => b.setAttribute('aria-label', b.dataset.e));
   $('#gT').textContent = L('Rejoindre l’appel', 'Join the call'); $('#gP').textContent = L('Cliquez pour activer le son et suivre votre session Claude Code en direct.', 'Click to enable sound and follow your Claude Code session live.'); $('#gB').textContent = L('▶ Rejoindre', '▶ Join');
-  $('#eDemo').textContent = L('▶ Voir la démo', '▶ Watch the demo'); $('#eT').textContent = L('En attente d’une session', 'Waiting for a session'); $('#eP').textContent = L('Lancez Claude Code dans ce dossier : l’appel démarrera tout seul.', 'Start Claude Code in this folder — the call will start by itself.');
+  $('#eDemo').textContent = L('▶ Voir la démo', '▶ Watch the demo'); $('#eT').textContent = L('En attente d’une session', 'Waiting for a session'); $('#eP').innerHTML = watched() ? esc(L('Lancez Claude Code dans {0} : l’appel démarrera tout seul.', 'Start Claude Code in {0} — the call will start by itself.')).replace('{0}', `<b>${esc(watched())}</b>`) : esc(L('Lancez Claude Code dans ce dossier : l’appel démarrera tout seul.', 'Start Claude Code in this folder — the call will start by itself.'));
   for (const id in S.agents) { const p = persona(S.agents[id]); Object.assign(S.agents[id], { name: p.name, role: p.role }); const t = $('#t-' + id); if (t) { t.querySelector('.tag span').textContent = p.role; t.querySelector('.tag b').textContent = p.name; if (id === 'main' || id === 'user') t.querySelector('.tag span').textContent = p.role; } }
   document.querySelectorAll('#menu .mi[data-t]').forEach((b) => b.querySelector('.sw').classList.toggle('on', !!prefs[b.dataset.t])); renderCoffee(); renderTokens(); updateHint(); renderLog(true); syncUI();
 }
@@ -2002,6 +2167,7 @@ function menuInit() {
       for (const e of sc.items) { const hit = !q || e.textContent.toLowerCase().includes(q) || [...e.querySelectorAll('option')].some((o) => o.textContent.toLowerCase().includes(q)); e.classList.toggle('mhide', !hit); if (hit && q) any = true; if (q) e.classList.remove('mfold'); else e.classList.toggle('mfold', sc.h.classList.contains('closed')); }
       sc.h.classList.toggle('mhide', !!q && !any && !sc.h.textContent.toLowerCase().includes(q)); if (q) sc.h.classList.remove('closed'); }
     if (!q) secs.forEach((sc, i) => sc.h.classList.toggle('closed', (prefs.menuClosed || []).includes(i)));
+    $('#menuNone').style.display = q && !secs.some((sc) => sc.items.some((e) => !e.classList.contains('mhide'))) ? '' : 'none';
   };
 }
 $('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b) return; prefs[b.dataset.t] = !prefs[b.dataset.t]; savePrefs(); if (prefs[b.dataset.t] && ['voice', 'office', 'music', 'notify'].includes(b.dataset.t)) claimAudio(); b.querySelector('.sw').classList.toggle('on', prefs[b.dataset.t]); AUD.apply(); if (b.dataset.t === 'office') $('#officeBox').style.display = prefs.office ? '' : 'none'; if (b.dataset.t === 'customLaptop') { for (const k in imgCache) delete imgCache[k]; buildStage(); paintStatus(); } if (b.dataset.t === 'reactions') document.body.classList.toggle('react', prefs.reactions); if (b.dataset.t === 'roster') { document.body.classList.toggle('rost', prefs.roster); paintStates(); } if (b.dataset.t === 'notify') { prefs.notifyChosen = true; savePrefs(); } if (b.dataset.t === 'notify' && prefs.notify) askNotify(); if (b.dataset.t === 'vanish' && !prefs.vanish) { S.gone.clear(); paintStatus(); }
@@ -2009,7 +2175,7 @@ $('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b)
 $('#station').innerHTML = STATIONS.map((s) => `<option value="${s.id}">📻 ${s.name}</option>`).join('');
 $('#station').value = prefs.station; $('#musicVol').value = prefs.musicVol; $('#musicBox').style.display = prefs.music ? '' : 'none';
 $('#station').onchange = (e) => { prefs.station = e.target.value; savePrefs(); AUD.init(); RADIO.sync(); };
-$('#chatSel').value = ['quiet', 'normal', 'lively'].includes(prefs.chat) ? prefs.chat : 'quiet'; $('#chatSel').onchange = () => { prefs.chat = $('#chatSel').value; savePrefs(); };
+$('#chatSel').value = ['quiet', 'normal', 'lively'].includes(prefs.chat) ? prefs.chat : 'normal'; $('#chatSel').onchange = () => { prefs.chat = $('#chatSel').value; savePrefs(); };
 $('#vstyle').innerHTML = [['animal', 'Animal Crossing (babillage)', 'Animal Crossing (babble)'], ['sims', 'Simlish (babillage)', 'Simlish (babble)'], ['cartoon', 'Voix cartoon (voix réelle)', 'Cartoon voices (real voice)'], ['natural', 'Voix naturelles', 'Natural voices'], ['kokoro', 'Voix très naturelles (à installer)', 'Very natural voices (installs on demand)']].map(([v, fr, en]) => `<option value="${v}" data-fr="${fr}" data-en="${en}">${L(fr, en)}</option>`).join(''); $('#vstyle').value = prefs.vstyle; $('#vstyle').onchange = () => { prefs.vstyle = $('#vstyle').value; prefs.vstyleChosen = true; savePrefs(); TTS.init().then(kokoroUI); kokoroUI(); };
 // ---- ⚙ → voice server (OpenAI-compatible): settings box, rebuilt with the characters
 function renderTtsBox() {
@@ -2058,7 +2224,7 @@ $('#mExport').onclick = () => { $('#menu').classList.remove('on'); exportVideo()
 $('#mClip').onclick = () => { $('#menu').classList.remove('on'); exportVideo(0, 0, 25000); };
 $('#mBrowser').onclick = () => { $('#menu').classList.remove('on'); window.parent.postMessage({ agentStandup: 'openBrowser' }, '*'); };
 $('#seek').oninput = (e) => seekTo(+e.target.value);
-$('#eDemo').onclick = () => setMode('demo');
+$('#eDemo').onclick = async () => { await setMode('demo'); if (S.demo && !S.playing) togglePlay(); };   // "Watch the demo" plays it
 $('#gB').onclick = () => {
   claimAudio(); AUD.init(); AUD.apply(); S.locked = false; $('#gate').classList.remove('on'); syncUI();
   if (synth && !EMBED) { try { synth.speak(new SpeechSynthesisUtterance('')); } catch {} }   // unlock browser speech
@@ -2074,6 +2240,74 @@ function jumpAttn(dir = 1) {
   toast(`${nameOf(id)} — ${agentState(id, Date.now()).txt.replace(/^\S+\s/, '')}`);
 }
 $('#board').onclick = (e) => { if (e.target.closest('.blocked, .stalled')) jumpAttn(1); };
+// ---------- the header status: one line that tells the state of the SESSION (not of the playback), most urgent first ----------
+// offline › an agent needs you (who, since when) › stalled › agents at work (and who the lead waits on) › your turn (with the lead's last sentence) › idle.
+// It reads the same states as the tiles (agentState); a click goes to the agent it is about. Live, it replaces the count chips, which would say the same thing twice.
+function isTurn(id, st) { return id === 'main' && st.k === 'done' && S.status.main !== 'done'; }   // the lead is done and waits for you: not a sub-agent's "done"
+function watched() { return niceProj(Q.get('proj') || prefs.proj || ''); }   // the folder the live view follows, when it follows one
+function lastWord() {   // the last sentence the lead said: a closing question ("Do you want me to commit?") stays on screen while it is your turn
+  const key = (S.cur ? S.cur.id : '') + '|' + S.idx + '|' + S.events.length; if (lastWord.key === key) return lastWord.v;
+  let e = null; for (let i = Math.min(S.idx, S.events.length - 1); i >= 0 && !e; i--) if (S.events[i].agent === 'main' && S.events[i].kind === 'say') e = S.events[i];
+  lastWord.key = key; return (lastWord.v = e ? pieces(plain(e.text)).pop() || '' : '');
+}
+function paintPill() {
+  const pill = $('#pill'), now = Date.now(); let cls = '', txt = '', to = '', tip = '', sess = false;
+  if (S.offline) { cls = 'off'; txt = '⚠ ' + L('HORS LIGNE', 'OFFLINE'); }
+  else if (!S.live) txt = 'REPLAY';
+  else if (!S.cur) txt = L('En attente d’une session', 'Waiting for a session');
+  else if (S.locked) txt = L('PRÊT', 'READY');
+  else if (!S.playing) txt = L('PAUSE', 'PAUSED');
+  else {
+    sess = true; const st = {}, by = { working: [], waiting: [], blocked: [], stalled: [], done: [], idle: [] };
+    for (const id in S.agents) if (id !== 'user' && !S.gone.has(id) && (id === 'main' || S.status[id])) { st[id] = agentState(id, now); by[st[id].k].push(id); }
+    const what = (id) => `${nameOf(id)} — ${st[id].txt.replace(/^\S+\s/, '')}`, more = (a) => (a.length > 1 ? ` +${a.length - 1}` : ''), lead = st.main || { k: 'idle' };
+    if (by.blocked.length) { cls = 'blocked'; to = by.blocked[0]; txt = '✋ ' + what(to) + more(by.blocked); }
+    else if (by.stalled.length) { cls = 'stalled'; to = by.stalled[0]; txt = '⚠ ' + what(to) + more(by.stalled); }
+    else if (by.working.length || by.waiting.length) {   // "2 working · Claude — waiting on Ken, Mira", or what the only one at work is doing
+      const w = by.working, wt = lead.k === 'waiting' ? 'main' : w.length ? '' : by.waiting[0]; cls = 'working'; to = wt || (w.length === 1 ? w[0] : 'main');
+      txt = (w.length === 1 && !wt ? '⚙ ' + what(w[0]) : w.length ? `⚙ ${w.length} ${L('au travail', 'working')}` : '') + (wt ? (w.length ? ' · ' : '🔗 ') + what(wt) : '');
+    }
+    else if (isTurn('main', lead)) { const last = lastWord(); cls = 'turn'; to = 'main'; txt = '👉 ' + L('à vous', 'your turn') + (last ? ' · ' + (last.length > 110 ? last.slice(0, 108).replace(/\s+\S*$/, '') + '…' : last) : ''); tip = last; }
+    else { cls = 'idle'; to = 'main'; txt = '💤 ' + L('inactif', 'idle'); }
+  }
+  const c = cls + (to ? ' go' : ''), sub = !sess && S.cur && S.title ? ' · ' + S.title : '';
+  for (const el of [pill, $('#sline')]) {   // the same status, in the header (wide) and on its own line (narrow)
+    if (el.className !== c) el.className = c; if (el.textContent !== txt) el.textContent = txt; if (el.title !== (tip || txt)) el.title = tip || txt; if (el.dataset.sub !== sub) el.dataset.sub = sub;
+    if (to && !el.hasAttribute('tabindex')) { el.tabIndex = 0; el.setAttribute('role', 'button'); } else if (!to && el.hasAttribute('tabindex')) { el.removeAttribute('tabindex'); el.removeAttribute('role'); }
+  }
+  S.pillTo = to; S.pillSess = sess;
+}
+function pillGo() {   // to the agent the status is about; several need you: one after the other (as J does)
+  const id = S.pillTo, t = id && $('#t-' + id); if (!t) return; if ((S.attn || []).includes(id)) { jumpAttn(1); return; }
+  if (document.body.classList.contains('tree') || document.body.classList.contains('board')) setView('call');
+  S.focusLock = Date.now() + 25000; setFocus(id); paintStates(); t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); popTile(id);
+}
+$('#pill').onclick = $('#sline').onclick = pillGo; $('#pill').onkeydown = $('#sline').onkeydown = (e) => { if (S.pillTo && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pillGo(); } };
+// ---------- keyboard: the door has the focus (Enter / Space joins, or starts the demo when there is no session); the ⚙ switches say their state; Escape closes and gives the focus back ----------
+function focusDoor() {   // never taken from a field or a menu the person is in
+  const b = $('#empty').classList.contains('on') ? $('#eDemo') : $('#gate').classList.contains('on') ? $('#gB') : null, a = document.activeElement;
+  if (b && a !== b && (!a || a === document.body || a === $('#gB') || a === $('#eDemo'))) b.focus({ preventScroll: true });
+}
+for (const q of ['#gate', '#empty']) new MutationObserver(focusDoor).observe($(q), { attributes: true, attributeFilter: ['class'] });
+function syncSwitches() { document.querySelectorAll('#menu .mi[data-t]').forEach((b) => { b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!prefs[b.dataset.t])); }); }
+new MutationObserver(() => {   // the menu opens under the header and the status line, not over them
+  const m = $('#menu'), on = m.classList.contains('on'), h = Math.round($('main').getBoundingClientRect().top); $('#bMenu').setAttribute('aria-expanded', String(on)); if (!on) return;
+  syncSwitches(); m.style.top = h + 3 + 'px'; m.style.maxHeight = `calc(100dvh - ${h + 13}px)`;
+}).observe($('#menu'), { attributes: true, attributeFilter: ['class'] });
+$('#menu').addEventListener('click', () => setTimeout(syncSwitches)); $('#bMenu').setAttribute('aria-expanded', 'false'); syncSwitches();
+addEventListener('keydown', (e) => {   // on the way down: Escape also works from the search box and the selects of the menu, which the shortcuts below ignore
+  if (e.key !== 'Escape' || $('#switcher')) return;
+  if ($('#menu').classList.contains('on')) { $('#menu').classList.remove('on'); $('#bMenu').focus(); }
+  else if ($('#detail').classList.contains('on') && !$('#recap').classList.contains('on')) { const t = $('#t-' + S.detail); $('#dclose').click(); if (t && t.offsetParent) t.focus(); }
+}, true);
+// ---------- a bubble that is not whole on screen (last row of tiles, a row of the compact list below the fold) brings the stage to it ----------
+new MutationObserver((ms) => {
+  for (const m of ms) {
+    const b = m.target; if (b.className !== 'bubble' || !b.offsetHeight || b.parentNode.classList.contains('musing')) continue; const st = $('#stage'), r = b.getBoundingClientRect(), s = st.getBoundingClientRect();   // (a thought does not move the stage)
+    let room = r.top - s.top - 10; for (const o of st.querySelectorAll('.bubble')) { const q = o.getBoundingClientRect(); if (o !== b && q.height && q.top >= s.top && q.bottom <= s.bottom) room = Math.min(room, q.top - s.top - 10); }   // never at the cost of another line that is on screen
+    if (r.bottom > s.bottom - 6) { if (room > 0) st.scrollBy({ top: Math.min(r.bottom - s.bottom + 10, room), behavior: 'smooth' }); } else if (r.top < s.top + 4) st.scrollBy({ top: r.top - s.top - 10, behavior: 'smooth' });
+  }
+}).observe($('#stage'), { subtree: true, childList: true });
 // Replay: arrow keys step through the call, N jumps between highlights, speed presets, and the position of each session is remembered
 const stepKind = (e) => !['usage', 'results', 'finish', 'compact'].includes(e.kind);
 function stepEvent(dir) {

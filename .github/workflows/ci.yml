@@ -17,8 +17,15 @@ jobs:
           node --check extension.js
           node --check bin/agent-standup.js
           node -e "new Function('return async function(){' + require('fs').readFileSync('public/index.html','utf8').split('<script>')[1].split('</script>')[0] + '}')"
-      - name: Tests
-        run: npm test
+      - name: One version everywhere
+        run: |
+          v=$(node -p "require('./package.json').version")
+          test "$v" = "$(node -p "require('./desktop/package.json').version")" || { echo "desktop/package.json is not at $v"; exit 1; }
+          grep -q "^## $v\$" CHANGELOG.md || { echo "CHANGELOG.md has no entry for $v"; exit 1; }
+      - name: Tests (the server, and the live call in a real browser)
+        run: |
+          npm ci
+          npm test
       - name: Translations are complete and consistent
         run: npm run i18n
       - name: Package the command line tool and smoke-test it

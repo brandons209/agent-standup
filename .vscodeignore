@@ -16,3 +16,8 @@ dist-desktop/**
 dist-release/**
 ROADMAP.md
 dist-release-*/**
+test/**
+node_modules/**
+package-lock.json
+.gitignore
+.claude/**

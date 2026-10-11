@@ -50,30 +50,44 @@ const resultText = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map(
 const IMG_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']), mediaMemo = new Map();
 const isImg = (x) => !!x && x.type === 'image' && !!x.source && x.source.type === 'base64' && typeof x.source.data === 'string' && IMG_TYPES.has(x.source.media_type);
 const resultImages = (c) => (Array.isArray(c) ? c.filter(isImg) : []);
+const mtimeOf = (f) => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };   // 0 for a file that is gone, or a symlink that points nowhere: never an exception
+// Every sub-agent transcript of a session: <id>/subagents/*.jsonl, plus the ones a workflow launched, one folder deeper in <id>/subagents/workflows/<run>/agent-*.jsonl (each run also keeps a journal.jsonl, which is not an agent).
+function subFiles(proj, id) {
+  const sd = path.join(ROOT, proj, id, 'subagents'), out = [], seen = new Set(['main', 'user']); out.dirs = [sd]; out.journals = [];
+  const add = (dir, f, run) => { let aid = f.replace(/^agent-/, '').replace(/\.jsonl$/, '').replace(/[^\w.-]/g, '_'); const id0 = aid; if (seen.has(aid)) aid = (run || 'agent').replace(/[^\w.-]/g, '_') + '.' + aid; seen.add(aid); out.push({ file: path.join(dir, f), aid, id0, run }); };   // an id is the file name; the same name in two folders gets its run in front
+  let names; try { names = fs.readdirSync(sd); } catch { return out; }
+  for (const f of names) if (f.endsWith('.jsonl')) add(sd, f, '');
+  if (!names.includes('workflows')) return out;
+  const wd = path.join(sd, 'workflows'); let runs = []; try { runs = fs.readdirSync(wd).sort(); } catch {} out.dirs.push(wd);
+  for (const run of runs) {
+    const dir = path.join(wd, run); let fl; try { fl = fs.readdirSync(dir).sort(); } catch { continue; } out.dirs.push(dir);
+    for (const f of fl) { if (/^agent-.*\.jsonl$/.test(f)) add(dir, f, run); else if (f === 'journal.jsonl') out.journals.push({ file: path.join(dir, f), run }); }
+  }
+  return out;
+}
 function mediaFile(proj, sid, agent) {
   if (agent === 'main') return path.join(ROOT, proj, sid + '.jsonl');
-  const dir = path.join(ROOT, proj, sid, 'subagents'); let hit = null;
-  try { hit = fs.readdirSync(dir).find((x) => x.endsWith('.jsonl') && x.replace(/^agent-/, '').replace(/\.jsonl$/, '').replace(/[^\w.-]/g, '_') === agent); } catch {}
-  return hit ? path.join(dir, hit) : null;
+  const hit = subFiles(proj, sid).find((x) => x.aid === agent);
+  return hit ? hit.file : null;
 }
 function toolImage(file, toolId, n) {   // looks for the tool's result line in the transcript, 8 MB at a time; the few pictures asked last are kept in memory
-  const key = file + '|' + toolId + '|' + n; if (mediaMemo.has(key)) return mediaMemo.get(key);
-  const needle = Buffer.from(toolId), mark = Buffer.from('"image"'); let fd, found = null, carry = Buffer.alloc(0), pos = 0;
+  const key = file + '|' + toolId + '|' + n, memo = mediaMemo.get(key); if (memo && memo.buf) return memo;
+  const needle = Buffer.from('"' + toolId + '"'), mark = Buffer.from('"image"'), until = Date.now() + 2000; let fd, found = null, carry = Buffer.alloc(0), pos = 0, size = 0;   // the id between its quotes, so a made-up one-letter id does not match on every line; and never more than 2 s of searching
   try {
-    fd = fs.openSync(file, 'r'); const size = fs.fstatSync(fd).size;
-    while (pos < size && !found) {
+    fd = fs.openSync(file, 'r'); size = fs.fstatSync(fd).size; if (memo && memo.miss === size) return null;   // already searched in vain, and nothing was written since
+    while (pos < size && !found && Date.now() < until) {
       const buf = Buffer.alloc(Math.min(8 * 1024 * 1024, size - pos)); fs.readSync(fd, buf, 0, buf.length, pos); pos += buf.length;
       const all = carry.length ? Buffer.concat([carry, buf]) : buf; let from = 0;
-      for (let hit; !found && (hit = all.indexOf(needle, from)) >= 0;) {
+      for (let hit; !found && (hit = all.indexOf(needle, from)) >= 0 && Date.now() < until;) {
         const a = all.lastIndexOf(10, hit) + 1, b = all.indexOf(10, hit); if (b < 0) break;   // the line goes on in the next chunk
-        from = b + 1; const m = all.indexOf(mark, a); if (m < 0 || m > b) continue;
+        from = b + 1; if (all.subarray(a, b).indexOf(mark) < 0) continue;
         let r; try { r = JSON.parse(all.subarray(a, b).toString('utf8')); } catch { continue; }
         for (const blk of blocks(r)) if (blk.type === 'tool_result' && blk.tool_use_id === toolId) { const im = resultImages(blk.content)[n]; if (im) found = { type: im.source.media_type, buf: Buffer.from(im.source.data, 'base64') }; }
       }
       carry = all.subarray(all.lastIndexOf(10) + 1);
     }
   } catch {} finally { if (fd != null) fs.closeSync(fd); }
-  if (found) { mediaMemo.set(key, found); if (mediaMemo.size > 12) mediaMemo.delete(mediaMemo.keys().next().value); }
+  mediaMemo.delete(key); mediaMemo.set(key, found || { miss: size }); if (mediaMemo.size > 12) mediaMemo.delete(mediaMemo.keys().next().value);
   return found;
 }
 const RESULT_MAX = { AskUserQuestion: 900, Skill: 300, ToolSearch: 500, Read: 1900, Bash: 1300, Grep: 900, Glob: 800, WebFetch: 800, WebSearch: 800, Edit: 200, MultiEdit: 200, Write: 200 };
@@ -95,10 +109,8 @@ function listSessions0() {
     try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
     for (const f of files) {
       const id = f.replace(/\.jsonl$/, '');
-      const st = fs.statSync(path.join(dir, f));
-      const subDir = path.join(dir, id, 'subagents');
-      const agents = fs.existsSync(subDir) ? fs.readdirSync(subDir).filter((x) => x.endsWith('.jsonl')).length : 0;
-      rows.push({ proj, id, mtime: st.mtimeMs, size: st.size, agents });
+      let st; try { st = fs.statSync(path.join(dir, f)); } catch { continue; }   // a link to a transcript that is gone
+      rows.push({ proj, id, mtime: st.mtimeMs, size: st.size, agents: subFiles(proj, id).length });
     }
   }
   rows.sort((a, b) => b.mtime - a.mtime);
@@ -114,27 +126,48 @@ function stamp(proj, id) {
   const base = path.join(ROOT, proj); let n = 0;
   const add = (f) => { try { const s = fs.statSync(f); n += s.mtimeMs + s.size; } catch {} };
   add(path.join(base, id + '.jsonl'));
-  const sd = path.join(base, id, 'subagents');
-  if (fs.existsSync(sd)) for (const f of fs.readdirSync(sd)) add(path.join(sd, f));
+  const subs = subFiles(proj, id);   // the transcripts and the folders they are in (a folder changes when a file appears in it, e.g. an agent's meta file), not every file around them
+  for (const x of subs) add(x.file); for (const x of subs.journals) add(x.file); for (const d of subs.dirs) n += mtimeOf(d);
   return n;
 }
-const tlCache = new Map();   // "proj/id" → { st (file stamp), tl, at, ms, files[], json?, gz? }
+const tlCache = new Map();   // "proj/id" → { st (file stamp), tl, at, ms, files[], feed, sq, json?, gz?, idle? }
 const MAX_CACHED_SESSIONS = 3;
 function timelineEntry(proj, id) {
   const key = proj + '/' + id, st = stamp(proj, id), hit = tlCache.get(key), now = Date.now();
-  if (hit && hit.st === st && !(hit.recentUntil && now > hit.recentUntil)) return hit;   // a sub-agent's 4-minute silence rule can flip without any file change
-  if (hit && now - hit.at < Math.max(250, hit.ms * 2)) return hit;   // very big sessions: don't rebuild on every poll
-  const t0 = Date.now(), tl = buildTimeline(proj, id), base = path.join(ROOT, proj), sd = path.join(base, id, 'subagents');
-  const files = [path.join(base, id + '.jsonl')]; try { for (const f of fs.readdirSync(sd)) files.push(path.join(sd, f)); } catch {}
-  const entry = { st, tl, at: Date.now(), ms: Date.now() - t0, files, recentUntil: tl.recentUntil || 0 };
+  if (hit && ((hit.st === st && !(hit.recentUntil && now > hit.recentUntil)) || now - hit.at < Math.max(250, hit.ms * 2))) {   // nothing was written (a sub-agent's 4-minute silence rule can flip without any file change); or a very big session, which is not rebuilt on every poll
+    tlCache.delete(key); tlCache.set(key, hit); return hit;   // asked for again: the last one to be dropped
+  }
+  const t0 = Date.now(), files = [], tl = buildTimeline(proj, id, files), feed = feedStep(hit && hit.feed, tl, files);
+  const entry = { st, tl, at: Date.now(), ms: Date.now() - t0, files, feed, sq: feed.sq, recentUntil: tl.recentUntil || 0 };
   tlCache.delete(key); tlCache.set(key, entry);
-  while (tlCache.size > MAX_CACHED_SESSIONS) {   // free the memory of sessions nobody is looking at any more
+  while (tlCache.size > MAX_CACHED_SESSIONS) {   // free the memory of sessions nobody is looking at any more (their live feed goes with them: a page still on one of them is told to load it again)
     const [oldKey, old] = tlCache.entries().next().value; tlCache.delete(oldKey);
     for (const f of old.files) fileStates.delete(f);
   }
   return entry;
 }
+// ---- Live feed. The timeline is sorted again at each build and events already sent can change (an order typed mid-turn is stamped at typing time and lands before what the page has; a sub-agent's last line becomes its report; a tool call joins an earlier beat),
+// so a page cannot ask for "what comes after index n". Every event has a key `k` that never changes, each build that changes something gets the next sequence number, and a page asks for the events that are new or different since the number it holds.
+// `ep` names this memory: it is a new one after a restart, after the session left the cache, or when a transcript was rewritten, and the page then loads the whole session again.
+const sigOf = (e) => e.kind + '|' + e.agent + '|' + (e.to || '') + '|' + (e.end || '') + '|' + (e.kind === 'tools' ? e.tools.length + ':' + e.tools[e.tools.length - 1].id : e.kind === 'usage' ? e.u.i + ',' + e.u.o + ',' + e.u.r + ',' + e.u.w + ',' + e.model : e.kind === 'order' ? e.toolId + ',' + e.bg + ',' + e.title : e.kind === 'finish' ? e.ts : '');   // everything about an event that can differ from one build to the next. Its text, its tool calls, its results and its time never do: they come from one transcript record (same key = same record); and `t` moves only when time zero does, which feedStep looks at once for all
+function feedStep(prev, tl, files) {
+  let f = prev && files.every((x) => { const was = prev.gens.get(x); return was === undefined || was === (fileStates.get(x) || {}).gen; }) ? prev : null;   // a transcript read again from its start numbers its events again: the keys no longer mean the same thing
+  for (let pass = 0; ; pass++) {
+    if (!f) f = { ep: crypto.randomBytes(6).toString('hex'), seq: 0, known: new Map(), gens: new Map() };
+    const n = tl.events.length, sq = new Uint32Array(n), seq = f.seq + 1, before = f.known.size, z = tl.events.find((e) => e.kind !== 'usage' && e.kind !== 'finish' && e.kind !== 'compact'), t0 = z ? z.ts : 0, moved = f.t0 !== t0; let hits = 0, changed = false; f.t0 = t0;   // time zero moved (something now comes before the first line): every `t` is different
+    for (let i = 0; i < n; i++) {
+      const e = tl.events[i], s = sigOf(e), was = f.known.get(e.k);
+      if (was) { hits++; if (was.s !== s || moved) { was.s = s; was.q = seq; changed = true; } sq[i] = was.q; } else { f.known.set(e.k, { s, q: seq }); sq[i] = seq; changed = true; }
+    }
+    if (hits < before && !pass) { f = null; continue; }   // an event the page may hold no longer exists: nothing can tell it to drop it, so everything starts over
+    if (changed) f.seq = seq;
+    for (const x of files) f.gens.set(x, (fileStates.get(x) || {}).gen);
+    f.sq = sq; tl.ep = f.ep; tl.seq = f.seq; return f;
+  }
+}
 const timeline = (proj, id) => timelineEntry(proj, id).tl;
+const demoEntry = () => { const tl = require('./demo.js')(); tl.events.forEach((e, i) => { e.k = 'd:' + i; }); tl.ep = 'demo'; tl.seq = 1; return { tl }; };   // the built-in session never changes: one sequence number for all of it
+const feedSince = (entry, after) => { const ev = entry.tl.events, sq = entry.sq, out = []; if (after < entry.tl.seq) for (let i = 0; i < ev.length; i++) if ((sq ? sq[i] : 1) > after) out.push(ev[i]); return out; };   // in timeline order; nothing to scan when the page is up to date
 
 // ---- Board: one cheap row per recent session (state from the tail of its transcript), so many parallel sessions can be watched at once.
 const readTail = (file, bytes) => { const fd = fs.openSync(file, 'r'); try { const sz = fs.fstatSync(fd).size, n = Math.min(bytes, sz), buf = Buffer.alloc(n); fs.readSync(fd, buf, 0, n, sz - n); return { text: buf.toString('utf8'), cut: sz > bytes }; } finally { fs.closeSync(fd); } };
@@ -145,22 +178,31 @@ let boardMemo = { at: 0, rows: [] };
 function parseTail(file, st) {
   const sig = st.mtimeMs + ':' + st.size, hit = boardCache.get(file); if (hit && hit.sig === sig) return hit;
   const { text, cut } = readTail(file, 192 * 1024), lines = text.split('\n'); if (cut) lines.shift();
-  const pend = new Map(); let lastType = null, lastTool = false, lastTs = 0;
+  const pend = new Map(); let lastType = null, lastTool = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined;
   for (const l of lines) {
     if (!l) continue; let r; try { r = JSON.parse(l); } catch { continue; }
+    if (r.type === 'custom-title' && typeof r.customTitle === 'string') custom = r.customTitle; else if (r.type === 'ai-title' && typeof r.aiTitle === 'string') ai = r.aiTitle;   // a session is renamed, or named, long after its row was first shown: the latest one read wins
     const t = Date.parse(r.timestamp) || 0, bl = blocks(r);
     if (r.type === 'assistant' || r.type === 'user') { lastType = r.type; lastTool = bl.some((b) => b.type === 'tool_use'); if (t) lastTs = t; }
     for (const b of bl) { if (b.type === 'tool_use') pend.set(b.id, { name: b.name, ts: t }); else if (b.type === 'tool_result') pend.delete(b.tool_use_id); }
   }
-  let title = hit && hit.title, tried = hit && hit.tried;
-  if (!title && !tried) {
-    const big = readTail(file, 256 * 1024).text, mc = [...big.matchAll(/"type":"custom-title","customTitle":"((?:[^"\\]|\\.)*)"/g)].pop(), m = mc || [...big.matchAll(/"type":"ai-title","aiTitle":"((?:[^"\\]|\\.)*)"/g)].pop();   // a title the person typed wins over the generated one
-    if (m) { try { title = JSON.parse('"' + m[1] + '"'); } catch {} }
-    if (!title) { const hd = readHead(file, 64 * 1024), u2 = hd.match(/"type":"user"[\s\S]{0,3000}?"type":"text","text":"(?!<)((?:[^"\\]|\\.)*)"/); if (u2) { try { title = JSON.parse('"' + u2[1] + '"').replace(/\s+/g, ' ').slice(0, 90); } catch {} } }
-    if (!title) { const u = readHead(file, 64 * 1024).match(/"role":"user","content":"((?:[^"\\]|\\.)*)"/); if (u) { try { title = JSON.parse('"' + u[1] + '"').replace(/\s+/g, ' ').slice(0, 90); } catch {} } }
+  if (!hit && !custom) {   // first look at this file: a little further back than the lines read above, and without needing whole lines
+    const big = readTail(file, 256 * 1024).text, un = (m) => { try { return m ? JSON.parse('"' + m[1] + '"') : null; } catch { return null; } };
+    custom = un([...big.matchAll(/"type":"custom-title","customTitle":"((?:[^"\\]|\\.)*)"/g)].pop()); if (!ai) ai = un([...big.matchAll(/"type":"ai-title","aiTitle":"((?:[^"\\]|\\.)*)"/g)].pop());
   }
-  const out = { sig, title: title || null, tried: true, lastType, lastTool, lastTs, pending: [...pend.values()] };
+  if (!custom && !ai && first == null) first = firstPrompt(file) || (st.size > 64 * 1024 ? '' : null);   // '' = looked for and not there; a file that has just been created is looked at again
+  const out = { sig, title: custom || ai || first || null, custom, ai, first, lastType, lastTool, lastTs, pending: [...pend.values()] };   // a title the person typed wins over the generated one, and both over the first prompt
   boardCache.set(file, out); if (boardCache.size > 200) boardCache.delete(boardCache.keys().next().value); return out;
+}
+function firstPrompt(file) {   // the first thing the person typed, read record by record: a pattern over the raw text ran from a user record into the assistant's first answer and took that as the title
+  const ONE = (t) => t.replace(/\s+/g, ' ').trim().slice(0, 90);
+  for (const l of readHead(file, 64 * 1024).split('\n')) {
+    if (!l) continue; let r; try { r = JSON.parse(l); } catch { r = null; }
+    if (r) { if (r.type !== 'user' || r.isMeta || r.isCompactSummary) continue; const t = ONE(blocks(r).filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n').replace(HARNESS, '')); if (t && t[0] !== '<' && !/^\[Request interrupted/i.test(t)) return t; continue; }
+    const u = /"type":"user"/.test(l) && l.match(/"role":"user","content":(?:\[\{"type":"text","text":)?"(?!<)((?:[^"\\]|\\.){1,200})/);   // a first prompt too long to be whole in what was read: its start, from that same line only
+    if (u) { try { const t = ONE(JSON.parse('"' + u[1].replace(/\\u[0-9a-fA-F]{0,3}$/, '') + '"')); if (t) return t; } catch {} }
+  }
+  return null;
 }
 function boardRows() {
   if (Date.now() - boardMemo.at < 1200) return boardMemo.rows;   // several windows polling at once share one scan
@@ -183,8 +225,8 @@ function boardRows0() {
       else if (p.lastType === 'assistant' && !p.lastTool) state = 'turn';
       else state = age < 10 * 60e3 ? 'working' : 'idle';
     }
-    let subActive = 0, subTotal = 0; const sd = path.join(ROOT, proj, id, 'subagents');
-    try { for (const x of fs.readdirSync(sd)) if (x.endsWith('.jsonl')) { subTotal++; if (now - fs.statSync(path.join(sd, x)).mtimeMs < 90e3) subActive++; } } catch {}
+    let subActive = 0, subTotal = 0;
+    for (const x of subFiles(proj, id)) { subTotal++; if (now - mtimeOf(x.file) < 90e3) subActive++; }
     return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal };
   });
 }
@@ -195,7 +237,8 @@ function writePrefs(v) { fs.mkdirSync(path.dirname(PREFS), { recursive: true });
 // Most recently active session (optionally limited to one project dir) — drives the live feed.
 const STICK_MS = 90000;   // a session written to in the last 90 s keeps the call, so another session writing elsewhere does not steal it mid-line
 function sessionMtime(proj, id) {
-  try { let m = fs.statSync(path.join(ROOT, proj, id + '.jsonl')).mtimeMs; const sd = path.join(ROOT, proj, id, 'subagents'); if (fs.existsSync(sd)) for (const x of fs.readdirSync(sd)) m = Math.max(m, fs.statSync(path.join(sd, x)).mtimeMs); return m; } catch { return 0; }
+  let m = mtimeOf(path.join(ROOT, proj, id + '.jsonl')); if (!m) return 0; const subs = subFiles(proj, id);
+  for (const x of subs) m = Math.max(m, mtimeOf(x.file)); for (const d of subs.dirs) m = Math.max(m, mtimeOf(d)); return m;   // the folders too: a new file in them is activity, as when every file around the transcripts was looked at
 }
 function currentSession(projFilter, idFilter, stick) {
   const safe = (x) => typeof x === 'string' && /^[\w.\-]+$/.test(x) && x !== '..';
@@ -210,10 +253,7 @@ function currentSession(projFilter, idFilter, stick) {
     try { files = fs.readdirSync(dir); } catch { continue; }
     for (const f of files) {
       if (!f.endsWith('.jsonl')) continue;
-      const id = f.slice(0, -6); let m = fs.statSync(path.join(dir, f)).mtimeMs;
-      const sd = path.join(dir, id, 'subagents');
-      if (fs.existsSync(sd)) for (const x of fs.readdirSync(sd)) m = Math.max(m, fs.statSync(path.join(sd, x)).mtimeMs);
-      consider(proj, id, m);
+      const m = sessionMtime(proj, f.slice(0, -6)); if (m) consider(proj, f.slice(0, -6), m);   // 0: a link to a transcript that is gone
     }
   }
   if (!best && projFilter) return currentSession('', '', stick);
@@ -222,18 +262,24 @@ function currentSession(projFilter, idFilter, stick) {
 
 // ---- Incremental transcript reader: each .jsonl is parsed once, then only the bytes appended since are read.
 // A session is merged from its main file and one file per sub-agent; the per-file results are cached and re-assembled cheaply.
-const fileStates = new Map();   // path → { agent, offset, tail, raw[], toolName{}, msgUsage Map }
-function readNew(file, agent) {
-  let size; try { size = fs.statSync(file).size; } catch { fileStates.delete(file); return null; }
+const fileStates = new Map();   // path → { agent, gen, offset, mtime, fp, tail, raw[], toolName{}, msgUsage Map }
+let fileGen = 0;   // each time a transcript is read from its start it gets a new number, which is how the live feed knows its events were numbered again
+const sameBytes = (file, st) => {   // are the last bytes we read still where we read them? If not, the file was rewritten and not appended to
+  let fd; try { fd = fs.openSync(file, 'r'); const b = Buffer.alloc(st.fp.length); fs.readSync(fd, b, 0, b.length, st.offset - b.length); return b.equals(st.fp); } catch { return false; } finally { if (fd != null) fs.closeSync(fd); }
+};
+function readNew(file, agent, journal) {
+  let size, mtime; try { const s = fs.statSync(file); size = s.size; mtime = s.mtimeMs; } catch { fileStates.delete(file); return null; }
   let st = fileStates.get(file);
-  if (!st || size < st.offset) { st = { agent, offset: 0, tail: Buffer.alloc(0), raw: [], toolName: {}, msgUsage: new Map() }; fileStates.set(file, st); }
+  if (st && size >= st.offset && mtime !== st.mtime && st.fp.length && !sameBytes(file, st)) st = null;   // rewritten in place and not shorter: checked only when the file was written to, with one small read
+  if (!st || size < st.offset) { st = { agent, journal: !!journal, gen: ++fileGen, offset: 0, mtime: 0, fp: Buffer.alloc(0), tail: Buffer.alloc(0), raw: [], toolName: {}, msgUsage: new Map() }; fileStates.set(file, st); }
+  st.mtime = mtime;
   while (size > st.offset) {   // read in chunks of at most 16 MB so a huge transcript never needs one giant buffer
     const fd = fs.openSync(file, 'r'); let buf;
     try { buf = Buffer.alloc(Math.min(16 * 1024 * 1024, size - st.offset)); fs.readSync(fd, buf, 0, buf.length, st.offset); } finally { fs.closeSync(fd); }
-    st.offset += buf.length;
+    st.offset += buf.length; st.fp = Buffer.from(buf.length >= 64 ? buf.subarray(buf.length - 64) : Buffer.concat([st.fp, buf]).subarray(-64));   // a copy: a view would keep the whole chunk in memory
     const all = st.tail.length ? Buffer.concat([st.tail, buf]) : buf, cut = all.lastIndexOf(10);   // only complete lines; a half-written last line waits for the next read
     if (cut < 0) { st.tail = all; continue; }
-    st.tail = all.subarray(cut + 1);
+    st.tail = Buffer.from(all.subarray(cut + 1));   // a copy, for the same reason
     for (const line of all.subarray(0, cut).toString('utf8').split('\n')) {
       if (!line) continue;
       let r; try { r = JSON.parse(line); } catch { continue; }
@@ -244,83 +290,100 @@ function readNew(file, agent) {
   return st;
 }
 function parseRecord(st, r) {
-  const agent = st.agent, ts = Date.parse(r.timestamp) || 0;
-  if (r.type === 'system' && r.subtype === 'compact_boundary') { st.raw.push({ ts, agent, kind: 'compact' }); return; }   // Claude Code compacted the conversation
+  const agent = st.agent, ts = Date.parse(r.timestamp) || 0, push = (e) => { e.k = agent + ':' + st.raw.length; st.raw.push(e); return e; };   // k: the event's key in the live feed = whose file + its rank in it. A file is only ever appended to, so the rank never changes (and when it is not, the whole file is read again under a new number, see readNew)
+  if (ts > (st.lastTs || 0)) st.lastTs = ts;
+  if (st.journal) { if (r.type === 'result' && r.agentId) push({ ts: 0, agent, kind: 'wfdone', child: String(r.agentId).replace(/[^\w.-]/g, '_') }); return; }   // a workflow's journal: one line when an agent starts, one when it hands its result back (no time on them)
+  if (r.type === 'system' && r.subtype === 'compact_boundary') { push({ ts, agent, kind: 'compact' }); return; }   // Claude Code compacted the conversation
   if (r.type === 'queue-operation' && typeof r.content === 'string' && r.content.includes('<task-notification>')) {   // how Claude Code reports that a background sub-agent has stopped
     const id = (r.content.match(/<tool-use-id>([^<]+)<\/tool-use-id>/) || [])[1], status = (r.content.match(/<status>([^<]+)<\/status>/) || [])[1];
-    if (id && status && status !== 'running') st.raw.push({ ts, agent, kind: 'agentdone', toolId: id });
+    if (id && status && status !== 'running') push({ ts, agent, kind: 'agentdone', toolId: id });
     return;
   }
   if (r.type === 'attachment' && r.attachment && r.attachment.type === 'queued_command') {   // an order typed while the lead was working: Claude Code hands it over in the middle of the turn, as an attachment and not as a user message
     const q = r.attachment, human = q.origin ? q.origin.kind === 'human' : q.commandMode === 'prompt'; if (agent !== 'main' || !human) return;   // the same record also carries task notifications
     const txt = (Array.isArray(q.prompt) ? q.prompt.filter((b) => b && b.type === 'text').map((b) => b.text).join('\n') : typeof q.prompt === 'string' ? q.prompt : '').replace(HARNESS, '').trim();
-    if (txt && !/^<(system-reminder|command-|local-command|task-notification)/.test(txt)) st.raw.push({ ts, agent: 'user', kind: 'user', text: txt });
+    if (txt && !/^<(system-reminder|command-|local-command|task-notification)/.test(txt)) push({ ts: Math.max(ts, st.lastTs || 0), agent: 'user', kind: 'user', text: txt });   // its place in the call is when the lead got it, not when it was typed (minutes earlier, during a long command): the call hears of it only now, and a line dated in the past looks "far behind" and was shown without a voice
     return;
   }
   if (r.type === 'user') {
-    const items = [];   // tool results: the real output that appeared on the agent's screen
-    for (const b of blocks(r)) if (b.type === 'tool_result' && (st.toolName[b.tool_use_id] === 'Agent' || st.toolName[b.tool_use_id] === 'Task') && !(st.bg && st.bg[b.tool_use_id]) && !/^\s*Async agent launched/i.test(resultText(b.content))) st.raw.push({ ts, agent, kind: 'agentdone', toolId: b.tool_use_id });   // a synchronous call: the lead got the sub-agent's answer back, so it has finished (async launches answer immediately and are not a completion)
+    const items = [], wf = r.toolUseResult && typeof r.toolUseResult === 'object' && typeof r.toolUseResult.runId === 'string' ? r.toolUseResult.runId : '';   // tool results: the real output that appeared on the agent's screen
+    for (const b of blocks(r)) if (b.type === 'tool_result' && wf) push({ ts, agent, kind: 'wfrun', toolId: b.tool_use_id, run: wf });   // the answer to a Workflow call names the run it started: its agents are in subagents/workflows/<run>/
+    for (const b of blocks(r)) if (b.type === 'tool_result' && (st.toolName[b.tool_use_id] === 'Agent' || st.toolName[b.tool_use_id] === 'Task') && !(st.bg && st.bg[b.tool_use_id]) && !/^\s*Async agent launched/i.test(resultText(b.content))) push({ ts, agent, kind: 'agentdone', toolId: b.tool_use_id });   // a synchronous call: the lead got the sub-agent's answer back, so it has finished (async launches answer immediately and are not a completion)
     for (const b of blocks(r)) if (b.type === 'tool_result' && st.toolName[b.tool_use_id] && !NO_RESULT.has(st.toolName[b.tool_use_id])) {
       const n = st.toolName[b.tool_use_id], img = resultImages(b.content).length;
       items.push({ id: b.tool_use_id, err: !!b.is_error, out: clip(resultText(b.content).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trimEnd(), RESULT_MAX[n] || (/^mcp__/.test(n) ? 900 : 600)), ...(img ? { img } : {}) });   // img: how many pictures came back; the page fetches them from /api/media
     }
-    if (items.length) st.raw.push({ ts, agent, kind: 'results', items });
-    if (agent !== 'main') return;   // a sub-agent's first user message is the order, emitted from the parent's side
-    const txt = blocks(r).filter((b) => b.type === 'text').map((b) => b.text).join('\n').replace(HARNESS, '').replace(/^\s*\[Request interrupted[^\]]*\]\s*/i, '').trim();   // what the human typed, without the blocks the harness wraps around it
-    if (txt && !/^<(system-reminder|command-|local-command|task-notification)/.test(txt) && !r.isMeta) st.raw.push({ ts, agent: 'user', kind: 'user', text: txt });
+    if (items.length) push({ ts, agent, kind: 'results', items });
+    const typed = blocks(r).filter((b) => b.type === 'text').map((b) => b.text).join('\n').replace(HARNESS, ''), cut = /^\s*\[Request interrupted[^\]]*\]/i.test(typed);   // what the human typed, without the blocks the harness wraps around it
+    if (agent !== 'main') { if (!st.prompt && typed.trim() && !st.raw.length) st.prompt = { ts, text: typed.trim() }; return; }   // a sub-agent's first user message is the order, emitted from the parent's side (kept here for the agents of a workflow, whose order is in no other file)
+    if (cut && st.act >= 0) st.raw[st.act].end = 1;   // Esc: the turn stops there, without the end_turn mark. The last thing the lead said or did closes it
+    const txt = typed.replace(/^\s*\[Request interrupted[^\]]*\]\s*/i, '').trim();
+    if (txt && !/^<(system-reminder|command-|local-command|task-notification)/.test(txt) && !r.isMeta && !r.isCompactSummary) push({ ts, agent: 'user', kind: 'user', text: txt });   // not the summary Claude Code writes when it compacts: thousands of characters the human never typed
   } else if (r.type === 'assistant') {
-    const m = r.message || {};
+    const m = r.message || {}; let said = null;
     if (m.id && m.usage) {   // the same message is repeated once per content block with identical numbers: keep one per message id
       const u = m.usage, prev = st.msgUsage.get(m.id);
       st.msgUsage.set(m.id, { ts: prev ? prev.ts : ts, u: { i: u.input_tokens || 0, o: u.output_tokens || 0, r: u.cache_read_input_tokens || 0, w: u.cache_creation_input_tokens || 0 }, model: m.model });
     }
+    const th = () => { const t = st.th; st.th = ''; return t ? { th: t } : {}; };   // what the agent was thinking before this line or call, when Claude Code kept it (most of the time it only keeps a signature): the call shows it as an inner thought
     for (const b of blocks(r)) {
-      if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) st.raw.push({ ts, agent, kind: 'say', text: b.text.trim() });
+      if (b.type === 'thinking' && typeof b.thinking === 'string' && b.thinking.trim()) st.th = clip(b.thinking.replace(/\s+/g, ' ').trim(), 900);
+      else if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) { said = push({ ts, agent, kind: 'say', text: b.text.trim(), ...th() }); st.act = st.raw.length - 1; st.sayOf = m.id; st.sayAt = st.act; }
       else if (b.type === 'tool_use') {
         st.toolName[b.id] = b.name; if (b.input && b.input.run_in_background) (st.bg = st.bg || {})[b.id] = true;
-        if (b.name === 'Agent' || b.name === 'Task') st.raw.push({ ts, agent, kind: 'agentcall', toolId: b.id, bg: !!(b.input && b.input.run_in_background), text: (b.input && b.input.prompt) || '', title: (b.input && b.input.description) || '' });
-        else st.raw.push({ ts, agent, kind: 'tool', tool: toolLabel(b, ts) });
+        if (b.name === 'Agent' || b.name === 'Task') push({ ts, agent, kind: 'agentcall', toolId: b.id, bg: !!(b.input && b.input.run_in_background), text: (b.input && b.input.prompt) || '', title: (b.input && b.input.description) || '' });
+        else { push({ ts, agent, kind: 'tool', tool: toolLabel(b, ts), ...th() }); st.act = st.raw.length - 1; }
       }
+    }
+    if (agent === 'main' && m.stop_reason === 'end_turn') {   // the lead's turn is over: Claude Code writes one record per content block, each with the message's stop reason, so the mark goes on the line this record carries (a thinking block carries none)
+      if (!said && m.id && st.sayOf === m.id) said = st.raw[st.sayAt];   // ...or on the line the same message brought in an earlier record
+      if (said) said.end = 1;
     }
   }
 }
 const metaCache = new Map();   // meta file path → { mtime, value }
 function readMeta(f) {
-  try { const mt = fs.statSync(f).mtimeMs, c = metaCache.get(f); if (c && c.mtime === mt) return c.value; const v = JSON.parse(fs.readFileSync(f, 'utf8')); metaCache.set(f, { mtime: mt, value: v }); return v; } catch { return {}; }
+  try { const mt = fs.statSync(f).mtimeMs, c = metaCache.get(f); if (c && c.mtime === mt) return c.value; const v = JSON.parse(fs.readFileSync(f, 'utf8')); if (metaCache.size > 3000) metaCache.clear(); metaCache.set(f, { mtime: mt, value: v }); return v; } catch { return {}; }
 }
 
-function buildTimeline(proj, id) {
+function buildTimeline(proj, id, files = []) {
   const base = path.join(ROOT, proj), mainFile = path.join(base, id + '.jsonl');
   if (!fs.existsSync(mainFile)) throw new Error('session not found');
   const agents = { main: { id: 'main', role: 'Lead', type: 'main' } };
-  const states = [readNew(mainFile, 'main')];
-  const subDir = path.join(base, id, 'subagents');
-  if (fs.existsSync(subDir)) {
-    for (const f of fs.readdirSync(subDir).filter((x) => x.endsWith('.jsonl'))) {
-      const aid = f.replace(/^agent-/, '').replace(/\.jsonl$/, '').replace(/[^\w.-]/g, '_'), m = readMeta(path.join(subDir, f.replace(/\.jsonl$/, '.meta.json')));
-      agents[aid] = { id: aid, role: m.description || m.agentType || 'Agent', type: m.agentType || 'agent', toolUseId: m.toolUseId };
-      try { agents[aid].mtime = fs.statSync(path.join(subDir, f)).mtimeMs; } catch {}
-      const st = readNew(path.join(subDir, f), aid); if (st) states.push(st);
-    }
+  const states = [readNew(mainFile, 'main')], subs = subFiles(proj, id), runs = {}; files.push(mainFile);   // runs: workflow run → { agents (file name → agent id), by (who launched it), toolId, done }
+  for (const x of subs) {
+    const aid = x.aid, m = readMeta(x.file.replace(/\.jsonl$/, '.meta.json'));
+    agents[aid] = { id: aid, role: m.description || m.workflowPhase || m.agentType || 'Agent', type: m.agentType || 'agent', toolUseId: m.toolUseId };
+    if (x.run) { agents[aid].wf = x.run; if (m.workflowPhase) agents[aid].phase = m.workflowPhase; (runs[x.run] = runs[x.run] || { agents: {}, done: new Set() }).agents[x.id0] = aid; }   // launched by a workflow: no Agent call of the lead points at it
+    agents[aid].mtime = mtimeOf(x.file) || undefined;
+    const st = readNew(x.file, aid); if (st) states.push(st); files.push(x.file);
   }
+  for (const j of subs.journals) { const st = readNew(j.file, 'wf:' + j.run, true), run = runs[j.run]; files.push(j.file); if (st && run) for (const e of st.raw) if (run.agents[e.child]) run.done.add(run.agents[e.child]); }
   const childByTool = {};   // Agent tool_use id → the sub-agent it created, so we know who ordered whom
   for (const a of Object.values(agents)) if (a.toolUseId) childByTool[a.toolUseId] = a.id;
+  const runByTool = {}; for (const st of states) if (st) for (const e of st.raw) if (e.kind === 'wfrun' && runs[e.run] && !runs[e.run].by) { runs[e.run].by = e.agent; runs[e.run].toolId = e.toolId; runByTool[e.toolId] = runs[e.run]; }   // Workflow tool_use id → the run it started
 
-  const finished = new Set(), now0 = Date.now(); for (const st of states) if (st) for (const e of st.raw) if (e.kind === 'agentdone' && childByTool[e.toolId]) finished.add(childByTool[e.toolId]);
+  const finished = new Set(), now0 = Date.now(); for (const st of states) if (st) for (const e of st.raw) if (e.kind === 'agentdone') { if (childByTool[e.toolId]) finished.add(childByTool[e.toolId]); else if (runByTool[e.toolId]) for (const a of Object.values(runByTool[e.toolId].agents)) finished.add(a); }   // a run that stopped: so did every agent in it
+  for (const run of Object.values(runs)) for (const a of run.done) finished.add(a);
   let recentUntil = 0; for (const a of Object.values(agents)) if (a.id !== 'main' && a.mtime && now0 - a.mtime <= 240000) recentUntil = Math.max(recentUntil, a.mtime + 241000);
   for (const a of Object.values(agents)) if (a.id !== 'main' && now0 - (a.mtime || 0) > 240000) finished.add(a.id);   // old transcripts without a completion record: silent for 4 min counts as finished
-  const events = [], parent = {}, doneSeen = new Set();
+  const events = [], parent = {}, doneSeen = new Set(), lastTs = {}; for (const st of states) if (st) lastTs[st.agent] = st.lastTs || 0;
+  const finish = (to, ts, by) => { if (!doneSeen.has(to)) { doneSeen.add(to); events.push({ ts, agent: to, kind: 'finish', to: by, k: 'f/' + to }); } };   // one per agent, whichever record says it first: the key is the agent, not the record
   for (const st of states) {
     if (!st) continue;
     let lastSay = -1;   // the last thing a sub-agent says is its report back to the lead
     if (st.agent !== 'main' && finished.has(st.agent)) for (let i = st.raw.length - 1; i >= 0; i--) if (st.raw[i].kind === 'say') { lastSay = i; break; }
+    const run = agents[st.agent] && agents[st.agent].wf ? runs[agents[st.agent].wf] : null;
+    if (run && st.prompt) { parent[st.agent] = run.by || 'main'; events.push({ ts: st.prompt.ts, agent: parent[st.agent], to: st.agent, kind: 'order', ...(run.toolId ? { toolId: run.toolId } : {}), bg: true, wf: agents[st.agent].wf, text: st.prompt.text, title: agents[st.agent].role, k: 'o/' + st.agent }); }   // the order a workflow gave is the first message of the agent's own file: shown as an order from whoever launched the workflow (the lead when nothing says who), given in the background, when the agent started
     st.raw.forEach((e, i) => {
-      if (e.kind === 'agentdone') { const to = childByTool[e.toolId]; if (to && !doneSeen.has(to)) { doneSeen.add(to); events.push({ ts: e.ts, agent: to, kind: 'finish', to: e.agent }); } }
-      else if (e.kind === 'agentcall') { const to = childByTool[e.toolId]; if (to) { parent[to] = e.agent; events.push({ ts: e.ts, agent: e.agent, to, kind: 'order', toolId: e.toolId, bg: e.bg, text: e.text, title: e.title }); } }
+      if (e.kind === 'agentdone') { const to = childByTool[e.toolId], wr = runByTool[e.toolId]; if (to) finish(to, e.ts, e.agent); else if (wr) for (const a of Object.values(wr.agents)) if (!wr.done.has(a)) finish(a, Math.max(e.ts, lastTs[a] || 0), e.agent); }   // the agents the journal knows about are finished below, at their own time
+      else if (e.kind === 'agentcall') { const to = childByTool[e.toolId]; if (to) { parent[to] = e.agent; events.push({ ts: e.ts, agent: e.agent, to, kind: 'order', toolId: e.toolId, bg: e.bg, text: e.text, title: e.title, k: e.k }); } }
+      else if (e.kind === 'wfrun' || e.kind === 'wfdone') return;
       else if (i === lastSay) events.push({ ...e, kind: 'report', to: null });   // `to` filled below, once every order is known
       else events.push(e);
     });
-    for (const [, mu] of st.msgUsage) events.push({ ts: mu.ts, agent: st.agent, kind: 'usage', u: mu.u, model: mu.model });
+    if (run && run.done.has(st.agent) && st.lastTs) finish(st.agent, st.lastTs, parent[st.agent] || 'main');   // the journal has no times: the agent finished when it last wrote
+    for (const [mid, mu] of st.msgUsage) events.push({ ts: mu.ts, agent: st.agent, kind: 'usage', u: mu.u, model: mu.model, k: 'u/' + st.agent + '/' + mid });
   }
   for (const e of events) if (e.kind === 'report' && e.to === null) e.to = parent[e.agent] || 'main';
 
@@ -329,8 +392,8 @@ function buildTimeline(proj, id) {
   for (const e of events) {
     const p = lastReal >= 0 ? merged[lastReal] : null;
     if (e.kind === 'usage' || e.kind === 'finish' || e.kind === 'compact') { merged.push(e); continue; }
-    if (e.kind === 'tool' && p && p.kind === 'tools' && p.agent === e.agent) p.tools.push(e.tool);
-    else { merged.push(e.kind === 'tool' ? { ts: e.ts, agent: e.agent, kind: 'tools', tools: [e.tool] } : e); lastReal = merged.length - 1; }
+    if (e.kind === 'tool' && p && p.kind === 'tools' && p.agent === e.agent && !p.end) { p.tools.push(e.tool); if (e.end) p.end = 1; }   // a beat keeps the key of its first call; one that closed a turn takes no more calls
+    else { merged.push(e.kind === 'tool' ? { ts: e.ts, agent: e.agent, kind: 'tools', tools: [e.tool], ...(e.end ? { end: 1 } : {}), ...(e.th ? { th: e.th } : {}), k: e.k } : e); lastReal = merged.length - 1; }
   }
   const real = merged.find((e) => e.kind !== 'usage' && e.kind !== 'finish' && e.kind !== 'compact'), first = real ? real.ts : 0, last = merged.length ? merged[merged.length - 1].ts : 0;   // time zero = the first thing said or done
   return { id, proj, agents: Object.values(agents), events: merged.map((e) => ({ ...e, t: Math.max(0, e.ts - first) })), durationMs: last - first, recentUntil };
@@ -477,7 +540,7 @@ const ttsJobs = new Map();
 try { for (const f of fs.readdirSync(ttsDir)) { const p = path.join(ttsDir, f); if (Date.now() - fs.statSync(p).mtimeMs > 864e5) fs.unlinkSync(p); } } catch {}   // drop cached audio older than a day
 function synthesize(voice, wpm, text, out) {
   return new Promise((resolve, reject) => {
-    let p;
+    let p; text = text.replace(/\[\[[^\]]*\]\]/g, ' ').replace(/\[(?=\[)/g, '[ ').replace(/\](?=\])/g, '] ');   // macOS `say` obeys commands written between [[ and ]] (a 30-second silence, another voice, another speed) and this text comes from a transcript: they are taken out, and no two brackets are left side by side
     if (MAC) p = spawn('say', ['-v', voice, '-r', String(wpm), '--data-format=LEI16@22050', '-o', out, '--', text]);
     else if (WIN) {
       const rate = Math.max(-6, Math.min(8, Math.round((wpm - 175) / 12)));   // SAPI rate: -10..10
@@ -564,12 +627,14 @@ function listCharacters(pack) {
 let audioOwner = { id: null, seen: 0 };
 function start(port = PORT) {
   return http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://x');
+  let url; try { url = new URL(req.url, 'http://x'); } catch { res.writeHead(400); return res.end('bad request'); }   // "GET //" is not an address: answered, where it used to stop the whole server
+  req.on('error', () => {}); res.on('error', () => {});   // a browser that goes away mid-request is not our problem
   // Only the local machine may talk to this server: blocks other websites (cross-site requests) and DNS-rebinding attempts.
   const local = (h) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(h || '');
   let originOk = true; try { originOk = !req.headers.origin || local(new URL(req.headers.origin).host); } catch { originOk = false; }
   if (!local(req.headers.host) || !originOk) { res.writeHead(403); return res.end('forbidden'); }
-  const json = (o, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
+  const json = (o, code = 200) => { try { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); } catch { res.destroy(); } };   // also called from callbacks that run later, where nothing would catch an exception
+  const sendFile = (fp) => { const s = fs.createReadStream(fp); s.on('error', () => res.destroy()); s.pipe(res); };   // a file that vanished between the check and the read ends this answer, not the server
   // Endpoints with side effects (they spawn programs or claim the sound), and the one that serves pictures from a session, refuse requests that a browser marks as coming from another site, e.g. an <img> on a web page.
   const sfs = req.headers['sec-fetch-site'];
   if (sfs && sfs !== 'same-origin' && sfs !== 'none' && (req.method !== 'GET' || ['/api/translate', '/api/quips', '/api/warm', '/api/audio', '/api/tts', '/api/prefs', '/api/prefs.js', '/api/voices', '/api/kokoro', '/api/kokoro/install', '/api/media'].includes(url.pathname))) { res.writeHead(403); return res.end('forbidden'); }
@@ -609,7 +674,7 @@ function start(port = PORT) {
       return tts(url.searchParams.get('text') || '', url.searchParams.get('voice'), url.searchParams.get('rate'), eng, url.searchParams.get('lang'))
         .then((f) => {
           res.writeHead(200, { 'content-type': { mp3: 'audio/mpeg', flac: 'audio/flac', opus: 'audio/ogg', aac: 'audio/aac' }[path.extname(f).slice(1)] || 'audio/wav', 'cache-control': eng === 'openai' ? 'no-store' : 'max-age=86400' });
-          fs.createReadStream(f).pipe(res);
+          sendFile(f);
           if (f.includes('.fail.')) setTimeout(() => fs.unlink(f, () => {}), 60000).unref();   // shared by deduped requests, so removed later
         })
         .catch((e) => json({ error: String(e.message) }, 400));
@@ -622,7 +687,7 @@ function start(port = PORT) {
     if (url.pathname === '/api/characters') return json(listCharacters(url.searchParams.get('pack') || ''));
     if (url.pathname === '/api/packs') return json(Object.keys(PACKS).map((name) => ({ name, n: listCharacters(name).chars.length })));
     if (url.pathname === '/api/media') {
-      const q = (k) => url.searchParams.get(k) || '', SAFE = /^[\w.\-]+$/, n = +q('n') || 0, bad = [q('proj'), q('id'), q('agent'), q('tool')].some((v) => !SAFE.test(v) || v === '..' || v.length > 200);
+      const q = (k) => url.searchParams.get(k) || '', SAFE = /^[\w.\-]+$/, n = +q('n') || 0, bad = [q('proj'), q('id'), q('agent'), q('tool')].some((v) => !SAFE.test(v) || v === '..' || v.length > 200) || q('tool').length < 6;   // no tool call has an id that short, and looking for one meant reading the whole transcript
       const file = bad || !Number.isInteger(n) || n < 0 || n > 9 ? null : mediaFile(q('proj'), q('id'), q('agent')), im = file && toolImage(file, q('tool'), n);
       if (!im) { res.writeHead(bad ? 400 : 404); return res.end(bad ? 'bad request' : 'not found'); }
       res.writeHead(200, { 'content-type': im.type, 'content-length': im.buf.length, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' }); return res.end(im.buf);
@@ -631,8 +696,8 @@ function start(port = PORT) {
       const proj = url.searchParams.get('proj') || '', sid = url.searchParams.get('id') || '', SAFE = /^[\w.\-]+$/;
       if (!SAFE.test(proj) || !SAFE.test(sid) || proj === '..' || sid === '..' || proj.length > 200 || sid.length > 200) { res.writeHead(400); return res.end('bad request'); }
       if (proj !== '_demo' && !fs.existsSync(path.join(ROOT, proj, sid + '.jsonl'))) return json({ error: 'session not found' }, 404);
-      const entry = proj === '_demo' ? { tl: require('./demo.js')() } : timelineEntry(proj, sid), tl = entry.tl;   // built-in fictional session
-      const after = url.searchParams.get('after');
+      const entry = proj === '_demo' ? demoEntry() : timelineEntry(proj, sid), tl = entry.tl;   // built-in fictional session
+      const after = url.searchParams.get('after'), ep = url.searchParams.get('ep');
       if (after == null) {   // the whole timeline: serialize once per version, send gzip-compressed when the browser allows it (12 MB → ~1.5 MB)
         const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
         if (!entry.json) entry.json = JSON.stringify(tl);
@@ -640,14 +705,17 @@ function start(port = PORT) {
         res.writeHead(200, { 'content-type': 'application/json', ...(gz ? { 'content-encoding': 'gzip' } : {}), vary: 'accept-encoding' });
         return res.end(gz ? entry.gz : entry.json);
       }
-      return json({ id: tl.id, agents: tl.agents, total: tl.events.length, events: tl.events.slice(+after) });
+      if (ep == null) return json({ id: tl.id, agents: tl.agents, total: tl.events.length, events: tl.events.slice(+after) });   // a page loaded before 1.25.7 still asks by position
+      const a = +after; if (ep !== tl.ep || !(a >= 0 && a <= tl.seq)) return json({ resync: true });   // not the feed this page was following (restart, session dropped from memory, transcript rewritten): it loads the session again
+      if (a === tl.seq) { if (!entry.idle) entry.idle = JSON.stringify({ id: tl.id, agents: tl.agents, ep: tl.ep, seq: tl.seq, events: [] }); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(entry.idle); }   // nothing new, which is the answer to nearly every poll: written once
+      return json({ id: tl.id, agents: tl.agents, ep: tl.ep, seq: tl.seq, events: feedSince(entry, a) });   // new events and changed ones alike, whole, under the key they always had
     }
     const pk = url.pathname.match(/^\/packs\/([a-z]+)\/(.*)$/);
     if (url.pathname.startsWith('/characters/') || (pk && packDir(pk[1]))) {   // only plain image files of the characters folder (or of a built-in pack), by exact name
       let f = ''; try { f = decodeURIComponent(pk ? pk[2] : url.pathname.slice('/characters/'.length)); } catch {}
       const dir = pk ? packDir(pk[1]) : charactersDir(), fp = path.join(dir, f);
       try { const ls = fs.lstatSync(fp); if (!CHAR_NAME.test(f) || !fp.startsWith(dir + path.sep) || !ls.isFile() || ls.size > CHAR_MAX) throw 0; } catch { res.writeHead(404); return res.end('not found'); }
-      res.writeHead(200, { 'content-type': CHAR_TYPES[f.split('.').pop().toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" }); return fs.createReadStream(fp).pipe(res);   // an SVG opened directly must not run scripts against this server
+      res.writeHead(200, { 'content-type': CHAR_TYPES[f.split('.').pop().toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" }); return sendFile(fp);   // an SVG opened directly must not run scripts against this server
     }
     const file = path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname);
     let fst = null; try { fst = fs.statSync(file); } catch {}
