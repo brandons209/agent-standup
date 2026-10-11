@@ -39,6 +39,7 @@
 
   /* ---------- layout ---------- */
   main { flex:1; display:flex; min-height:0; position:relative }
+  #cols { flex:1; display:flex; min-width:0; min-height:0 }
   #center { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; position:relative; overflow:hidden }
   #stage { flex:1; overflow:auto; padding:14px; display:grid; gap:12px; align-content:start; grid-auto-flow:dense;
            grid-template-columns:repeat(var(--cols,4),1fr); grid-auto-rows:var(--rh,160px) }
@@ -113,9 +114,13 @@
   #shares:not([data-n="1"]) .ptodo { display:none } #shares:not([data-n="1"]) .pcam { width:96px; height:72px; right:10px; bottom:10px } #shares:not([data-n="1"]) .pane.has-todo .pcam { right:10px } #shares:not([data-n="1"]) .pcap { left:10px; right:116px; bottom:10px; font-size:12px }   /* too narrow for a terminal and a task list side by side: the terminal keeps the room */
   #gantt { display:none; flex:none; width:100%; background:#0f1118; border-top:1px solid var(--line); cursor:pointer }
   body.replay #gantt { display:block }
-  aside { display:none; width:320px; flex:none; border-left:1px solid var(--line); background:var(--panel); flex-direction:column; min-height:0 }
+  aside { display:none; position:relative; width:var(--logw, 320px); flex:none; border-left:1px solid var(--line); background:var(--panel); flex-direction:column; min-height:0 }
   body.log aside { display:flex }
-  aside h2 { margin:0; padding:11px 14px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); border-bottom:1px solid var(--line) }
+  body.logb main { flex-direction:column }
+  body.logb aside { width:auto; height:var(--logh, 240px); border-left:0; border-top:1px solid var(--line) }
+  #logGrip { position:absolute; z-index:2; touch-action:none; top:0; bottom:0; left:-3px; width:6px; cursor:col-resize } #logGrip:hover { background:var(--accent); opacity:.4 }
+  body.logb #logGrip { top:-3px; bottom:auto; left:0; right:0; width:auto; height:6px; cursor:row-resize }
+  aside h2 { display:flex; align-items:center; justify-content:space-between; margin:0; padding:11px 14px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); border-bottom:1px solid var(--line) }
   #log { flex:1; overflow:auto }
   .row { padding:7px 14px; border-bottom:1px solid var(--line); font-size:12.5px }
   body.replay .row { cursor:pointer } body.replay .row:hover { background:var(--panel2) }
@@ -124,7 +129,7 @@
   footer { display:none; height:44px; flex:none; align-items:center; gap:12px; padding:0 14px; border-top:1px solid var(--line) }
   body.replay footer { display:flex }
   input[type=range] { accent-color:var(--accent) } #seek { flex:1; min-width:40px } #pos, footer label.dim { white-space:nowrap; flex:none } @media (max-width:520px) { footer { gap:8px; padding:0 8px } footer label.dim { display:none } }   /* narrow: the 1× 2× 4× 8× buttons are the speed control */
-  @media (max-width:760px) { aside { position:absolute; right:0; top:0; bottom:0; z-index:6; box-shadow:-10px 0 30px rgba(0,0,0,.5) } .brand small { display:none } }
+  @media (max-width:760px) { aside { position:absolute; right:0; top:0; bottom:0; z-index:6; box-shadow:-10px 0 30px rgba(0,0,0,.5) } .brand small { display:none } body.logb aside { left:0; right:0; top:auto; bottom:0; height:45vh; width:auto } #logGrip { display:none } }
   @media (max-width:720px) { .brand b { display:none } }
   @media (max-width:480px) { #viewSeg button { font-size:0; padding:4px 6px } #viewSeg button::before { content:attr(data-ic); font-size:14px } }   /* Call / Tree / Sessions stay one click away in a side panel, as icons */
   @media (max-width:360px) { .brand { display:none } header { gap:4px } }
