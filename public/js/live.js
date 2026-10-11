@@ -55,18 +55,23 @@ setInterval(async () => {
   try {
     const switched = await followCurrent(); if (S.offline) { S.offline = false; syncUI(); }
     if (switched || !S.cur) return;
-    const cur = S.cur, d = await (await fetch(`/api/session?proj=${encodeURIComponent(cur.proj)}&id=${cur.id}&after=${S.seq}&ep=${encodeURIComponent(S.ep)}${S.since ? '&said=' + S.since : ''}`)).json();
+    var cur = S.cur, d = await (await fetch(`/api/session?proj=${encodeURIComponent(cur.proj)}&id=${cur.id}&after=${S.seq}&ep=${encodeURIComponent(S.ep)}${S.since ? '&said=' + S.since : ''}`)).json();
     if (d.error || cur !== S.cur) return; if (d.resync) { S.cur = null; return; }   // the server no longer has our place (restarted, transcript rewritten): reload next tick
-    S.seq = d.seq; if (!d.events || !d.events.length) return;
+    if (!d.events || !d.events.length) { S.seq = d.seq; S.pollFails = 0; return; }
     for (const a of d.agents) if (!S.agents[a.id]) { S.agents[a.id] = persona(a); addTile(S.agents[a.id]); }
     const from = S.events.length, fresh = [], changed = [];   // the session is not written in order: what is new goes at the end (the order the call got it in), what the server corrected is corrected in place
     for (const e of d.events) { const old = S.byK.get(e.k); if (old) { changed.push([old, { kind: old.kind, n: old.tools ? old.tools.length : 0, end: old.end }]); Object.assign(old, e); } else { S.byK.set(e.k, e); fresh.push(e); } }
     if (fresh.some((e) => e.end)) S.sawEnd = true;
-    if (fresh.length) { S.events = S.events.concat(fresh); stampT(from); $('#seek').max = S.events.length - 1; trNew(from); warmTTS(from); renderLog(false); }
+    if (fresh.length) { S.events = S.events.concat(fresh); stampT(from); $('#seek').max = S.events.length - 1; trNew(from); warmTTS(from); }
+    renderLog(false);   // also when nothing is new: a batch retried after a failure finds its events already here, and the transcript catches up from where it stopped
     if (S.playing && !S.recomputing) for (const e of fresh) if (e.kind === 'order' && !S.status[e.to]) { S.status[e.to] = 'working'; S.orderTs[e.to] = e.ts || 0; S.gone.delete(e.to); }   // a new sub-agent shows up now, while the previous line is still being read
     for (const [e, was] of changed) amend(e, was);
+    S.seq = d.seq; S.pollFails = 0;   // only once the batch is in: a batch that failed halfway is asked for again, and what it had already added comes back as a correction
     paintStatus();
-  } catch { if (!S.offline) { S.offline = true; syncUI(); } } finally { polling = false; }
+  } catch (err) {
+    console.error('live poll', err); if (!S.offline) { S.offline = true; syncUI(); }
+    if (d && d.seq && S.seq !== d.seq && ++S.pollFails >= 3) { S.seq = d.seq; S.pollFails = 0; }   // a batch that keeps failing is passed over, so the call does not stall on it
+  } finally { polling = false; }
 }, 400);
 
 
