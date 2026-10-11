@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 116">
+  <!-- Spike , celebrating -->
+  <style>
+    .blink { transform-box:fill-box; transform-origin:center; animation:blink 4.5s 2s infinite }
+    @keyframes blink { 0%, 92%, 100% { transform:scaleY(1) } 95% { transform:scaleY(.1) } }
+    .tail { transform-box:fill-box; transform-origin:0% 20%; animation:flick 3s ease-in-out infinite }
+    @keyframes flick { 0%, 100% { transform:rotate(0) } 40% { transform:rotate(-8deg) } 55% { transform:rotate(6deg) } 70% { transform:rotate(0) } }
+    .spines { transform-box:fill-box; transform-origin:50% 100%; animation:sway 3.4s ease-in-out infinite }
+    @keyframes sway { 0%, 100% { transform:rotate(0) } 25% { transform:rotate(2deg) } 75% { transform:rotate(-2deg) } }
+    .flame { transform-box:fill-box; transform-origin:100% 50%; transform:scale(0); animation:burp 6s ease-out infinite }
+    @keyframes burp { 0%, 80%, 100% { transform:scale(0); opacity:0 } 83% { transform:scale(1.1); opacity:1 } 92% { transform:scale(1); opacity:.9 } 97% { transform:scale(.6); opacity:0 } }
+    .jump { transform-box:fill-box; transform-origin:50% 100%; animation:jump .6s ease-out 3 }
+    @keyframes jump { 0%, 100% { transform:translateY(0) } 35% { transform:translateY(-7px) scaleY(1.02) } 70% { transform:translateY(0) scaleY(.98) } }
+    .spark { transform-box:fill-box; transform-origin:center; transform:scale(0); animation:twinkle 1.4s ease-in-out infinite }
+    .spark.b { animation-delay:.45s } .spark.c { animation-delay:.9s }
+    @keyframes twinkle { 0%, 100% { transform:scale(0) } 50% { transform:scale(1) } }
+  </style>
+  <defs>
+    <g id="scales">
+      <ellipse cx="60" cy="84" rx="20" ry="22"/>
+      <circle cx="58" cy="42" r="21"/>
+      <ellipse cx="40" cy="50" rx="14" ry="10.5"/>
+      <rect x="45" y="94" width="13" height="20" rx="5.5"/>
+      <rect x="64" y="94" width="13" height="20" rx="5.5"/>
+    </g>
+    <path id="spine" d="M-4 2 L0 -6 L4 2 Z"/>
+    <path id="sp" d="M0 -4 L1 -1 L4 0 L1 1 L0 4 L-1 1 L-4 0 L-1 -1 Z"/>
+  </defs>
+
+  <g class="jump">
+  <g class="tail">
+    <path d="M76 96 C88 104 100 104 104 94 C106 88 104 82 100 80" fill="none" stroke="#6a3a91" stroke-width="10" stroke-linecap="round"/>
+    <path d="M76 96 C88 104 100 104 104 94 C106 88 104 82 100 80" fill="none" stroke="#a46fd2" stroke-width="7" stroke-linecap="round"/>
+    <path d="M100 82 L94 72 L104 74 L108 66 L110 78 Z" fill="#3ab54a" stroke="#1d6b28" stroke-width="1.4" stroke-linejoin="round"/>
+  </g>
+
+  <g class="spines" fill="#3ab54a" stroke="#1d6b28" stroke-width="1.4" stroke-linejoin="round">
+    <use href="#spine" transform="translate(50 22) rotate(-20) scale(1.1)"/>
+    <use href="#spine" transform="translate(61 20) scale(1.3)"/>
+    <use href="#spine" transform="translate(71 24) rotate(25) scale(1.2)"/>
+    <use href="#spine" transform="translate(77 32) rotate(55) scale(1.05)"/>
+    <use href="#spine" transform="translate(79 66) rotate(80) scale(.9)"/>
+    <use href="#spine" transform="translate(80 77) rotate(90) scale(.85)"/>
+  </g>
+
+  <path d="M72 36 L88 30 L82 39 L90 44 L73 47 Z" fill="#3ab54a" stroke="#1d6b28" stroke-width="1.4" stroke-linejoin="round"/>
+
+  <use href="#scales" fill="none" stroke="#6a3a91" stroke-width="3.2" stroke-linejoin="round"/>
+  <use href="#scales" fill="#a46fd2"/>
+  <ellipse cx="54" cy="34" rx="9" ry="6" fill="#c39ae6" opacity=".8"/>
+
+  <ellipse cx="57" cy="85" rx="13" ry="17" fill="#c5e88a" stroke="#8cb556" stroke-width="1"/>
+  <path d="M46 78 Q57 81 68 78 M45 86 Q57 89 69 86 M47 94 Q57 97 67 94" fill="none" stroke="#8cb556" stroke-width="1" stroke-linecap="round"/>
+  <g fill="#c5e88a" stroke="#6a3a91" stroke-width="1"><path d="M46 112 h4 v2 h-4 Z M51 112 h4 v2 h-4 Z M65 112 h4 v2 h-4 Z M70 112 h4 v2 h-4 Z"/></g>
+
+  <path d="M48 68 C42 72 40 78 42 82" fill="none" stroke="#6a3a91" stroke-width="9" stroke-linecap="round"/>
+  <path d="M48 68 C42 72 40 78 42 82" fill="none" stroke="#a46fd2" stroke-width="6" stroke-linecap="round"/>
+  <path d="M70 68 C76 72 78 78 76 82" fill="none" stroke="#6a3a91" stroke-width="9" stroke-linecap="round"/>
+  <path d="M70 68 C76 72 78 78 76 82" fill="none" stroke="#a46fd2" stroke-width="6" stroke-linecap="round"/>
+
+  <path d="M36 32 L40 24 L46 31 Z" fill="#3ab54a" stroke="#1d6b28" stroke-width="1.4" stroke-linejoin="round"/>
+
+  <g>
+    <path d="M33.4 41.6 Q38 35.6 42.6 41.6" fill="none" stroke="#2f1848" stroke-width="1.9" stroke-linecap="round"/>
+    <path d="M47.6 42.4 Q54 34.6 60.4 42.4" fill="none" stroke="#2f1848" stroke-width="1.9" stroke-linecap="round"/>
+    <ellipse cx="32" cy="48" rx="3.2" ry="1.8" fill="#ff8f8f" opacity=".55"/><ellipse cx="50" cy="52" rx="3" ry="1.7" fill="#ff8f8f" opacity=".55"/>
+  </g>
+  <path d="M46 30 Q53 27 60 30" fill="none" stroke="#2f1848" stroke-width="1.4" stroke-linecap="round"/>
+  <circle cx="29" cy="46" r="1" fill="#6a3a91"/>
+  <g id="mouth"><path d="M28.38 53.2 Q38.5 55.31 48.62 52.67 Q46.23 63.1 38.5 63.1 Q30.77 63.1 28.38 53.2 Z" fill="#7a2338" stroke="#2f1848" stroke-width="1.2" stroke-linejoin="round"/><path d="M32.79 60.33 Q38.5 57.69 44.21 60.33 Q38.5 63.23 32.79 60.33 Z" fill="#f17d8f"/><path d="M41.36 54.39 L42.55 57.69 L43.74 54.12" fill="#fff" stroke="#2f1848" stroke-width=".6" stroke-linejoin="round"/></g>
+
+  <g class="flame">
+    <path d="M28 55 C22 50 18 54 13 49 C14 54 9 56 5 54 C8 60 4 63 2 62 C8 68 20 66 28 58 Z" fill="#45d06a" stroke="#1d8a3c" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M26 56 C21 54 18 56 15 54 C15 58 11 60 9 60 C14 63 21 62 26 57.5 Z" fill="#b6f5a8"/>
+  </g>
+  </g>
+  <g fill="#ffd34a" stroke="#c99a18" stroke-width=".5">
+    <use class="spark" href="#sp" transform="translate(12 22) scale(1.3)"/>
+    <use class="spark b" href="#sp" transform="translate(84 14) scale(1.6)"/>
+    <use class="spark c" href="#sp" transform="translate(104 44) scale(1.2)"/>
+    <use class="spark b" href="#sp" transform="translate(8 82) scale(1)"/>
+  </g>
+</svg>
