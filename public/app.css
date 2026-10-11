@@ -128,7 +128,10 @@
   .row { padding:.55em 14px; border-bottom:1px solid var(--line) }
   body.replay .row { cursor:pointer } body.replay .row:hover { background:var(--panel2) }
   .row.now { background:#283052 } .row .who { font-weight:600 } .row .arrow, .row .k { color:var(--dim); font-size:.88em }
-  .row .txt { color:#c3c6d4; word-break:break-word } .row .who { color:var(--c) } .row { border-left:3px solid transparent } .row.say, .row.report, .row.order, .row.user { border-left-color:color-mix(in srgb, var(--c, transparent) 70%, transparent) }
+  .row .txt { color:#c3c6d4; word-break:break-word } .row .txt.full { max-height:28em; overflow:auto; scrollbar-width:thin }
+  .md p, .md ul, .md ol, .md pre, .md blockquote { margin:.35em 0 } .md ul, .md ol { padding-left:1.4em } .md .mdh { display:block; margin:.5em 0 .2em; color:var(--text) }
+  .md code { font:.92em ui-monospace,SFMono-Regular,Menlo,monospace; background:rgba(255,255,255,.07); padding:0 .3em; border-radius:4px } .md pre { font:.88em/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; background:#0d1117; padding:.5em .7em; border-radius:6px; overflow:auto; white-space:pre }
+  .md blockquote { border-left:3px solid var(--line); padding-left:.6em; color:var(--dim) } .md u { text-decoration-color:var(--accent); cursor:help } .row .who { color:var(--c) } .row { border-left:3px solid transparent } .row.say, .row.report, .row.order, .row.user { border-left-color:color-mix(in srgb, var(--c, transparent) 70%, transparent) }
   .row.chat { padding-top:.3em; padding-bottom:.3em; font-size:.92em; opacity:.72 } .row.chat .txt { display:inline; font-style:italic } .row.tools { padding-top:.25em; padding-bottom:.25em; font-size:.88em; opacity:.6 } .row.speaking { background:color-mix(in srgb, var(--accent) 16%, transparent) }
   footer { display:none; height:44px; flex:none; align-items:center; gap:12px; padding:0 14px; border-top:1px solid var(--line) }
   body.replay footer { display:flex }

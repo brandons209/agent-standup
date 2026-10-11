@@ -111,10 +111,12 @@ const applyLog = () => {
   b.style.setProperty('--logw', prefs.logW + 'px'); b.style.setProperty('--logh', prefs.logH + 'px'); b.style.setProperty('--logf', (prefs.logFont || 12.5) + 'px');
   $('#logSmaller').title = L('Texte plus petit', 'Smaller text'); $('#logBigger').title = L('Texte plus grand', 'Larger text');
   $('#logDock').title = bot ? L('Ancrer à droite', 'Dock on the right') : L('Ancrer en bas', 'Dock at the bottom');
+  $('#logFull').classList.toggle('on', !!prefs.logFull); $('#logFull').title = prefs.logFull ? L('Messages abrégés', 'Short messages') : L('Messages complets', 'Full messages');
   $('#logText').classList.toggle('on', !!prefs.logText); $('#logText').title = prefs.logText ? L('Afficher aussi les outils', 'Show tool calls too') : L('Seulement ce qui est dit', 'Spoken lines only');
 };
 const logFont = (d) => { prefs.logFont = Math.max(11, Math.min(20, (prefs.logFont || 12.5) + d)); savePrefs(); applyLog(); };
 $('#logSmaller').onclick = () => logFont(-1); $('#logBigger').onclick = () => logFont(1);
+$('#logFull').onclick = () => { prefs.logFull = !prefs.logFull; savePrefs(); applyLog(); renderLog(true); };
 $('#logText').onclick = () => { prefs.logText = !prefs.logText; savePrefs(); applyLog(); renderLog(true); };
 $('#bLog').onclick = () => { prefs.log = !prefs.log; savePrefs(); applyLog(); };
 $('#logDock').onclick = () => { prefs.logPos = prefs.logPos === 'bottom' ? 'right' : 'bottom'; savePrefs(); applyLog(); };

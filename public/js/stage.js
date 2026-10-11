@@ -36,11 +36,29 @@ const layout = () => {
 };
 new ResizeObserver(layout).observe($('#center'));
 
+function mdHTML(src) {   // a transcript message as markdown: everything is escaped first, then only these forms become tags (no raw HTML, links are not clickable)
+  const inl = (t) => esc(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^\w*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>').replace(/(^|[^\w])_([^_\s][^_]*)_(?!\w)/g, '$1<i>$2</i>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, t, u) => `<u title="${u}">${t}</u>`);
+  const out = [], lines = String(src).replace(/\r/g, '').split('\n'); let list = null, para = [];
+  const flush = () => { if (para.length) out.push(`<p>${para.map(inl).join('<br>')}</p>`); para = []; if (list) { out.push(`</${list}>`); list = null; } };
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i], fence = l.match(/^\s*```/);
+    if (fence) { flush(); const code = []; while (++i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i]); out.push(`<pre>${esc(code.join('\n'))}</pre>`); continue; }
+    if (/^\s*\|.*\|\s*$/.test(l)) { flush(); const rows = [l]; while (i + 1 < lines.length && /^\s*\|.*\|\s*$/.test(lines[i + 1])) rows.push(lines[++i]); out.push(`<pre>${esc(rows.join('\n'))}</pre>`); continue; }   // a table keeps its columns as text
+    const h = l.match(/^(#{1,4})\s+(.*)/), li = l.match(/^\s*(?:[-*+]|(\d+)[.)])\s+(.*)/), q = l.match(/^\s*>\s?(.*)/);
+    if (h) { flush(); out.push(`<b class="mdh">${inl(h[2])}</b>`); }
+    else if (li) { const kind = li[1] ? 'ol' : 'ul'; if (para.length || list !== kind) { const keep = list === kind && !para.length; if (!keep) { flush(); out.push(`<${kind}>`); list = kind; } } out.push(`<li>${inl(li[2])}</li>`); }
+    else if (q) { flush(); out.push(`<blockquote>${inl(q[1])}</blockquote>`); }
+    else if (!l.trim()) flush();
+    else { if (list) flush(); para.push(l); }
+  }
+  flush(); return out.join('');
+}
 const whoTag = (id) => { const p = S.agents[id]; return `<span class="who" style="--c:${p && p.shirt ? p.shirt : 'inherit'}">${esc(nameOf(id))}</span>`; };   // each agent's name in its own colour, as on its tile
 function logRow(i) {
   const e = S.events[i], arrow = e.to ? ` <span class="arrow">→</span> ${whoTag(e.to)}` : '';
-  const body = e.kind === 'tools' ? e.tools.map((t) => t.name).join(', ') : spoken(e), k = { order: L('tâche', 'task'), report: L('rapport', 'report'), say: '', user: L('brief', 'brief'), tools: L('outils', 'tools') }[e.kind];
-  return `<div class="row ${e.kind}" data-i="${i}" data-a="${esc(e.agent)}">${whoTag(e.agent)}${arrow} <span class="k">${k}</span><div class="txt">${esc(body)}</div></div>`;
+  const full = prefs.logFull && e.kind !== 'tools' && e.text, body = e.kind === 'tools' ? e.tools.map((t) => t.name).join(', ') : full ? (e.kind === 'order' ? `${nameOf(e.to)}, ` : '') + String(e.text).trim() : spoken(e), k = { order: L('tâche', 'task'), report: L('rapport', 'report'), say: '', user: L('brief', 'brief'), tools: L('outils', 'tools') }[e.kind];
+  return `<div class="row ${e.kind}" data-i="${i}" data-a="${esc(e.agent)}">${whoTag(e.agent)}${arrow} <span class="k">${k}</span><div class="txt${full ? ' full md' : ''}">${full ? mdHTML(body) : esc(body)}</div></div>`;
 }
 function renderLog(full) {
   const log = $('#log'); let from = S.live ? Math.max(0, S.events.length - 300) : 0;
