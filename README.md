@@ -90,11 +90,13 @@ Other agent tools than Claude Code (Codex CLI, Gemini CLI, OpenCode…) are rese
 Pick one in ⚙ → Language: **English, Français, 繁體中文, 简体中文, Español, Deutsch, Português (Brasil), 日本語**. The interface (menus, chips, tooltips, recap) is translated; VS Code's command titles, setting descriptions and status bar follow VS Code's own display language. English and French are written by hand; the other languages are **AI-drafted and not yet reviewed by native speakers**, so corrections are very welcome: each language is one small JSON file (`public/locales/<code>.json`), see [public/locales/README.md](public/locales/README.md) to fix or add one (`npm run i18n` checks the files). The words the agents say stay in the language of your session (French translation of their lines is optional); the little banter lines and the demo exist in English and French.
 
 ## Your own characters
-Replace the drawn characters with your own pixel art. Drop PNG (or GIF/WebP) files, 300 KB at most each, into `~/.agent-standup/characters` (⚙ → Characters shows the folder, and in VS Code *Open folder* opens it; the `agentStandup.charactersPath` setting changes it):
+Replace the drawn characters with your own pixel art. Drop PNG (or GIF/WebP/SVG) files, 300 KB at most each, into `~/.agent-standup/characters` (⚙ → Characters shows the folder, and in VS Code *Open folder* opens it; the `agentStandup.charactersPath` setting changes it):
 - `lead.png` (or `claude.png`) is the lead, `you.png` is you, any other image becomes a sub-agent (one per agent, repeated if you have fewer images than agents);
+- sub-agents get a random image by default; turn on ⚙ → Characters → **Rotate characters, no repeats** to hand them out in turn, so with N images any N sub-agents in a row all look different;
 - `name-talk.png` next to `name.png` is an optional open-mouth frame that shows while the character speaks;
 - 32×32 or 64×64 px, transparent background, facing front, feet at the bottom looks best. The art is shown crisp (no smoothing) on top of the usual scene and desk, and every status, hand and badge still works.
-Press **Reload** in the menu to see changes. A starter pack is in [examples/characters](examples/characters).
+- SVG works too and stays sharp at any size; it may animate itself with CSS `@keyframes` (blinking, a swaying tail…), but scripts and external files are ignored, and video exports show it as a still frame.
+Press **Reload** in the menu to see changes. A starter pack is in [examples/characters](examples/characters), and animated SVG examples in [examples/characters/mane6](examples/characters/mane6).
 
 ## Agents list
 On wide windows (900 px+), a fixed list sits left of the call: every agent with its role and one status line, **most urgent first** (needs you, stalled, working, waiting, done) and the lead pinned on top. It stays readable with dozens of agents, which a grid of tiles does not. Click a name to put that agent in the spotlight (kept for 25 s even when someone else speaks), double-click for details. Toggle it in ⚙ → Agents list.
