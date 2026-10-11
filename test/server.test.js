@@ -166,11 +166,13 @@ test('compaction summaries, workflow agents, titles and a transcript rewritten i
 });
 test('a pinned session is that session or nothing, whatever was written later elsewhere', async () => {
   const a = path.join(tmp, 'projects', '-pa'), b = path.join(tmp, 'projects', '-pb'); fs.mkdirSync(a, { recursive: true }); fs.mkdirSync(b, { recursive: true });
-  fs.writeFileSync(path.join(a, 'old.jsonl'), line(typed(0, 'first'))); await wait(30); fs.writeFileSync(path.join(b, 'new.jsonl'), line(typed(0, 'later, elsewhere')));
+  fs.writeFileSync(path.join(a, 'old.jsonl'), line(typed(0, 'first'))); await wait(30); fs.writeFileSync(path.join(a, 'busy.jsonl'), line(typed(0, 'later, same project'))); await wait(30); fs.writeFileSync(path.join(b, 'new.jsonl'), line(typed(0, 'later, elsewhere')));
   const { port, stop } = await serve(), cur = async (q) => JSON.parse((await get(port, '/api/current?' + q)).body);
   try {
     assert.equal((await cur('proj=-pa&id=old')).id, 'old'); assert.equal((await cur('proj=-pa&id=old')).proj, '-pa');
     assert.deepEqual(await cur('proj=-pa&id=gone'), { missing: true }); assert.deepEqual(await cur('proj=&id=old'), { missing: true }); assert.deepEqual(await cur('proj=..&id=old'), { missing: true });
+    assert.equal((await cur('proj=-pa&id=old&sproj=-pa&sid=busy')).id, 'old', 'a pin wins over the session a follow window sticks to');
+    assert.equal((await cur('proj=-pa&sproj=-pa&sid=busy')).id, 'busy', 'a follow window keeps its session');
     assert.equal((await cur('proj=')).id, 'new');   // not pinned: the newest one
   } finally { stop(); }
 });
@@ -218,12 +220,20 @@ test('how far a session was said is kept per session, never goes back, and outli
 });
 test('a character\'s thinking and celebrating pictures are its frames, not characters of their own', () => {
   const dir = path.join(tmp, 'chars'); fs.mkdirSync(dir, { recursive: true }); const svg = '<svg xmlns="http://www.w3.org/2000/svg"/>';
-  for (const f of ['lead.svg', 'aj.svg', 'aj-talk.svg', 'aj-think.svg', 'aj-celebrate.svg', 'bo.png', 'bo-think.png']) fs.writeFileSync(path.join(dir, f), svg);
+  for (const f of ['lead.svg', 'aj.svg', 'aj-talk.svg', 'aj-think.svg', 'aj-celebrate.svg', 'bo.png', 'bo-think.png', 'deep-think.png']) fs.writeFileSync(path.join(dir, f), svg);
   process.env.AGENT_STANDUP_CHARACTERS = dir;
   try {
     const { chars } = require('../server.js').listCharacters(), by = Object.fromEntries(chars.map((c) => [c.stem, c]));
-    assert.deepEqual(chars.map((c) => c.stem), ['aj', 'bo', 'lead']);
+    assert.deepEqual(chars.map((c) => c.stem), ['aj', 'bo', 'deep-think', 'lead'], 'a "-think" picture with no character of its own is a character');
     assert.deepEqual([by.aj.talk, by.aj.think, by.aj.celebrate], ['aj-talk.svg', 'aj-think.svg', 'aj-celebrate.svg']);
     assert.deepEqual([by.bo.talk, by.bo.think, by.bo.celebrate], [null, 'bo-think.png', null]);
   } finally { delete process.env.AGENT_STANDUP_CHARACTERS; }
+});
+test('the page is served as files that are never kept stale, and nothing outside public/ can be reached', async () => {
+  const { port, stop } = await serve();
+  try {
+    const html = (await get(port, '/')).body, srcs = [...html.matchAll(/<script src="(\/js\/[\w-]+\.js)">/g)].map((m) => m[1]); assert.ok(srcs.length >= 14);
+    for (const p of [...srcs, '/app.css']) { const r = await get(port, p); assert.equal(r.status, 200, p); assert.equal(r.headers['cache-control'], 'no-cache', p); assert.match(r.headers['content-type'], p.endsWith('.css') ? /text\/css/ : /javascript/, p); }
+    for (const p of ['/js/../../server.js', '/js/..%2f..%2fserver.js', '/js/%2e%2e/%2e%2e/package.json', '/js/nope.js', '/js/']) assert.equal((await get(port, p)).status, 404, p);
+  } finally { stop(); }
 });

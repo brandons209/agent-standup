@@ -32,7 +32,7 @@ function session() {
 async function open(s, join = true) {
   const page = await browser.newPage(), errors = []; page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`http://localhost:${port}/?proj=${s.proj}`); await page.waitForFunction('typeof S !== "undefined" && S.cur', { timeout: 15000 });
-  await page.evaluate(() => { window.__said = []; const o = window.startTalk; window.startTalk = function (id, line, label) { window.__said.push({ id, line: String(line), label: label || '' }); return o.apply(this, arguments); }; });
+  await page.evaluate(() => { window.__said = []; const o = window.startTalk; window.startTalk = function (id, line, label) { window.__said.push({ id, line: String(line), label: label || '', at: performance.now() }); return o.apply(this, arguments); }; });
   await page.evaluate(() => { window.__voice = []; const o = window.speakLine; window.speakLine = function (text, p, primary, token, fr, always) { window.__voice.push({ id: p && p.id, text: String(text), silent: !!(S.hurry && !always) }); return o.apply(this, arguments); }; });   // silent: shown without a voice because the call is behind
   if (join) await page.click('#gB');
   const call = {
@@ -161,20 +161,22 @@ test('live call', { skip: missing || false, timeout: 600000 }, async (t) => {
 
   await t.test('a sub-agent at work says what it is doing, in turn: never over another line, never twice in a row', async () => {
     const s = session(); s.user('hello', Date.now() - 600000); s.say('Ready.', { at: Date.now() - 590000, end: true }); const c = await open(s);
-    await c.page.evaluate(() => { prefs.narrate = true; window.__talking = 0; window.__overlap = 0; const st = window.startTalk, sp = window.stopTalk; window.startTalk = function (id) { if (S.speakers.size && !S.speakers.has(id)) window.__overlap++; return st.apply(this, arguments); }; window.stopTalk = sp; });
+    await c.page.evaluate(() => { prefs.narrate = true; window.__overlap = 0; const st = window.startTalk; window.startTalk = function (id) { if (S.speakers.size && !S.speakers.has(id)) window.__overlap++; return st.apply(this, arguments); }; });
     s.user('Check the login'); await wait(1500); s.launch(1, 'Check login', 'Look at the login page'); await wait(1500);
     for (let k = 0; k < 4; k++) { const id = s.tool('Read', { file_path: `/x/src/file${k}.js` }, { sub: 1 }); await wait(400); s.result(id, 'ok', { sub: 1 }); await wait(3500); }
     await c.quiet(); const said = await c.said(), mine = said.filter((x) => x.label === '🛠');
     assert.ok(mine.length >= 1, 'it said what it was doing'); assert.ok(mine.every((x) => /^Reading file\d\.js\.$/.test(x.line)), JSON.stringify(mine));
-    assert.ok(mine.length <= 2, 'at most one line per 12 s from one agent'); assert.equal(await c.page.evaluate(() => window.__overlap), 0, 'never over someone else'); await c.close();
+    for (let k = 1; k < mine.length; k++) assert.ok(mine[k].at - mine[k - 1].at >= 12000, 'never twice in a row: at least 12 s between two lines of one agent');
+    assert.equal(await c.page.evaluate(() => window.__overlap), 0, 'never over someone else'); await c.close();
   });
 
   await t.test('a sub-agent that finishes says so once and celebrates', async () => {
     const s = session(); s.user('hello', Date.now() - 600000); s.say('Ready.', { at: Date.now() - 590000, end: true }); const c = await open(s);
+    await c.page.evaluate(() => { window.__cheered = 0; const o = window.celebrate; window.celebrate = function (id) { if (id === 'a1') window.__cheered++; return o.apply(this, arguments); }; });
     s.user('Check the login'); await wait(1200); const id = s.launch(1, 'Check login', 'Look at the login page'); await wait(1500);
     s.say('Looked at it: the query is slow.', { sub: 1 }); await wait(6000); s.result(id, 'Looked at it: the query is slow.'); await c.quiet();
     const said = await c.said(); assert.ok(said.filter((x) => x.id === 'a1' && x.label === '🎉').length <= 1, 'at most one completion line');
-    assert.equal(await c.page.evaluate(() => S.quipped.a1), true); await c.close();
+    assert.equal(await c.page.evaluate(() => S.quipped.a1), true); assert.ok(await c.page.evaluate(() => window.__cheered >= 1), 'it celebrated'); await c.close();
   });
 
   await t.test('pausing and resuming at the end of a live call does not repeat the last line', async () => {
