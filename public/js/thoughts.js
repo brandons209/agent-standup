@@ -45,7 +45,7 @@ function stopMumble() { const v = TH.voice; if (v) { TH.voice = null; try { v.sr
 async function mumble(id, text) {   // lips closed: the mouth does not move, the music does not make room, and anyone who starts to speak cuts it
   const p = S.agents[id], t = $('#t-' + id); if (!p || !t || !prefs.voice || AUD.off() || !AUD.ctx || S.speakers.size || TH.voice) return;
   if (!TTS.server || prefs.vstyle === 'animal' || prefs.vstyle === 'sims') { AUD.murmur(0.5 + (p.vi % 5) / 10, Math.min(2.2, estMs(text) / 1000), 0.4); return; }
-  const fr = frVoice(text), voice = TTS.voiceFor(p, fr), token = S.token; if (!voice) return; let buf; try { buf = await TTS.buf(speakable(text), voice, TTS.rate(), true, fr); } catch { return; }   // made like a line prepared ahead: it never delays a real one
+  const fr = frVoice(text), voice = TTS.voiceFor(p, fr), token = S.token; if (!voice) return; let buf; try { buf = await TTS.buf(speakable(plain(text)), voice, TTS.rate(), true, fr); } catch { return; }   // made like a line prepared ahead: it never delays a real one
   if (token !== S.token || S.speakers.size || TH.voice || !t.classList.contains('musing')) return;   // someone spoke meanwhile, or the thought is gone
   const c = AUD.ctx, src = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain(); src.buffer = buf; lp.type = 'lowpass'; lp.frequency.value = 1100; g.gain.value = 0.2; let stops = [];
   if (prefs.vstyle === 'natural' || prefs.vstyle === 'kokoro') src.connect(lp); else { const ch = fxChain(c, src, fxFor(p)); stops = ch.stops; ch.node.connect(lp); }

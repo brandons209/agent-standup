@@ -18,7 +18,7 @@ const spd = () => (S.live ? 1.12 * lagFactor() : +$('#speed').value) * (S.boost 
 const nameOf = (id) => (S.agents[id] || {}).name || id;
 
 // ---------- text prep ----------
-const plain = (t) => String(t).replace(/```[\s\S]*?```/g, ' ').replace(/`([^`]*)`/g, '$1').replace(/https?:\/\/\S+/g, 'link').replace(/[#*_>|~\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+const plain = (t) => String(t).replace(/```[\s\S]*?(```|$)/g, ' ').replace(/^\s*\|.*\|\s*$/gm, ' ').replace(/^\s*(?:[-*+]|\d+[.)]|>)\s+/gm, '').replace(/\[([^\]]+)\]\([^)\s]*\)/g, '$1').replace(/`([^`]*)`/g, '$1').replace(/https?:\/\/\S+/g, 'link').replace(/[#*_>|~\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
 function short(t, max = 230) {
   const s = plain(t); if (s.length <= max) return s;
   const cut = s.slice(0, max), end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
