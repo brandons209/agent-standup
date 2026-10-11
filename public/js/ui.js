@@ -33,7 +33,12 @@ function setView(v) { prefs.view = v; savePrefs(); document.body.classList.toggl
 $('#viewSeg').onclick = (e) => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); };
 $('#langSel').onchange = () => setLang($('#langSel').value, true);
 $('#charPack').value = ['none', 'folder', 'starter', 'cats'].includes(prefs.charPack) ? prefs.charPack : 'none'; $('#charPack').onchange = () => { prefs.charPack = $('#charPack').value; savePrefs(); $('#charReload').onclick(); };
-$('#charReload').onclick = async () => { await loadChars(); for (const k in imgCache) delete imgCache[k]; for (const id in S.agents) S.agents[id].custom = null; for (const id in S.agents) S.agents[id].custom = customFor(id); buildStage(); paintStatus(); renderCharInfo(); await TTS.init(); };
+$('#charReload').onclick = async () => { await loadChars(); for (const k in imgCache) delete imgCache[k]; renameAgents(); renderCharInfo(); await TTS.init(); };
+function renameAgents() {   // pictures and names are given again: a sub-agent is named after its character, or from the list
+  for (const k in nameBook) delete nameBook[k]; const old = S.agents; S.agents = {}; for (const id in old) S.agents[id] = persona(old[id].src || { id });
+  buildStage(); paintStatus(); renderLog(true);
+}
+$('#names').value = prefs.names || ''; $('#names').oninput = () => { prefs.names = $('#names').value; savePrefs(); clearTimeout(S.namesT); S.namesT = setTimeout(renameAgents, 600); };
 $('#charOpen').onclick = () => window.parent.postMessage({ agentStandup: 'openCharacters' }, '*');
 $('#modeSeg').onclick = (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m); };
 // ⚙ menu: sections that fold (remembered) and a search box

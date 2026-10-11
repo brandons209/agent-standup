@@ -3,10 +3,13 @@
 // =====================================================================
 const NAMES = ['Ada','Linus','Grace','Alan','Margaret','Dennis','Barbara','Ken','Radia','Tim','Hedy','Guido','Frances','Bjarne','Katherine','Brian','Sophie','Niklaus','Annie','Donald','Joan','Edsger','Lynn','Vint','Mae','Rob','Zoe','Ivan','Nina','Otto','Lena','Hugo','Ines','Théo','Maya','Jules','Alma','Remy','Cleo','Noah','Iris','Leo','Mira','Axel','Nora','Eli','Lou','Gaby'];
 const nameBook = {};   // agent id → unique first name within the session
-function uniqueName(id, h) {
+const namePool = () => { const own = String(prefs.names || '').split('\n').map((x) => x.trim()).filter(Boolean); return own.length ? own : NAMES; };   // ⚙ your own list, one name per line
+const charName = (stem) => stem.replace(/[-_]+/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());   // rainbow-dash → Rainbow Dash
+function uniqueName(id, h, want) {   // want: the name of the agent's character; else one from the pool. Never two agents with the same name in a session
   if (nameBook[id]) return nameBook[id]; const taken = new Set(Object.values(nameBook));
-  for (let k = 0; k < NAMES.length; k++) { const n = NAMES[(h + k) % NAMES.length]; if (!taken.has(n)) return (nameBook[id] = n); }
-  return (nameBook[id] = NAMES[h % NAMES.length] + ' ' + (taken.size + 1));
+  if (want) { for (let k = 1; ; k++) { const n = k === 1 ? want : `${want} ${k}`; if (!taken.has(n)) return (nameBook[id] = n); } }
+  const P = namePool(); for (let k = 0; k < P.length; k++) { const n = P[(h + k) % P.length]; if (!taken.has(n)) return (nameBook[id] = n); }
+  return (nameBook[id] = P[h % P.length] + ' ' + (taken.size + 1));
 }
 const PAL = ['#ff7a6b','#ffb347','#ffd84a','#4fd1a5','#4cc3ff','#7c8cff','#b583ff','#ff7eb6'];
 const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -38,12 +41,12 @@ function renderCharInfo() {
   el.innerHTML = CHARS.pack === 'none' ? esc(L('Les personnages dessinés par l’application. Choisissez « Mon dossier » pour vos propres images, ou un pack.', 'The characters drawn by the app. Pick “My folder” for your own images, or a pack.')) : CHARS.pack !== 'folder' ? `✓ ${CHARS.n} ${esc(L('personnages du pack', 'characters from the pack'))} · ${esc(L('Pour les modifier, copiez-les dans votre dossier et choisissez « Mon dossier ».', 'To tweak them, copy them into your folder and pick “My folder”.'))}` : CHARS.n ? `✓ ${CHARS.n} ${esc(L('personnage(s) personnalisé(s) chargé(s)', 'custom character(s) loaded'))}` : `${esc(L('Déposez vos images (PNG ou SVG) dans ce dossier pour remplacer les personnages :', 'Drop your pixel art (PNG or SVG) in this folder to replace the characters:'))}<br><code style="word-break:break-all">${esc(CHARS.dir)}</code><br>${esc(L('lead.png = le chef · you.png = vous · les autres = les sous-agents · nom-talk.png = bouche ouverte', 'lead.png = the lead · you.png = you · others = the sub-agents · name-talk.png = open mouth'))}`;
   $('#charOpen').style.display = EMBED ? '' : 'none'; renderTtsBox();
 }
-function persona(a) { const p = persona0(a); p.custom = customFor(a.id); return p; }
-function persona0(a) {
+function persona(a) { const custom = customFor(a.id), p = persona0(a, custom); p.custom = custom; p.src = a; return p; }   // the picture first: a sub-agent is named after its character; src: the agent as the server gave it, to name it again
+function persona0(a, custom) {
   const h = hash(a.id), base = { ...a };
   if (a.id === 'main') return { ...base, name: 'Claude', role: L('Chef', 'Lead'), shirt: '#e8845f', shape: 0, acc: 1, eye: 0, glasses: false, scene: 6, prop: 1, acc2: '#f5c04a', lead: true, vi: 0, gid: 'main' };
   if (a.id === 'user') return { ...base, name: L('Vous', 'You'), role: L('Humain', 'Human'), shirt: '#8a94c9', shape: 1, acc: 2, eye: 1, glasses: false, scene: 7, prop: 1, acc2: '#ff7a6b', vi: 3, gid: 'user' };
-  return { ...base, name: a.name || uniqueName(a.id, h), roleEn: a.roleEn || a.role, role: (FR() && a.roleFr) || a.roleEn || a.role, shirt: PAL[(h >>> 6) % 8], shape: (h >>> 3) % 5, acc: (h >>> 9) % 6, eye: (h >>> 12) % 3, glasses: ((h >>> 15) % 4) === 0,
+  return { ...base, name: a.name || uniqueName(a.id, h, custom && charName(custom.name)), roleEn: a.roleEn || a.role, role: (FR() && a.roleFr) || a.roleEn || a.role, shirt: PAL[(h >>> 6) % 8], shape: (h >>> 3) % 5, acc: (h >>> 9) % 6, eye: (h >>> 12) % 3, glasses: ((h >>> 15) % 4) === 0,
            scene: (h >>> 18) % 6, prop: (h >>> 21) % 3, acc2: PAL[(h >>> 24) % 8], vi: h >>> 4, gid: h.toString(36) };
 }
 

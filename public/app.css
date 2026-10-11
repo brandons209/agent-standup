@@ -225,6 +225,7 @@
   .mi { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; text-align:left; padding:8px 10px; border-radius:8px } .mi:hover { background:var(--panel2) }
   .sw { width:30px; height:17px; border-radius:99px; background:#3a3e50; position:relative; flex:none; transition:background .15s } .sw::after { content:''; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:#fff; transition:transform .15s }
   .sw.on { background:var(--accent) } .sw.on::after { transform:translateX(13px) }
+  #menu textarea { width:100%; box-sizing:border-box; resize:vertical; background:var(--panel2); color:inherit; border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:2px 0 6px; font:12px/1.4 inherit }
   #menu select, #menu input[type=text] { width:100%; box-sizing:border-box; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:2px 0 6px } #menu .box { padding:0 10px }
   #menu .hint { font-size:11.5px; color:#ffb347; padding:0 10px 6px }
   #card { position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center; text-align:center; background:radial-gradient(circle at 50% 40%,#2a3a66,#05060c); color:#fff }
