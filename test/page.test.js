@@ -66,6 +66,20 @@ test('screen share: thinking keeps the screen, done closes it, catching up never
   run(`applyStatus({ kind: 'finish', agent: 'a', to: 'main', ts: S.clock })`); tick(2000); assert.equal(panes(), '', 'closed when done');
   run(`S.status.a = 'working'; S.boost = 3`); tool('a'); assert.equal(panes(), '', 'catching up');
 });
+test('a sub-agent that left the call shares no screen; new work from an agent thought done brings it back', { timeout: 5000 }, () => {
+  const { run, get } = page(); run(`AUD.tone = () => {}; avatarSVG = () => ''; termModel = () => ({ view: 'term', title: 't', lines: [], stat: '' }); setTicker = () => {}; activityLabel = () => ''; toast = () => {}; poof = () => {};
+    S.agents = { main: { id: 'main', name: 'C', gid: 0 }, a: { id: 'a', name: 'A', gid: 1 } }; S.status = { a: 'working' }; S.playing = true; S.boost = 1; S.live = true; S.turnOver = false; prefs.multiShare = false; prefs.banter = false;`);
+  get('t-a').innerHTML = '<div class="bubble"></div>';
+  let n = 0; const tools = (a) => `{ agent: '${a}', kind: 'tools', ts: S.clock, tools: [{ id: 't${++n}', ts: S.clock, name: 'Bash', arg: 'x', d: { kind: 'cmd', text: 'x' } }] }`, panes = () => run('[...S.shares.keys()].join()');
+  run(`tickTools(${tools('a')})`); assert.equal(panes(), 'a');
+  run(`applyStatus({ kind: 'report', agent: 'a', to: 'main', ts: S.clock }); vanish('a')`); assert.equal(panes(), '', 'leaving closes its screen');
+  run(`tickTools(${tools('a')})`); assert.equal(panes(), '', 'no screen for an agent that is gone');
+  run(`{ const e = ${tools('a')}; applyStatus(e); tickTools(e); }`);
+  assert.deepEqual(JSON.parse(run(`JSON.stringify([S.status.a, S.gone.has('a'), 'a' in S.doneAt])`)), ['working', false, false], 'back at work');
+  assert.equal(panes(), 'a', 'and sharing again');
+  run(`S.events = [{ kind: 'order', agent: 'main', to: 'a', ts: 0, t: 0 }, { kind: 'report', agent: 'a', to: 'main', ts: 1, t: 1 }, ${tools('a').replace('ts: S.clock', 'ts: 2, t: 2')}, { kind: 'say', agent: 'main', ts: 99e4, t: 99e4 }]; recomputeStatus(4)`);
+  assert.deepEqual(JSON.parse(run(`JSON.stringify([S.status.a, S.gone.has('a')])`)), ['working', false], 'a seek works it out the same way');
+});
 test('liveStart: a reload starts after what this session already said', { timeout: 5000 }, () => {
   const { run } = page(); run('recomputeStatus = () => {}; paintStatus = () => {}; trNew = () => {};');
   const now = Date.now(), ev = (dt, kind = 'say') => ({ ts: now + dt, kind, agent: 'main', text: 'x' });

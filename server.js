@@ -136,7 +136,7 @@ const saidTs = new Map();   // "proj/id" → the newest event time a page has sa
 function noteSaid(key, v) { const n = +v; if (!(n > 0) || n > Date.now() + 5000) return saidTs.get(key) || 0; const m = Math.max(saidTs.get(key) || 0, n); saidTs.delete(key); saidTs.set(key, m); if (saidTs.size > 200) saidTs.delete(saidTs.keys().next().value); return m; }
 function timelineEntry(proj, id) {
   const key = proj + '/' + id, st = stamp(proj, id), hit = tlCache.get(key), now = Date.now();
-  if (hit && ((hit.st === st && !(hit.recentUntil && now > hit.recentUntil)) || now - hit.at < Math.max(250, hit.ms * 2))) {   // nothing was written (a sub-agent's 4-minute silence rule can flip without any file change); or a very big session, which is not rebuilt on every poll
+  if (hit && ((hit.st === st && !(hit.recentUntil && now > hit.recentUntil)) || now - hit.at < Math.max(250, hit.ms * 2))) {   // nothing was written (a sub-agent's silence rule can flip without any file change); or a very big session, which is not rebuilt on every poll
     tlCache.delete(key); tlCache.set(key, hit); return hit;   // asked for again: the last one to be dropped
   }
   const t0 = Date.now(), files = [], tl = buildTimeline(proj, id, files), feed = feedStep(hit && hit.feed, tl, files);
@@ -308,6 +308,7 @@ function parseRecord(st, r) {
     return;
   }
   if (r.type === 'user') {
+    st.ended = false;
     const items = [], wf = r.toolUseResult && typeof r.toolUseResult === 'object' && typeof r.toolUseResult.runId === 'string' ? r.toolUseResult.runId : '';   // tool results: the real output that appeared on the agent's screen
     for (const b of blocks(r)) if (b.type === 'tool_result' && wf) push({ ts, agent, kind: 'wfrun', toolId: b.tool_use_id, run: wf });   // the answer to a Workflow call names the run it started: its agents are in subagents/workflows/<run>/
     for (const b of blocks(r)) if (b.type === 'tool_result' && (st.toolName[b.tool_use_id] === 'Agent' || st.toolName[b.tool_use_id] === 'Task') && !(st.bg && st.bg[b.tool_use_id]) && !/^\s*Async agent launched/i.test(resultText(b.content))) push({ ts, agent, kind: 'agentdone', toolId: b.tool_use_id });   // a synchronous call: the lead got the sub-agent's answer back, so it has finished (async launches answer immediately and are not a completion)
@@ -322,7 +323,7 @@ function parseRecord(st, r) {
     const txt = typed.replace(/^\s*\[Request interrupted[^\]]*\]\s*/i, '').trim();
     if (txt && !/^<(system-reminder|command-|local-command|task-notification)/.test(txt) && !r.isMeta && !r.isCompactSummary) push({ ts, agent: 'user', kind: 'user', text: txt });   // not the summary Claude Code writes when it compacts: thousands of characters the human never typed
   } else if (r.type === 'assistant') {
-    const m = r.message || {}; let said = null;
+    const m = r.message || {}; let said = null; st.ended = m.stop_reason === 'end_turn';   // the agent closed its turn: silence after this is idleness, not a long command
     if (m.id && m.usage) {   // the same message is repeated once per content block with identical numbers: keep one per message id
       const u = m.usage, prev = st.msgUsage.get(m.id);
       st.msgUsage.set(m.id, { ts: prev ? prev.ts : ts, u: { i: u.input_tokens || 0, o: u.output_tokens || 0, r: u.cache_read_input_tokens || 0, w: u.cache_creation_input_tokens || 0 }, model: m.model });
@@ -348,6 +349,7 @@ function readMeta(f) {
   try { const mt = fs.statSync(f).mtimeMs, c = metaCache.get(f); if (c && c.mtime === mt) return c.value; const v = JSON.parse(fs.readFileSync(f, 'utf8')); if (metaCache.size > 3000) metaCache.clear(); metaCache.set(f, { mtime: mt, value: v }); return v; } catch { return {}; }
 }
 
+const QUIET_DONE_MS = 6 * 60000, QUIET_STUCK_MS = 30 * 60000, RESUMED_MS = 10000;
 function buildTimeline(proj, id, files = []) {
   const base = path.join(ROOT, proj), mainFile = path.join(base, id + '.jsonl');
   if (!fs.existsSync(mainFile)) throw new Error('session not found');
@@ -365,11 +367,15 @@ function buildTimeline(proj, id, files = []) {
   for (const a of Object.values(agents)) if (a.toolUseId) childByTool[a.toolUseId] = a.id;
   const runByTool = {}; for (const st of states) if (st) for (const e of st.raw) if (e.kind === 'wfrun' && runs[e.run] && !runs[e.run].by) { runs[e.run].by = e.agent; runs[e.run].toolId = e.toolId; runByTool[e.toolId] = runs[e.run]; }   // Workflow tool_use id → the run it started
 
-  const finished = new Set(), now0 = Date.now(); for (const st of states) if (st) for (const e of st.raw) if (e.kind === 'agentdone') { if (childByTool[e.toolId]) finished.add(childByTool[e.toolId]); else if (runByTool[e.toolId]) for (const a of Object.values(runByTool[e.toolId].agents)) finished.add(a); }   // a run that stopped: so did every agent in it
+  const lastTs = {}, stOf = {}; for (const st of states) if (st) { lastTs[st.agent] = st.lastTs || 0; stOf[st.agent] = st; }
+  const finished = new Set(), doneTs = {}, now0 = Date.now(); for (const st of states) if (st) for (const e of st.raw) if (e.kind === 'agentdone') { const to = childByTool[e.toolId]; if (to) { if ((lastTs[to] || 0) <= e.ts + RESUMED_MS) { finished.add(to); doneTs[to] = e.ts; } } else if (runByTool[e.toolId]) for (const a of Object.values(runByTool[e.toolId].agents)) finished.add(a); }   // an agent that wrote again after its completion was continued; a run that stopped: so did every agent in it
   for (const run of Object.values(runs)) for (const a of run.done) finished.add(a);
-  let recentUntil = 0; for (const a of Object.values(agents)) if (a.id !== 'main' && a.mtime && now0 - a.mtime <= 240000) recentUntil = Math.max(recentUntil, a.mtime + 241000);
-  for (const a of Object.values(agents)) if (a.id !== 'main' && now0 - (a.mtime || 0) > 240000) finished.add(a.id);   // old transcripts without a completion record: silent for 4 min counts as finished
-  const events = [], parent = {}, doneSeen = new Set(), lastTs = {}; for (const st of states) if (st) lastTs[st.agent] = st.lastTs || 0;
+  let recentUntil = 0;   // the next moment the silence rule flips for someone: the cached timeline is rebuilt then
+  for (const a of Object.values(agents)) if (a.id !== 'main' && !finished.has(a.id)) {   // transcripts without a completion record: a closed turn and 6 min of silence, or 30 min stuck mid-call
+    const quiet = stOf[a.id] && stOf[a.id].ended ? QUIET_DONE_MS : QUIET_STUCK_MS;
+    if (now0 - (a.mtime || 0) > quiet) finished.add(a.id); else { const at = a.mtime + quiet + 1000; if (!recentUntil || at < recentUntil) recentUntil = at; }
+  }
+  const events = [], parent = {}, doneSeen = new Set();
   const finish = (to, ts, by) => { if (!doneSeen.has(to)) { doneSeen.add(to); events.push({ ts, agent: to, kind: 'finish', to: by, k: 'f/' + to }); } };   // one per agent, whichever record says it first: the key is the agent, not the record
   for (const st of states) {
     if (!st) continue;
@@ -378,13 +384,13 @@ function buildTimeline(proj, id, files = []) {
     const run = agents[st.agent] && agents[st.agent].wf ? runs[agents[st.agent].wf] : null;
     if (run && st.prompt) { parent[st.agent] = run.by || 'main'; events.push({ ts: st.prompt.ts, agent: parent[st.agent], to: st.agent, kind: 'order', ...(run.toolId ? { toolId: run.toolId } : {}), bg: true, wf: agents[st.agent].wf, text: st.prompt.text, title: agents[st.agent].role, k: 'o/' + st.agent }); }   // the order a workflow gave is the first message of the agent's own file: shown as an order from whoever launched the workflow (the lead when nothing says who), given in the background, when the agent started
     st.raw.forEach((e, i) => {
-      if (e.kind === 'agentdone') { const to = childByTool[e.toolId], wr = runByTool[e.toolId]; if (to) finish(to, e.ts, e.agent); else if (wr) for (const a of Object.values(wr.agents)) if (!wr.done.has(a)) finish(a, Math.max(e.ts, lastTs[a] || 0), e.agent); }   // the agents the journal knows about are finished below, at their own time
+      if (e.kind === 'agentdone') { const to = childByTool[e.toolId], wr = runByTool[e.toolId]; if (to) { if (doneTs[to] === e.ts) finish(to, e.ts, e.agent); } else if (wr) for (const a of Object.values(wr.agents)) if (!wr.done.has(a)) finish(a, Math.max(e.ts, lastTs[a] || 0), e.agent); }   // the agents the journal knows about are finished below, at their own time
       else if (e.kind === 'agentcall') { const to = childByTool[e.toolId]; if (to) { parent[to] = e.agent; events.push({ ts: e.ts, agent: e.agent, to, kind: 'order', toolId: e.toolId, bg: e.bg, text: e.text, title: e.title, k: e.k }); } }
       else if (e.kind === 'wfrun' || e.kind === 'wfdone') return;
       else if (i === lastSay) events.push({ ...e, kind: 'report', to: null });   // `to` filled below, once every order is known
       else events.push(e);
     });
-    if (run && run.done.has(st.agent) && st.lastTs) finish(st.agent, st.lastTs, parent[st.agent] || 'main');   // the journal has no times: the agent finished when it last wrote
+    if (st.agent !== 'main' && finished.has(st.agent) && st.lastTs) finish(st.agent, st.lastTs, parent[st.agent] || 'main');   // no completion record with a time (a workflow's journal, a long silence): the agent finished when it last wrote
     for (const [mid, mu] of st.msgUsage) events.push({ ts: mu.ts, agent: st.agent, kind: 'usage', u: mu.u, model: mu.model, k: 'u/' + st.agent + '/' + mid });
   }
   for (const e of events) if (e.kind === 'report' && e.to === null) e.to = parent[e.agent] || 'main';

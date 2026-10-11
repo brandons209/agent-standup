@@ -40,7 +40,7 @@ async function run(i) {
         const e2 = S.events[j];
         if (e2.kind === 'usage' || e2.kind === 'compact') { tally(e2); j++; continue; }
         if (e2.kind === 'finish') { applyStatus(e2); if (isSub(e2.agent)) fin.push(e2.agent); j++; continue; }
-        if (e2.kind === 'tools') { tally(e2); tickTools(e2); applyStatus(e2); j++; continue; }
+        if (e2.kind === 'tools') { tally(e2); applyStatus(e2); tickTools(e2); j++; continue; }
         if (e2.kind === 'results') { tally(e2); applyResults(e2, true); j++; continue; }
         if (e2.kind !== 'order' && isSub(e2.agent) && !group.some((g) => g.agent === e2.agent)) { group.push(e2); j++; } else break;
       }

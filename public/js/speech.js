@@ -30,7 +30,7 @@ const BYE = { en: ['Bye, everyone!', 'Off I go. 👋', 'Thanks, see you!', 'My w
   fr: ['Salut tout le monde !', 'Je file. 👋', 'Merci, à plus !', 'Ma mission est terminée.', 'À tout à l’heure !', 'Je me déconnecte, ciao !', 'C’est dans la boîte !', 'Bon courage pour la suite !', 'Mic drop. 🎤', 'Je quitte l’appel… ☕'] };
 function byeLine(id) { const P = BYE[FR() ? 'fr' : 'en'], seed = hash(id + String(S.clock | 0)); let l = P[seed % P.length]; if (l === S.lastBye) l = P[(seed + 1) % P.length]; return (S.lastBye = l); }
 function vanish(id) {
-  S.gone.add(id); const t = $('#t-' + id), p = S.agents[id]; if (!t || !p) return;
+  S.gone.add(id); unshare(id); const t = $('#t-' + id), p = S.agents[id]; if (!t || !p) return;
   toast(`${p.name} ${L('a quitté l’appel', 'left the call')} 👋`);
   if (t.style.display === 'none' || document.body.classList.contains('tree')) return;
   S.leaving.add(id); const say = prefs.banter && !S.hurry && !S.speakers.has(id), go = () => { t.classList.remove('bye'); if (!S.leaving.has(id)) return; t.classList.add('vanishing'); poof(t, p.shirt); AUD.tone(660, .35, 'sine', .07); AUD.tone(330, .5, 'sine', .06, .12);

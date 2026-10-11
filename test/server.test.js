@@ -237,3 +237,33 @@ test('the page is served as files that are never kept stale, and nothing outside
     for (const p of ['/js/../../server.js', '/js/..%2f..%2fserver.js', '/js/%2e%2e/%2e%2e/package.json', '/js/nope.js', '/js/']) assert.equal((await get(port, p)).status, 404, p);
   } finally { stop(); }
 });
+test('a silent sub-agent is finished only once its turn has closed; one continued after its completion is not', async () => {
+  const dir = path.join(tmp, 'projects', '-q'), sd = path.join(dir, 's', 'subagents'); fs.mkdirSync(sd, { recursive: true });
+  const T = Date.now() - 20 * 60000, at = (s) => new Date(T + s * 1000).toISOString(), line = (r) => JSON.stringify(r) + '\n';
+  const call = (id, s) => line({ type: 'assistant', timestamp: at(s), message: { id: 'm' + id, stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name: 'Bash', input: { command: 'sleep 999' } }] } });
+  const answer = (id, s) => line({ type: 'user', timestamp: at(s), message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } });
+  const say = (text, s, end) => line({ type: 'assistant', timestamp: at(s), message: { id: 'm' + s, stop_reason: end ? 'end_turn' : null, content: [{ type: 'text', text }] } });
+  const notify = (tid, s) => line({ type: 'queue-operation', timestamp: at(s), content: `<task-notification><tool-use-id>${tid}</tool-use-id><status>completed</status></task-notification>` });
+  let main = line({ type: 'user', timestamp: at(0), message: { role: 'user', content: 'go' } });
+  const agents = { busy: [say('Running the long command.', 2), call('tb', 3)], idle: [say('All done here.', 2, true)], cont: [say('First pass done.', 2, true), call('tc', 40)], think: [call('tt', 2), answer('tt', 3)] };
+  for (const [k, recs] of Object.entries(agents)) {
+    const tid = 'toolu_' + k; main += line({ type: 'assistant', timestamp: at(1), message: { id: 'l' + k, content: [{ type: 'tool_use', id: tid, name: 'Agent', input: { description: k, prompt: 'p', run_in_background: true } }] } });
+    main += line({ type: 'user', timestamp: at(1), message: { content: [{ type: 'tool_result', tool_use_id: tid, content: 'Async agent launched successfully.' }] } });
+    fs.writeFileSync(path.join(sd, `agent-${k}.meta.json`), JSON.stringify({ agentType: 'x', description: k, toolUseId: tid })); fs.writeFileSync(path.join(sd, `agent-${k}.jsonl`), line({ type: 'user', timestamp: at(1), message: { role: 'user', content: 'p' } }) + recs.join(''));
+  }
+  main += notify('toolu_cont', 3); fs.writeFileSync(path.join(dir, 's.jsonl'), main);
+  const ago = (min) => new Date(Date.now() - min * 60000); for (const k of ['busy', 'idle', 'cont', 'think']) fs.utimesSync(path.join(sd, `agent-${k}.jsonl`), ago(7), ago(7));
+  const srv = require('../server.js').start(0); await new Promise((r) => srv.once('listening', r)); const port = srv.address().port;
+  try {
+    const ev = JSON.parse((await get(port, '/api/session?proj=-q&id=s')).body).events, done = (k) => ev.filter((e) => e.agent === k && (e.kind === 'finish' || e.kind === 'report')).map((e) => e.kind).sort().join();
+    assert.equal(done('busy'), '', 'a long command is not the end');
+    assert.equal(done('idle'), 'finish,report', 'closed its turn, then 6 min of silence');
+    assert.equal(done('think'), '', 'thinking about a result is not the end');
+    assert.equal(done('cont'), '', 'continued after its completion notice');
+    for (const k of ['busy', 'think']) fs.utimesSync(path.join(sd, `agent-${k}.jsonl`), ago(31), ago(31));
+    fs.appendFileSync(path.join(dir, 's.jsonl'), line({ type: 'user', timestamp: at(50), message: { role: 'user', content: 'again' } }));
+    await new Promise((r) => setTimeout(r, 300));   // past the rebuild throttle
+    const ev2 = JSON.parse((await get(port, '/api/session?proj=-q&id=s')).body).events;
+    for (const k of ['busy', 'think']) assert.equal(ev2.filter((e) => e.agent === k && e.kind === 'finish').length, 1, k + ': 30 min stuck counts as finished');
+  } finally { srv.close(); require('../server.js').shutdown(); }
+});

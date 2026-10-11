@@ -85,7 +85,7 @@ function paintShares() {   // the container, the presenter marks on the tiles, a
   const k = n + (pic ? 'p' : ''); if (k !== S.shareK) { S.shareK = k; layout(); }   // the stage is laid out again only when the screens change size
 }
 function share(id) {
-  if (S.boost > 1 || !S.agents[id]) return; const cur = S.shares.get(id);
+  if (S.boost > 1 || !S.agents[id] || S.gone.has(id)) return; const cur = S.shares.get(id);
   if (cur) { renderPane(cur.el, id); return; }
   if (S.shares.size < shareCap()) {
     const el = document.createElement('div'); el.className = 'pane'; el.innerHTML = paneHTML(); $('#shares').appendChild(el);
@@ -107,7 +107,7 @@ function tickShares(dt) {   // a pane whose agent is no longer busy goes, after 
   if (!S.playing || S.hold) return; S.vclock += dt;
   for (const [id, s] of [...S.shares]) {
     if (shareBusy(id)) { s.idle = 0; continue; } s.idle = (s.idle || 0) + dt; if (s.idle < SHARE_GRACE / Math.max(1, spd() / 1.2)) continue;
-    const next = Object.keys(S.run).find((o) => !S.shares.has(o) && shareBusy(o) && $('#t-' + o) && $('#t-' + o).style.display !== 'none');
+    const next = Object.keys(S.run).find((o) => !S.shares.has(o) && !S.gone.has(o) && shareBusy(o) && $('#t-' + o) && $('#t-' + o).style.display !== 'none');
     if (next) swapPane(id, next); else unshare(id);
   }
 }

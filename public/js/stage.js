@@ -95,6 +95,9 @@ function paintStatus() {
   $('#seek').value = S.idx; $('#pos').textContent = `${Math.min(S.idx + 1, S.events.length)} / ${S.events.length}`;
 }
 const applyStatus = (ev) => {
+  if ((ev.kind === 'tools' || ev.kind === 'say') && S.status[ev.agent] === 'done') {   // a finished agent at work again (continued, or wrongly thought done): back on the call
+    const id = ev.agent; S.status[id] = 'working'; delete S.doneAt[id]; delete S.quipped[id]; S.gone.delete(id); S.leaving.delete(id); const t = $('#t-' + id); if (t) t.classList.remove('vanishing');
+  }
   if (ev.kind === 'order') { (S.waitOn[ev.agent] = S.waitOn[ev.agent] || new Set()).add(ev.to); S.orderTs[ev.to] = ev.ts || 0; S.status[ev.to] = 'working'; delete S.doneAt[ev.to]; S.gone.delete(ev.to); S.leaving.delete(ev.to); if (!ev.bg && ev.toolId) S.run[ev.agent] = { id: ev.toolId, ts: ev.ts, start: performance.now(), name: 'Agent' }; const t = $('#t-' + ev.to); if (t) t.classList.remove('vanishing'); }
   if (ev.kind === 'finish') { if (S.waitOn[ev.to]) S.waitOn[ev.to].delete(ev.agent); if (S.status[ev.agent] !== 'done') { S.status[ev.agent] = 'done'; S.doneAt[ev.agent] = S.clock; } delete S.run[ev.agent]; const lr = S.run[ev.to]; if (lr && /^(Task|Agent)$/.test(lr.name) && !(S.waitOn[ev.to] && S.waitOn[ev.to].size)) delete S.run[ev.to]; }
   if (ev.kind === 'report') { if (S.waitOn[ev.to]) S.waitOn[ev.to].delete(ev.agent); S.status[ev.agent] = 'done'; S.doneAt[ev.agent] = S.clock; delete S.run[ev.agent]; }
@@ -106,7 +109,7 @@ function recomputeStatus(upTo) {
   for (let i = 0; i < upTo; i++) {
     const e = S.events[i]; applyStatus(e); tally(e); if (e.kind === 'tools') S.tc[e.agent] = (S.tc[e.agent] || 0) + e.tools.length;
     if (i >= upTo - 160) { if (e.kind === 'tools') e.tools.forEach((t) => pushTerm(e.agent, t)); else if (e.kind === 'results') applyResults(e, true); }
-    if (e.kind === 'report' || e.kind === 'finish') doneIdx[e.agent] = i; if (e.kind === 'order') delete doneIdx[e.to];
+    if (e.kind === 'report' || e.kind === 'finish') doneIdx[e.agent] = i; else if (S.status[e.agent] === 'working') delete doneIdx[e.agent]; if (e.kind === 'order') delete doneIdx[e.to];
   }
   S.recomputing = false; later('tok', renderTokens, 50); later('badges', renderBadges, 50);
   const now = S.events[Math.max(0, upTo - 1)];   // agents that finished long before this point are already gone
