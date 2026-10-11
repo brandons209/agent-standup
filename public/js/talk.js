@@ -147,7 +147,7 @@ async function leadAck(ev, token) {
 async function wrapUp(token) {   // live, once the lead is done: the part of its last message that the clipped reading left out, so you know what was done
   if (!S.wrap || S.speakers.size || !prefs.voice && !prefs.banter) return false; S.wrap = false;
   let k = S.events.length - 1; while (k >= 0 && !(S.events[k].agent === 'main' && S.events[k].kind === 'say')) k--; if (k < 0) return false; const e = S.events[k], m = S.mainSaid;
-  if (S.wrapped === e || e.ts <= (S.from || 0)) return false; S.wrapped = e;   // once per message: the lead's state can flip to done several times (a short command, a silence) without a new message
+  const wk = S.cur && S.cur.id + '/' + e.k; if (S.wrapped === wk || e.ts <= (S.from || 0)) return false; S.wrapped = wk;   // once per message, by key (the object is new after a reload): the lead's state can flip to done several times (a short command, a silence) without a new message
   const full = plain(e.text); let rest = m && m.ev === e ? full.slice(m.said).trim() : full; if (m && m.ev === e && m.full) return false; if (!m || m.ev !== e) rest = full;
   rest = rest.replace(/^[^\w\p{L}]+/u, ''); if (rest.length < 25) return false; const line = (m && m.ev === e ? L('Pour résumer : ', 'To sum up: ') : '') + short(rest, 520);
   await sayLine('main', line, '🎉', token); return true;

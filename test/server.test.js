@@ -189,3 +189,20 @@ test('the reasoning before a line or a call rides on it when the transcript keep
     assert.deepEqual(ev.map((e) => [e.kind, e.th || null]), [['tools', 'The query scans the whole table. I should check the index.'], ['say', null]]);
   } finally { srv.close(); require('../server.js').shutdown(); }
 });
+test('how far a session was said is kept per session, never goes back, and outlives a reload of its feed', async () => {
+  const dir = path.join(tmp, 'projects', '-said'), line = (t, text) => JSON.stringify({ type: 'assistant', timestamp: new Date(t).toISOString(), message: { id: 'm' + t, role: 'assistant', content: [{ type: 'text', text }] } }) + '\n';
+  fs.mkdirSync(dir, { recursive: true }); const t0 = Date.now() - 60000;
+  fs.writeFileSync(path.join(dir, 'a.jsonl'), line(t0, 'one') + line(t0 + 1000, 'two')); fs.writeFileSync(path.join(dir, 'b.jsonl'), line(t0, 'other'));
+  const srv = require('../server.js').start(0); await new Promise((r) => srv.once('listening', r)); const port = srv.address().port;
+  const load = async (id) => { const r = await get(port, `/api/session?proj=-said&id=${id}`), d = JSON.parse(r.body); return { said: +r.headers['x-said'], ep: d.ep, seq: d.seq }; };
+  const poll = (id, f, said) => get(port, `/api/session?proj=-said&id=${id}&after=${f.seq}&ep=${encodeURIComponent(f.ep)}&said=${said}`);
+  try {
+    const a = await load('a'); assert.equal(a.said, 0);
+    await poll('a', a, t0 + 1000); assert.equal((await load('a')).said, t0 + 1000);
+    await poll('a', a, t0); assert.equal((await load('a')).said, t0 + 1000, 'never goes back');
+    await poll('a', a, Date.now() + 3600e3); assert.equal((await load('a')).said, t0 + 1000, 'a time far in the future is ignored');
+    assert.equal((await load('b')).said, 0, 'per session');
+    fs.writeFileSync(path.join(dir, 'a.jsonl'), line(t0, 'a different conversation') + line(t0 + 500, 'x'.repeat(4000))); await new Promise((r) => setTimeout(r, 300));   // rewritten in place: a new feed
+    const a2 = await load('a'); assert.notEqual(a2.ep, a.ep); assert.equal(a2.said, t0 + 1000, 'outlives the new feed');
+  } finally { srv.close(); require('../server.js').shutdown(); }
+});

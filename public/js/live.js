@@ -3,8 +3,8 @@
 // =====================================================================
 async function loadSession(proj, id) {
   pause(); const mine = (S.loadN = (S.loadN || 0) + 1);
-  const data = await (await fetch(`/api/session?proj=${encodeURIComponent(proj)}&id=${id}`)).json();
-  if (mine !== S.loadN || data.error) return false;
+  const r = await fetch(`/api/session?proj=${encodeURIComponent(proj)}&id=${id}`), data = await r.json();
+  if (mine !== S.loadN || data.error) return false; S.saidSrv = +r.headers.get('x-said') || 0;
   S.term = {}; S.camFor = null; S.focus = null; S.agents = {}; for (const k in nameBook) delete nameBook[k]; [{ id: 'user' }, ...data.agents].forEach((a) => (S.agents[a.id] = persona(a)));
   clearThoughts(); Object.assign(TH, { since: {}, next: {}, said: {}, last: 0 }); S.events = data.events; stampT(0); S.byK = new Map(data.events.map((e) => [e.k, e])); S.seq = data.seq || 0; S.ep = data.ep || ''; S.sawEnd = data.events.some((e) => e.end); S.late = []; S.pos = 0; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
   const opt = $('#sessions').selectedOptions[0]; S.title = (S.live ? niceProj(proj) : opt && opt.dataset.title) || '';
@@ -19,11 +19,11 @@ async function fillProjects() {   // live view: follow the latest activity anywh
 }
 $('#liveProj').onchange = () => { Q.delete('proj'); prefs.proj = $('#liveProj').value; S.pin = ''; savePrefs(); S.cur = null; followCurrent(); };
 async function followCurrent() {
-  const cur = await (await fetch('/api/current?proj=' + encodeURIComponent(Q.get('proj') || prefs.proj || '') + (S.pin ? '&id=' + encodeURIComponent(S.pin) : '') + (S.cur && !S.pin ? '&sproj=' + encodeURIComponent(S.cur.proj) + '&sid=' + encodeURIComponent(S.cur.id) : ''))).json();
+  const cur = await (await fetch('/api/current?proj=' + encodeURIComponent(Q.get('proj') || prefs.proj || '') + (S.pin ? '&id=' + encodeURIComponent(S.pin) : '') + (S.stick && !S.pin ? '&sproj=' + encodeURIComponent(S.stick.proj) + '&sid=' + encodeURIComponent(S.stick.id) : ''))).json();
   if (!cur.id) { $('#empty').classList.add('on'); return false; } $('#empty').classList.remove('on');
   if (S.pin && cur.id !== S.pin) S.pin = '';   // the pinned session is gone: follow the latest one instead of staying silently pinned
   if (S.cur && S.cur.id === cur.id && S.cur.proj === cur.proj) return false;
-  if (!(await loadSession(cur.proj, cur.id))) return false;
+  if (!(await loadSession(cur.proj, cur.id))) return false; S.stick = { proj: cur.proj, id: cur.id };   // kept when a reload clears S.cur, so it does not hand the call to another session
   const start = liveStart(); if (!S.locked && !S.userPaused) run(start); return true;
 }
 // Live: a call starts when you join it. Only what happened since then, and was not said yet, is said (the last 16 events at most, when a session is picked up on the way);
@@ -32,9 +32,10 @@ const JOIN_BACK_MS = 10000;
 function midWork() {   // someone is in the middle of something: the session does not end on a message of the lead (its turn is over then, or about to be)
   let k = S.events.length - 1; while (k >= 0 && (S.events[k].kind === 'usage' || S.events[k].kind === 'compact')) k--; const e = S.events[k]; return !!e && !(e.agent === 'main' && e.kind === 'say');
 }
-function liveStart() {
-  const n = S.events.length; if (!S.locked && !S.since) S.since = Date.now() - (midWork() ? JOIN_BACK_MS : 0);   // S.since 0: joining now
-  const since = S.locked ? Date.now() : S.since; let i = n; while (i > Math.max(0, n - 16) && S.events[i - 1].ts > since) i--;
+function liveStart() {   // S.saidSrv: how far this session was already said (by any page, before a reload); S.join: you are joining now, so what came before is past
+  const n = S.events.length, now = Date.now() - (midWork() ? JOIN_BACK_MS : 0);
+  if (!S.locked) { S.since = S.join ? Math.max(S.saidSrv || 0, now) : S.saidSrv || now; S.join = false; }
+  const since = S.locked ? Date.now() : S.since; let i = n; while (i > Math.max(0, n - 16) && S.events[i - 1].ts > since) i--;   // by the session's own stamps, as run() marks them: _t depends on the order this page received events in, so it would not survive a reload
   recomputeStatus(i); S.idx = S.pos = i; S.from = since; trNew(Math.max(0, n - 16)); paintStatus(); return i;
 }
 function amend(e, was) {   // the server corrected an event the call already has: another tool call in the same message, a last line that turns out to be a report, the mark that closes the lead's turn
@@ -52,7 +53,7 @@ setInterval(async () => {
   try {
     const switched = await followCurrent(); if (S.offline) { S.offline = false; syncUI(); }
     if (switched || !S.cur) return;
-    const cur = S.cur, d = await (await fetch(`/api/session?proj=${encodeURIComponent(cur.proj)}&id=${cur.id}&after=${S.seq}&ep=${encodeURIComponent(S.ep)}`)).json();
+    const cur = S.cur, d = await (await fetch(`/api/session?proj=${encodeURIComponent(cur.proj)}&id=${cur.id}&after=${S.seq}&ep=${encodeURIComponent(S.ep)}${S.since ? '&said=' + S.since : ''}`)).json();
     if (d.error || cur !== S.cur) return; if (d.resync) { S.cur = null; return; }   // the server no longer has our place (restarted, transcript rewritten): reload next tick
     S.seq = d.seq; if (!d.events || !d.events.length) return;
     for (const a of d.agents) if (!S.agents[a.id]) { S.agents[a.id] = persona(a); addTile(S.agents[a.id]); }
@@ -141,7 +142,7 @@ async function setMode(m) {
   const live = m === 'live'; if (live === S.live && S.cur) return; pause(); S.live = live; S.userPaused = false;
   document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.m === m)); $('#sessions').style.display = live ? 'none' : '';
   S.cur = null; syncUI();
-  if (live) { S.since = 0; fillProjects(); await followCurrent(); return; }
+  if (live) { S.join = true; fillProjects(); await followCurrent(); return; }
   $('#liveProj').style.display = 'none';
   const rows = await (await fetch('/api/sessions')).json();
   $('#sessions').innerHTML = rows.map((r) => { const d = new Date(r.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });

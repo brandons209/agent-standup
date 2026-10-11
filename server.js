@@ -131,7 +131,9 @@ function stamp(proj, id) {
   return n;
 }
 const tlCache = new Map();   // "proj/id" → { st (file stamp), tl, at, ms, files[], feed, sq, json?, gz?, idle? }
-const MAX_CACHED_SESSIONS = 3;
+const MAX_CACHED_SESSIONS = 8;   // one tab per session: several are watched at once, and every eviction makes their pages load again
+const saidTs = new Map();   // "proj/id" → the newest event time a page has said in that session; outlives the timeline cache, so a reloaded or moved page does not read it again
+function noteSaid(key, v) { const n = +v; if (!(n > 0) || n > Date.now() + 60000) return saidTs.get(key) || 0; const m = Math.max(saidTs.get(key) || 0, n); saidTs.delete(key); saidTs.set(key, m); if (saidTs.size > 200) saidTs.delete(saidTs.keys().next().value); return m; }
 function timelineEntry(proj, id) {
   const key = proj + '/' + id, st = stamp(proj, id), hit = tlCache.get(key), now = Date.now();
   if (hit && ((hit.st === st && !(hit.recentUntil && now > hit.recentUntil)) || now - hit.at < Math.max(250, hit.ms * 2))) {   // nothing was written (a sub-agent's 4-minute silence rule can flip without any file change); or a very big session, which is not rebuilt on every poll
@@ -697,12 +699,12 @@ function start(port = PORT) {
       if (!SAFE.test(proj) || !SAFE.test(sid) || proj === '..' || sid === '..' || proj.length > 200 || sid.length > 200) { res.writeHead(400); return res.end('bad request'); }
       if (proj !== '_demo' && !fs.existsSync(path.join(ROOT, proj, sid + '.jsonl'))) return json({ error: 'session not found' }, 404);
       const entry = proj === '_demo' ? demoEntry() : timelineEntry(proj, sid), tl = entry.tl;   // built-in fictional session
-      const after = url.searchParams.get('after'), ep = url.searchParams.get('ep');
+      const after = url.searchParams.get('after'), ep = url.searchParams.get('ep'), said = noteSaid(proj + '/' + sid, url.searchParams.get('said'));
       if (after == null) {   // the whole timeline: serialize once per version, send gzip-compressed when the browser allows it (12 MB → ~1.5 MB)
         const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
         if (!entry.json) entry.json = JSON.stringify(tl);
         if (gz && !entry.gz) entry.gz = zlib.gzipSync(entry.json, { level: 5 });
-        res.writeHead(200, { 'content-type': 'application/json', ...(gz ? { 'content-encoding': 'gzip' } : {}), vary: 'accept-encoding' });
+        res.writeHead(200, { 'content-type': 'application/json', ...(gz ? { 'content-encoding': 'gzip' } : {}), vary: 'accept-encoding', 'x-said': String(said) });   // a header: the body is serialized once per version
         return res.end(gz ? entry.gz : entry.json);
       }
       if (ep == null) return json({ id: tl.id, agents: tl.agents, total: tl.events.length, events: tl.events.slice(+after) });   // a page loaded before 1.25.7 still asks by position

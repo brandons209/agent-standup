@@ -109,7 +109,7 @@ $('#eDemo').onclick = async () => { await setMode('demo'); if (S.demo && !S.play
 $('#gB').onclick = () => {
   claimAudio(); AUD.init(); AUD.apply(); S.locked = false; $('#gate').classList.remove('on'); syncUI();
   if (synth && !EMBED) { try { synth.speak(new SpeechSynthesisUtterance('')); } catch {} }   // unlock browser speech
-  S.since = 0; if (S.live && S.events.length) run(liveStart());   // what arrived while the door was closed is past too
+  S.join = true; if (S.live && S.events.length) run(liveStart());   // what arrived while the door was closed is past too
 };
 // J / K (or a click on the “need you” chip) jump to the agents that need you or are stalled, one after the other
 function jumpAttn(dir = 1) {

@@ -140,6 +140,25 @@ test('live call', { skip: missing || false, timeout: 600000 }, async (t) => {
     assert.equal((await c.said()).filter((x) => x.id === 'a1' && x.line.includes('Check the migration')).length, 0); s.result(run, 'ok', { sub: 1 }); await c.close();
   });
 
+  await t.test('a page reloaded in the middle of a call does not say again what it already said', async () => {
+    const s = session(); s.user('hello', Date.now() - 600000); s.say('Ready.', { at: Date.now() - 590000, end: true }); let c = await open(s);
+    s.user('Do the thing'); await wait(1200); s.say('FIRST step done.'); await c.heard('FIRST step'); await c.quiet(1500); await c.close();
+    c = await open(s); s.say('SECOND step done.', { end: true }); await c.heard('SECOND step'); await c.quiet();
+    const l = await c.lines(); assert.equal(count(l, 'FIRST step'), 0); assert.equal(count(l, 'SECOND step'), 1); await c.close();
+  });
+
+  await t.test('following the latest session: a call keeps its session while the other one writes, also across a reload of its feed', async () => {
+    const a = session(), b = session(); a.user('A order', Date.now() - 600000); a.say('A ready.', { at: Date.now() - 590000, end: true });
+    const page = await browser.newPage(), errors = []; page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(`http://localhost:${port}/?live=1&proj=`); await page.waitForFunction('typeof S !== "undefined" && S.cur', { timeout: 15000 }); await page.click('#gB');
+    a.say('A is working.'); await page.waitForFunction((p) => S.cur && S.cur.proj === p, { timeout: 15000 }, a.proj);
+    b.user('B order'); b.say('B line one.'); await wait(1500); b.say('B line two.'); await wait(1500);
+    assert.equal(await page.evaluate(() => S.cur.proj), a.proj, 'stays on its session while the other writes');
+    await page.evaluate(() => { S.cur = null; }); await wait(2500);   // a reload of the feed (restart, rewritten transcript)
+    assert.equal(await page.evaluate(() => S.cur && S.cur.proj), a.proj, 'a reload does not hand the call to the other session');
+    await page.close(); assert.deepEqual(errors, []);
+  });
+
   await t.test('pausing and resuming at the end of a live call does not repeat the last line', async () => {
     const s = session(); s.user('hello', Date.now() - 600000); s.say('Ready.', { at: Date.now() - 590000, end: true }); const c = await open(s);
     s.user('One thing'); await wait(1200); s.say('LAST line of the call.', { end: true }); await c.heard('LAST line'); await c.quiet(500);

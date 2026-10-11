@@ -23,7 +23,7 @@ function computeHighlights() {
     if (e.kind === 'results' && firstErr < 0 && e.items.some((it) => it.err)) firstErr = i;
     if (e.kind === 'compact') comp.push(i);
     if (prevT != null && e.kind !== 'user' && e.t - prevT <= 3600000 && e.t - prevT > gap.ms) gap = { ms: e.t - prevT, i };   // a wait for the human (the next event is their prompt) is not an agent wait
-    if (e.kind !== 'compact') prevT = e.t;
+    if (e.kind !== 'compact') prevT = Math.max(prevT ?? e.t, e.t);   // the call gets some events late with an older stamp
     const d = loopStep(R, e); if (d && loops.length < 3 && !loops.some((l) => l.agent === e.agent)) loops.push({ i, agent: e.agent, d });
   });
   if (firstErr >= 0) out.push({ i: firstErr, k: 'err', t: '✗ ' + L('première erreur', 'first error') });
@@ -52,7 +52,7 @@ function openRecap() {
     if (e.kind === 'tools') e.tools.forEach((t) => { tools++; A(e.agent).tools++; if (t.name === 'Bash') cmds++; const d = t.d || {};
       if ((d.kind === 'edit' || d.kind === 'write') && d.file) { A(e.agent).files.add(d.file); (files[d.file] = files[d.file] || { n: 0, who: new Set() }).n++; files[d.file].who.add(nameOf(e.agent)); } });
   });
-  const last = S.events.length ? S.events[S.events.length - 1].t : 0, rows = Object.values(per).filter((a) => a.id !== 'user' && S.agents[a.id]).sort((a, b) => b.tools - a.tools).slice(0, 18), fl = Object.entries(files).sort((a, b) => b[1].n - a[1].n).slice(0, 25);
+  const last = S.events.reduce((m, e) => Math.max(m, e.t || 0), 0), rows = Object.values(per).filter((a) => a.id !== 'user' && S.agents[a.id]).sort((a, b) => b.tools - a.tools).slice(0, 18), fl = Object.entries(files).sort((a, b) => b[1].n - a[1].n).slice(0, 25);
   const k = (v, l) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`, totTok = Object.values(tk).reduce((n, u) => n + tokTotal(u), 0);
   $('#recap .box').innerHTML = `<h1>${L('Récap de l’épisode', 'Episode recap')}</h1>
     <div class="kpis">${k(Math.max(0, Object.keys(S.agents).length - 2), 'agents')}${k(tools, L('appels d’outils', 'tool calls'))}${k(cmds, L('commandes', 'commands'))}${k(errs, L('outils en erreur', 'tool errors'))}${totTok ? k('⚡ ' + fmtTok(totTok), L('jetons', 'tokens')) : ''}${k(Object.keys(files).length, L('fichiers modifiés', 'files changed'))}${k(fmt(last), L('durée', 'duration'))}</div>
