@@ -169,6 +169,14 @@ test('live call', { skip: missing || false, timeout: 600000 }, async (t) => {
     assert.ok(mine.length <= 2, 'at most one line per 12 s from one agent'); assert.equal(await c.page.evaluate(() => window.__overlap), 0, 'never over someone else'); await c.close();
   });
 
+  await t.test('a sub-agent that finishes says so once and celebrates', async () => {
+    const s = session(); s.user('hello', Date.now() - 600000); s.say('Ready.', { at: Date.now() - 590000, end: true }); const c = await open(s);
+    s.user('Check the login'); await wait(1200); const id = s.launch(1, 'Check login', 'Look at the login page'); await wait(1500);
+    s.say('Looked at it: the query is slow.', { sub: 1 }); await wait(6000); s.result(id, 'Looked at it: the query is slow.'); await c.quiet();
+    const said = await c.said(); assert.ok(said.filter((x) => x.id === 'a1' && x.label === '🎉').length <= 1, 'at most one completion line');
+    assert.equal(await c.page.evaluate(() => S.quipped.a1), true); await c.close();
+  });
+
   await t.test('pausing and resuming at the end of a live call does not repeat the last line', async () => {
     const s = session(); s.user('hello', Date.now() - 600000); s.say('Ready.', { at: Date.now() - 590000, end: true }); const c = await open(s);
     s.user('One thing'); await wait(1200); s.say('LAST line of the call.', { end: true }); await c.heard('LAST line'); await c.quiet(500);

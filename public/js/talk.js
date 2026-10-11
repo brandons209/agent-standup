@@ -147,6 +147,17 @@ async function leadAck(ev, token) {
   if (!prefs.banter || !S.agents.main) { S.owed = false; return; } if (S.hurry || S.boost > 1 || !nearLive() || S.speakers.size) return; S.owed = false;   // reading your order took a while: the first tool is rarely less than 6 s old; if now is a bad moment, the next tool will do
   const W = LEAD[FR() ? 'fr' : 'en']; await sayLine('main', `${W.in[hash('k' + ev.ts) % W.in.length]} ${toolLine(ev, W)}`, '💬', token);
 }
+// A sub-agent that finishes its task says so, with a little flourish, and celebrates: once per agent. Right after it read its report out, only the celebration.
+const DONE = {
+  en: ['Wrapped up! 🎉', 'And that’s a wrap.', 'Done and dusted.', 'Nailed it.', 'Mission accomplished.', 'Ta-da! All done.', 'Another one off the list.', 'That’s me finished. High five?', 'Done. I’ll take my coffee now. ☕', 'Shipped it.'],
+  fr: ['Et voilà ! 🎉', 'C’est dans la boîte.', 'Terminé, et bien terminé.', 'Mission accomplie.', 'Tadaa ! C’est fini.', 'Un de moins sur la liste.', 'J’ai fini. On se tape dans la main ?', 'Fini. Je vais prendre un café. ☕', 'Livré !', 'Plié !'],
+};
+async function doneQuip(id, token) {
+  if (S.quipped[id]) return; S.quipped[id] = true; celebrate(id);
+  if (!S.live || !prefs.banter || !S.agents[id] || S.hurry || S.boost > 1 || !nearLive() || S.speakers.size || performance.now() - (S.reportAt[id] || -1e9) < 3000) return;   // its report was just read out: the dance says the rest
+  const P = DONE[FR() ? 'fr' : 'en'], seed = hash('d' + id + (S.cur ? S.cur.id : '')); let line = P[seed % P.length]; if (line === S.lastDone) line = P[(seed + 1) % P.length]; S.lastDone = line;
+  await sayLine(id, line, '🎉', token);
+}
 // Live: a sub-agent at work says now and then what it is doing, in turn with everyone else. Only when the call is up to date and quiet, never twice in a row
 // from the same agent, and a line that cannot be said now is dropped, not kept for later: five agents at work must not fill the call.
 const NARR = {

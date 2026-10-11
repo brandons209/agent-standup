@@ -26,7 +26,7 @@ async function run(i) {
     const ev = S.events[i]; S.idx = i; tally(ev); if (S.live && ev.ts > S.since) S.since = ev.ts;   // said once: a reload or a return to this session does not read it again
     if (!S.live && (ev.kind === 'say' || ev.kind === 'report' || ev.kind === 'order' || ev.kind === 'tools')) { await ponder(i, token); if (token !== S.token) return; }
     if (ev.kind === 'usage' || ev.kind === 'compact') { if (ev.kind === 'compact' && S.live && prefs.banter) toast(`${nameOf(ev.agent)}: ${L('contexte compacté 🗜', 'context compacted 🗜')}`); i++; continue; }
-    if (ev.kind === 'finish') { applyStatus(ev); paintStatus(); i++; continue; }
+    if (ev.kind === 'finish') { applyStatus(ev); paintStatus(); if (isSub(ev.agent)) { await doneQuip(ev.agent, token); if (token !== S.token) return; } i++; continue; }
     const backlog = S.live ? S.events.length - i : 0, quick = S.live ? Math.min(1, 40 / Math.max(1, backlog)) : 1;   // live: hundreds of tool events from parallel sub-agents must not take minutes to scroll past
     if (ev.kind === 'results') { applyResults(ev, S.boost > 1); if (quick === 1 && ev.items.some((it) => it.err)) { await narrate(ev, token, true); if (token !== S.token) return; } await sleep((S.boost === 1 && S.shares.has(ev.agent) && ev.items.some((it) => it.img) ? (S.live ? 900 : 1800) : S.demo ? 900 : S.live ? 30 * quick : 80) / spd()); i++; continue; }   // a picture gets a moment on screen
     if (ev.kind === 'tools') { applyStatus(ev); tickTools(ev); AUD.click(); OFFICE.kick(ev.tools[ev.tools.length - 1].name); paintStatus(); if (S.live && S.owed && ev.agent === 'main') { await leadAck(ev, token); if (token !== S.token) return; } if (quick === 1) { await narrate(ev, token); if (token !== S.token) return; await smallTalk(token); } await sleep((S.demo ? 1100 : S.live ? 110 * quick : 250) / spd()); i++; continue; }
@@ -54,7 +54,7 @@ async function run(i) {
       if (g.kind === 'order') { S.status[g.to] = 'working'; AUD.join(); setTimeout(() => { paintStatus(); fly(g.agent, g.to, '📨'); popTile(g.to); }, 30); }
       if (g.kind === 'report') { AUD.ding(); setTimeout(() => { fly(g.agent, g.to, '✅'); popTile(g.agent); }, 30); }
       const said = clipSpeech(line, S.pace); if (g.agent === 'main' && g.kind === 'say') { const full = plain(g.text), key = said.replace(/…$/, '').trim().slice(-30), pos = key ? full.indexOf(key) : -1, n = pos >= 0 ? pos + key.length : said.length; S.mainSaid = { ev: g, said: n, full: n >= full.length - 5 }; }
-      return speakLine(said, S.agents[g.agent], true, token, sessFr(said, g), g.kind === 'user').then(() => { if (token === S.token) stopTalk(g.agent); });
+      return speakLine(said, S.agents[g.agent], true, token, sessFr(said, g), g.kind === 'user').then(() => { if (token === S.token) stopTalk(g.agent); if (g.kind === 'report') S.reportAt[g.agent] = performance.now(); });
     };
     let plays;
     if (ev.kind === 'order' && group.length > 1) {   // the first order in full, then "Also Remy on X, Iris on Y"
