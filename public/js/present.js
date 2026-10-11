@@ -69,13 +69,13 @@ const lineHtml = (l, view) => view === 'editor'
 // One pane per agent that shares its screen (one at a time, or up to four with ⚙ "Several screens at once").
 // A pane stays while its agent is busy: a call running, or thinking between two calls until it speaks its report, finishes, or its turn ends.
 // Another agent only takes a pane after the one there was up for a moment, and the swap is a fade of the content, not a hide and show.
-const SHARE_CAP = 45000, SHARE_DWELL = 3000, SHARE_GRACE = 1500;
+const SHARE_DWELL = 3000, SHARE_GRACE = 1500, shareMaxMs = () => (prefs.shareS ?? 90) * 1000;   // shareMaxMs: thinking longer than this ends the share
 const shareCap = () => (prefs.multiShare && !document.body.classList.contains('narrow') ? 4 : 1);
 const paneOf = (id) => (S.shares.get(id) || {}).el || null;
 const primaryShare = () => { let b = null; for (const [id, s] of S.shares) if (!b || s.since < S.shares.get(b).since) b = id; return b; };   // the longest up: what the video export shows
 function busy(id) {
   const r = S.run[id]; if (r && !/^(Task|Agent)$/.test(r.name)) return true;   // the lead waiting on its sub-agents is not working on its own screen
-  return S.resAt[id] != null && S.clock - S.resAt[id] < SHARE_CAP && (id === 'main' ? !S.turnOver : S.status[id] !== 'done');
+  return S.resAt[id] != null && S.clock - S.resAt[id] < shareMaxMs() && (id === 'main' ? !S.turnOver : S.status[id] !== 'done');
 }
 const paneHTML = () => '<div class="pwin term"><div class="pbar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="ptitle"></span><span class="pbadge"></span></div><div class="pbody"></div><div class="pstat"></div></div><div class="ptodo" style="display:none"></div><div class="pcap"></div><div class="pcam tile working"></div>';
 function paintShares() {   // the container, the presenter marks on the tiles, and the stage around it
@@ -127,10 +127,10 @@ function renderPane(el, id) {
   }
   tl.dataset.k = tk;
   q('.pbadge').textContent = `🖥 ${p.name} ${L('partage son écran', 'is sharing their screen')}`;
-  const cam = q('.pcam'); if (el.dataset.cam !== id) { cam.innerHTML = avatarSVG(p, undefined, 'c' + p.gid + '_') + `<div class="tag"><b>${esc(p.name)}</b></div>`; el.dataset.cam = id; }
+  const cam = q('.pcam'); if (el.dataset.cam !== id) { cam.style.setProperty('--ac', p.shirt || '#7c9cff'); cam.innerHTML = avatarSVG(p, undefined, 'c' + p.gid + '_') + `<div class="tag"><b>${esc(p.name)}</b></div>`; el.dataset.cam = id; }
   const tile = $('#t-' + id); for (const c of ['speaking', 'thinking', 'celebrate']) cam.classList.toggle(c, c === 'speaking' ? S.speakers.has(id) : !!(tile && tile.classList.contains(c))); setFrame(cam, id);   // the camera in the corner moves like the tile
 }
-function setCaption(id, text) {   // the presenter's line is the caption of its own screen, and its tile bubble steps aside
+function setPaneCaption(id, text) {   // the presenter's line is the caption of its own screen, and its tile bubble steps aside
   const el = paneOf(id); if (!el) return; el.querySelector('.pcap').textContent = text;
   const t = $('#t-' + id); if (t) t.classList.toggle('capshown', !!text);
 }

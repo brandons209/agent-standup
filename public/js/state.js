@@ -4,7 +4,7 @@
 const S = { owner: null, errRun: {}, exQ: [], agents: {}, events: [], idx: 0, playing: false, token: 0, status: {}, tc: {}, cur: null, live: true, userPaused: false, boost: 1, stopAt: 0,
             speakers: new Set(), say: {}, lastTool: {}, level: {}, detail: null, collapsed: new Set(), title: '', idle: false, locked: true, logTo: 0, trOk: true,
             clock: 0, doneAt: {}, gone: new Set(), leaving: new Set(), demo: false, hold: false, late: [], byK: new Map(), pos: 0 };
-const VANISH_MS = 120000;   // a finished agent leaves the call after 2 minutes (playback time)
+const vanishMs = () => (prefs.vanishS ?? 30) * 1000;   // a finished agent leaves the call this long after (playback time)
 // Live: how far the call is behind the real session, and what to do about it (speak faster, say less, skip decoration) so it keeps the rhythm of the real conversation
 const lagMs = (i = S.idx) => {   // how much newer the newest event of the session is than the one being played: 0 when the call is up to date, however long the session has been idle
   if (!S.live || !S.events.length) return 0; const e = S.events[Math.max(0, Math.min(i, S.events.length - 1))];

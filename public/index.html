@@ -43,9 +43,12 @@
   <button class="mi" data-t="reactions"><span data-fr="Barre de réactions (👍 👏 ☕)" data-en="Reactions bar (👍 👏 ☕)">Barre de réactions (👍 👏 ☕)</span><i class="sw"></i></button>
   <button class="mi" data-t="banter"><span data-fr="Petites répliques et animations" data-en="Little lines & animations">Petites répliques et animations</span><i class="sw"></i></button>
   <div class="box"><div class="lbl"><span data-fr="Bavardage entre agents" data-en="Chatter between agents">Bavardage entre agents</span></div><select id="chatSel"><option value="quiet" data-fr="Discret" data-en="Quiet">Discret</option><option value="normal" data-fr="Normal" data-en="Normal">Normal</option><option value="lively" data-fr="Animé" data-en="Lively">Animé</option></select></div>
+  <button class="mi" data-t="logChat"><span data-fr="Le bavardage apparaît dans la transcription" data-en="Show chatter in the transcript">Le bavardage apparaît dans la transcription</span><i class="sw"></i></button>
   <button class="mi" data-t="narrate"><span data-fr="Les agents disent ce qu’ils font (en direct)" data-en="Agents say what they are doing (live)">Les agents disent ce qu’ils font (en direct)</span><i class="sw"></i></button>
   <button class="mi" data-t="multiShare"><span data-fr="Plusieurs écrans partagés à la fois" data-en="Several screens shared at once">Plusieurs écrans partagés à la fois</span><i class="sw"></i></button>
-  <button class="mi" data-t="vanish"><span data-fr="Retirer les agents terminés (2 min)" data-en="Remove finished agents (2 min)">Retirer les agents terminés (2 min)</span><i class="sw"></i></button>
+  <div class="box"><div class="lbl"><span data-fr="L’écran reste partagé pendant la réflexion" data-en="Screen stays shared while thinking">L’écran reste partagé pendant la réflexion</span></div><select id="shareSel"><option value="30">30 s</option><option value="60">1 min</option><option value="90">1 min 30</option><option value="180">3 min</option><option value="300">5 min</option></select></div>
+  <button class="mi" data-t="vanish"><span data-fr="Retirer les agents terminés" data-en="Remove finished agents">Retirer les agents terminés</span><i class="sw"></i></button>
+  <div class="box" id="vanishBox"><div class="lbl"><span data-fr="Après" data-en="After">Après</span></div><select id="vanishSel"><option value="10">10 s</option><option value="30">30 s</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option></select></div>
   <button class="mi" data-t="epi"><span data-fr="Réactions et blagues" data-en="Reactions & jokes">Réactions et blagues</span><i class="sw"></i></button>
   <h4 data-fr="Source" data-en="Source">Source</h4>
   <div class="box"><div class="seg" style="width:100%" id="modeSeg"><button data-m="live" style="flex:1">Live</button><button data-m="replay" style="flex:1">Replay</button><button data-m="demo" style="flex:1">Demo</button></div>
@@ -82,7 +85,7 @@
     <div id="detail"><div class="hd"><b id="dname"></b><button class="ic" id="dclose">✕</button></div><div id="dbody"></div></div>
   </section>
   </div>
-  <aside><i id="logGrip" aria-hidden="true"></i><h2 id="logH"><span>Transcript</span><button class="ic" id="logDock" title="Dock at the bottom">⇵</button></h2><input id="logQ" type="search" placeholder="Search…" aria-label="Search the transcript" style="margin:8px 10px;width:calc(100% - 20px)"><div id="log"></div></aside>
+  <aside><i id="logGrip" aria-hidden="true"></i><h2 id="logH"><span>Transcript</span><span><button class="ic" id="logText" title="Spoken lines only">💬</button><button class="ic" id="logDock" title="Dock at the bottom">⇵</button></span></h2><input id="logQ" type="search" placeholder="Search…" aria-label="Search the transcript" style="margin:8px 10px;width:calc(100% - 20px)"><div id="log"></div></aside>
 </main>
 <footer>
   <input id="seek" type="range" min="0" max="0" value="0"><span class="dim" id="pos">0 / 0</span>

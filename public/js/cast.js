@@ -6,7 +6,7 @@ const nameBook = {};   // agent id → unique first name within the session
 const namePool = () => { const own = String((typeof prefs !== 'undefined' && prefs.names) || '').split('\n').map((x) => x.trim()).filter(Boolean); return own.length ? own : NAMES; };   // ⚙ your own list, one name per line (the landing page shares this file and has no prefs)
 const charName = (stem) => stem.replace(/[-_]+/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());   // rainbow-dash → Rainbow Dash
 function uniqueName(id, h, want) {   // want: the name of the agent's character; else one from the pool. Never two agents with the same name in a session
-  if (nameBook[id]) return nameBook[id]; const taken = new Set(Object.values(nameBook));
+  if (nameBook[id]) return nameBook[id]; const taken = new Set(Object.entries(nameBook).filter(([k]) => !(typeof S !== 'undefined' && S.gone.has(k))).map(([, n]) => n));   // an agent that left the call frees its name
   if (want) { for (let k = 1; ; k++) { const n = k === 1 ? want : `${want} ${k}`; if (!taken.has(n)) return (nameBook[id] = n); } }
   const P = namePool(); for (let k = 0; k < P.length; k++) { const n = P[(h + k) % P.length]; if (!taken.has(n)) return (nameBook[id] = n); }
   return (nameBook[id] = P[h % P.length] + ' ' + (taken.size + 1));
@@ -30,11 +30,13 @@ async function loadChars() {
   } catch {}
   CHARS = next;
 }
-const customFor = (id) => {   // sub-agents: the best-hashed image no other agent holds; the whole pool again only once every image is taken
+const customFor = (id) => {   // sub-agents take the pool in turn, skipping pictures held by an agent still on the call; with more agents than pictures, the one held least
   if (id === 'main') return CHARS.lead; if (id === 'user') return CHARS.you; if (!CHARS.pool.length) return null;
-  const used = new Set(Object.keys(S.agents).filter((k) => k !== id && S.agents[k].custom).map((k) => S.agents[k].custom.name));
-  const free = CHARS.pool.filter((c) => !used.has(c.name)), from = free.length ? free : CHARS.pool;
-  return from.reduce((b, c) => (hash(id + '|' + (c.idle || '')) > hash(id + '|' + (b.idle || '')) ? c : b));
+  const held = new Map(CHARS.pool.map((c) => [c.name, 0]));
+  for (const k in S.agents) { const c = S.agents[k].custom; if (k !== id && c && held.has(c.name) && !S.gone.has(k)) held.set(c.name, held.get(c.name) + 1); }
+  const start = (S.castN = (S.castN || 0) + 1) - 1, n = CHARS.pool.length; let best = null;
+  for (let k = 0; k < n; k++) { const c = CHARS.pool[(start + k) % n]; if (!best || held.get(c.name) < held.get(best.name)) best = c; }
+  return best;
 };
 function renderCharInfo() {
   const el = $('#charInfo'); if (!el) return;
@@ -148,7 +150,7 @@ function avatarSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance:
       ${fig}
     </g>
     <rect y="62" width="100" height="13" fill="url(#${uid}dk${p.scene})"/><rect y="62" width="100" height="1.3" fill="#fff" opacity=".38"/><rect y="63.3" width="100" height="2.6" fill="#000" opacity=".1"/>
-    ${prop}${p.custom ? (prefs.customLaptop ? V('laptop', working, lapDark) : '') : V('laptop', working, lap) + V('hands', working, hands)}${V('sparks', done, `<g class="sparks">${sparks}</g>`)}
+    ${prop}${p.custom ? (prefs.customLaptop ? lapDark : '') : V('laptop', working, lap) + V('hands', working, hands)}${V('sparks', done, `<g class="sparks">${sparks}</g>`)}
   </svg>`;
 }
 

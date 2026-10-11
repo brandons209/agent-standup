@@ -40,7 +40,7 @@ function vanish(id) {
 setInterval(() => {
   if (!S.playing) return; S.clock += 500 * spd();
   if (!prefs.vanish) return;
-  for (const id in S.doneAt) if (S.status[id] === 'done' && !S.gone.has(id) && S.clock - S.doneAt[id] >= VANISH_MS) vanish(id);
+  for (const id in S.doneAt) if (S.status[id] === 'done' && !S.gone.has(id) && S.clock - S.doneAt[id] >= vanishMs()) vanish(id);
 }, 500);
 
 // ---------- speaking tiles ----------
@@ -56,7 +56,7 @@ function startTalk(id, text, label) {
   S.spokeAt = performance.now(); S.fill = 0; S.mused = false;
   if (!S.speakers.size && !(S.focusLock > Date.now())) setFocus(id); S.gone.delete(id); if (S.doneAt[id] != null) S.doneAt[id] = S.clock; t.style.display = ''; t.classList.add('speaking'); S.speakers.add(id); S.say[id] = { text, label }; AUD.duck(true);
   const shown0 = pieces(text), first = shown0.length > 1 ? shown0[0] : text; const b = t.querySelector('.bubble'); b.innerHTML = (label ? `<small>${esc(label)}</small>` : '') + esc(first);
-  const pane = paneOf(id), cam = pane && pane.querySelector('.pcam'); if (cam) { setCaption(id, first); cam.classList.add('speaking'); }
+  const pane = paneOf(id), cam = pane && pane.querySelector('.pcam'); if (cam) { setPaneCaption(id, first); cam.classList.add('speaking'); }
   const m = t.querySelector('.mouthE'); let open = false; clearInterval(mouths.get(id));
   mouths.set(id, setInterval(() => {
     if (!m) { const lv0 = S.level[id], op = lv0 ? lv0() > 0.05 : (open = !open); setFrame(t, id, op); if (cam) setFrame(cam, id, op); return; }   // custom character: its open-mouth picture while the voice is loud
@@ -80,7 +80,7 @@ function confetti() {
 function stopTalk(id) {
   captionClear(id); S.spokeAt = performance.now();
   clearInterval(mouths.get(id)); mouths.delete(id); S.speakers.delete(id); if (!S.speakers.size) AUD.duck(false); if (S.focus === id && S.speakers.size) setFocus([...S.speakers][0]);
-  const cam = paneOf(id) && paneOf(id).querySelector('.pcam'); if (cam) { setCaption(id, ''); cam.classList.remove('speaking'); const pm = cam.querySelector('.mouthE'); if (pm) { pm.setAttribute('ry', .9); pm.setAttribute('rx', 4.6); } }
+  const cam = paneOf(id) && paneOf(id).querySelector('.pcam'); if (cam) { setPaneCaption(id, ''); cam.classList.remove('speaking'); const pm = cam.querySelector('.mouthE'); if (pm) { pm.setAttribute('ry', .9); pm.setAttribute('rx', 4.6); } }
   const t = $('#t-' + id); if (!t) return;
   t.classList.remove('speaking'); const m = t.querySelector('.mouthE'); if (m) { m.setAttribute('ry', .9); m.setAttribute('rx', 4.6); }
   setFrame(t, id); if (cam) setFrame(cam, id);

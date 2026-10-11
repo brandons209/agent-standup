@@ -13,7 +13,7 @@ const AUD = {
     const len = c.sampleRate * 4, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0); let last = 0;   // office room tone
     for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
     const src = c.createBufferSource(); src.buffer = buf; src.loop = true; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
-    const g = c.createGain(); g.gain.value = 0.3; src.connect(lp).connect(g).connect(this.sfx); src.start(); this.apply(); OFFICE.start();
+    const g = c.createGain(); g.gain.value = 0.3; src.connect(lp).connect(g).connect(this.amb); src.start(); this.apply(); OFFICE.start();
   },
   apply() { if (!this.ctx) return; this.sfx.gain.value = prefs.office && !this.off() ? 1 : 0; this.voice.gain.value = prefs.voice && !this.off() ? 1 : 0; this.applyMusic(); RADIO.sync();  },
   // Music fades down quickly when an agent starts talking and comes back slowly once the room is quiet.
@@ -31,7 +31,7 @@ const AUD = {
   click() {
     if (!this.ctx || !prefs.office || performance.now() - this.lastClick < 70) return; this.lastClick = performance.now();
     const c = this.ctx, n = c.sampleRate * 0.03, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
-    const s = c.createBufferSource(); s.buffer = b; const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800 + Math.random() * 1500; const g = c.createGain(); g.gain.value = 0.18; s.connect(hp).connect(g).connect(this.sfx); s.start();
+    const s = c.createBufferSource(); s.buffer = b; const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800 + Math.random() * 1500; const g = c.createGain(); g.gain.value = 0.18; s.connect(hp).connect(g).connect(this.amb); s.start();
   },
   join() { this.tone(523, .14, 'triangle', .1); this.tone(784, .2, 'triangle', .1, .12); },
   ding() { this.tone(988, .5, 'triangle', .14); this.tone(1318, .5, 'sine', .06, .02); },
@@ -316,7 +316,7 @@ const capTimers = new Map();   // agent id → timers that advance its subtitle
 function captionClear(id) { (capTimers.get(id) || []).forEach(clearTimeout); capTimers.delete(id); }
 function setCaption(id, text) {
   const t = $('#t-' + id), b = t && t.querySelector('.bubble'), say = S.say[id]; if (!b || !say) return;
-  b.innerHTML = (say.label ? `<small>${esc(say.label)}</small>` : '') + esc(text); setCaption(id, text);
+  b.innerHTML = (say.label ? `<small>${esc(say.label)}</small>` : '') + esc(text); setPaneCaption(id, text);
 }
 function captionRun(id, text, totalMs, from = 0) {   // from: how far into the line the voice already is, when the timing is corrected along the way
   captionClear(id); const ps = pieces(text); if (ps.length < 2 || !(totalMs > 0)) return;

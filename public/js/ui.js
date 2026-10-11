@@ -35,7 +35,7 @@ $('#langSel').onchange = () => setLang($('#langSel').value, true);
 $('#charPack').value = ['none', 'folder', 'starter', 'cats'].includes(prefs.charPack) ? prefs.charPack : 'none'; $('#charPack').onchange = () => { prefs.charPack = $('#charPack').value; savePrefs(); $('#charReload').onclick(); };
 $('#charReload').onclick = async () => { await loadChars(); for (const k in imgCache) delete imgCache[k]; renameAgents(); renderCharInfo(); await TTS.init(); };
 function renameAgents() {   // pictures and names are given again: a sub-agent is named after its character, or from the list
-  for (const k in nameBook) delete nameBook[k]; const old = S.agents; S.agents = {}; for (const id in old) S.agents[id] = persona(old[id].src || { id });
+  for (const k in nameBook) delete nameBook[k]; S.castN = 0; const old = S.agents; S.agents = {}; for (const id in old) S.agents[id] = persona(old[id].src || { id });
   buildStage(); paintStatus(); renderLog(true);
 }
 $('#names').value = prefs.names || ''; $('#names').oninput = () => { prefs.names = $('#names').value; savePrefs(); clearTimeout(S.namesT); S.namesT = setTimeout(renameAgents, 600); };
@@ -56,13 +56,15 @@ function menuInit() {
     $('#menuNone').style.display = q && !secs.some((sc) => sc.items.some((e) => !e.classList.contains('mhide'))) ? '' : 'none';
   };
 }
-$('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b) return; prefs[b.dataset.t] = !prefs[b.dataset.t]; savePrefs(); if (prefs[b.dataset.t] && ['voice', 'office', 'music', 'notify'].includes(b.dataset.t)) claimAudio(); b.querySelector('.sw').classList.toggle('on', prefs[b.dataset.t]); AUD.apply(); if (b.dataset.t === 'office') $('#officeBox').style.display = prefs.office ? '' : 'none'; if (b.dataset.t === 'customLaptop') { for (const k in imgCache) delete imgCache[k]; buildStage(); paintStatus(); } if (b.dataset.t === 'reactions') document.body.classList.toggle('react', prefs.reactions); if (b.dataset.t === 'roster') { document.body.classList.toggle('rost', prefs.roster); paintStates(); } if (b.dataset.t === 'notify') { prefs.notifyChosen = true; savePrefs(); } if (b.dataset.t === 'notify' && prefs.notify) askNotify(); if (b.dataset.t === 'vanish' && !prefs.vanish) { S.gone.clear(); paintStatus(); }
+$('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b) return; prefs[b.dataset.t] = !prefs[b.dataset.t]; savePrefs(); if (prefs[b.dataset.t] && ['voice', 'office', 'music', 'notify'].includes(b.dataset.t)) claimAudio(); b.querySelector('.sw').classList.toggle('on', prefs[b.dataset.t]); AUD.apply(); if (b.dataset.t === 'office') $('#officeBox').style.display = prefs.office ? '' : 'none'; if (b.dataset.t === 'customLaptop') { for (const k in imgCache) delete imgCache[k]; buildStage(); paintStatus(); } if (b.dataset.t === 'reactions') document.body.classList.toggle('react', prefs.reactions); if (b.dataset.t === 'roster') { document.body.classList.toggle('rost', prefs.roster); paintStates(); } if (b.dataset.t === 'notify') { prefs.notifyChosen = true; savePrefs(); } if (b.dataset.t === 'notify' && prefs.notify) askNotify(); if (b.dataset.t === 'vanish') $('#vanishBox').style.display = prefs.vanish ? '' : 'none'; if (b.dataset.t === 'vanish' && !prefs.vanish) { S.gone.clear(); paintStatus(); }
   if (b.dataset.t === 'music') { $('#musicBox').style.display = prefs.music ? '' : 'none'; if (prefs.music) { AUD.init(); AUD.apply(); } }
   if (b.dataset.t === 'multiShare') while (S.shares.size > shareCap()) unshare(primaryShare()); };   // back to one screen: the newest stays
 $('#station').innerHTML = STATIONS.map((s) => `<option value="${s.id}">📻 ${s.name}</option>`).join('');
 $('#station').value = prefs.station; $('#musicVol').value = prefs.musicVol; $('#musicBox').style.display = prefs.music ? '' : 'none';
 $('#station').onchange = (e) => { prefs.station = e.target.value; savePrefs(); AUD.init(); RADIO.sync(); };
 $('#chatSel').value = ['quiet', 'normal', 'lively'].includes(prefs.chat) ? prefs.chat : 'normal'; $('#chatSel').onchange = () => { prefs.chat = $('#chatSel').value; savePrefs(); };
+for (const [sel, key, def] of [['#shareSel', 'shareS', 90], ['#vanishSel', 'vanishS', 30]]) { const el = $(sel); el.value = String(prefs[key] ?? def); if (el.selectedIndex < 0) el.value = String(def); el.onchange = () => { prefs[key] = +el.value; savePrefs(); }; }
+$('#vanishBox').style.display = prefs.vanish ? '' : 'none';
 $('#vstyle').innerHTML = [['animal', 'Animal Crossing (babillage)', 'Animal Crossing (babble)'], ['sims', 'Simlish (babillage)', 'Simlish (babble)'], ['cartoon', 'Voix cartoon (voix réelle)', 'Cartoon voices (real voice)'], ['natural', 'Voix naturelles', 'Natural voices'], ['kokoro', 'Voix très naturelles (à installer)', 'Very natural voices (installs on demand)']].map(([v, fr, en]) => `<option value="${v}" data-fr="${fr}" data-en="${en}">${L(fr, en)}</option>`).join(''); $('#vstyle').value = prefs.vstyle; $('#vstyle').onchange = () => { prefs.vstyle = $('#vstyle').value; prefs.vstyleChosen = true; savePrefs(); TTS.init().then(kokoroUI); kokoroUI(); };
 // ---- ⚙ → voice server (OpenAI-compatible): settings box, rebuilt with the characters
 function renderTtsBox() {
@@ -108,7 +110,9 @@ const applyLog = () => {
   b.classList.toggle('log', !!prefs.log); $('#bLog').classList.toggle('on', !!prefs.log); b.classList.toggle('logb', bot);
   b.style.setProperty('--logw', prefs.logW + 'px'); b.style.setProperty('--logh', prefs.logH + 'px');
   $('#logDock').title = bot ? L('Ancrer à droite', 'Dock on the right') : L('Ancrer en bas', 'Dock at the bottom');
+  $('#logText').classList.toggle('on', !!prefs.logText); $('#logText').title = prefs.logText ? L('Afficher aussi les outils', 'Show tool calls too') : L('Seulement ce qui est dit', 'Spoken lines only');
 };
+$('#logText').onclick = () => { prefs.logText = !prefs.logText; savePrefs(); applyLog(); renderLog(true); };
 $('#bLog').onclick = () => { prefs.log = !prefs.log; savePrefs(); applyLog(); };
 $('#logDock').onclick = () => { prefs.logPos = prefs.logPos === 'bottom' ? 'right' : 'bottom'; savePrefs(); applyLog(); };
 $('#logGrip').onpointerdown = (e) => {

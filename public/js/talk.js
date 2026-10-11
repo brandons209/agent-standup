@@ -40,7 +40,7 @@ function exchFacts(i, agent) {   // what this agent did since it received its or
   f.what = f.edits ? P('edit', f.edits) : f.tools ? P('call', f.tools) : L('rien à signaler', 'nothing to report'); return f;
 }
 const exVisible = (id) => S.agents[id] && !S.gone.has(id) && $('#t-' + id) && $('#t-' + id).style.display !== 'none';
-async function sayLine(id, line, label, token) { startTalk(id, line, label); await speakLine(line, S.agents[id], true, token); if (token === S.token) stopTalk(id); }   // a line cut short (pause, seek) must not close the bubble of whoever speaks next
+async function sayLine(id, line, label, token) { startTalk(id, line, label); logChat(id, line, label); await speakLine(line, S.agents[id], true, token); if (token === S.token) stopTalk(id); }   // a line cut short (pause, seek) must not close the bubble of whoever speaks next
 async function exSay(id, line, token) {   // one line of an exchange, then a short human pause
   if (!exVisible(id) || token !== S.token) return false; await sayLine(id, line, '💬', token);
   if (token !== S.token) return false; await sleep((150 + Math.random() * 250) / spd()); return token === S.token;
@@ -189,7 +189,7 @@ async function smallTalk(token) {
   if (!think && (quiet < (S.live ? 45000 : 12000 / spd()) * [1, 2.5, 6][n] || (S.live && Date.now() - last.ts > 6e5))) return;   // live: a session untouched for ten minutes is a call that is over
   const busy = here.filter((id) => agentState(id, Date.now()).k === 'working'), sharer = [...S.shares.keys()].find((x) => here.includes(x)), who = think ? muser : sharer || pick(busy.length ? busy : here); if (!who) return;   // whoever shares their screen speaks, so the screen stays up
   const P = FILL[FR() ? 'fr' : 'en'][S.shares.has(who) ? 'share' : busy.length ? 'busy' : 'wait']; let line = think ? varied('think', Math.floor(Math.random() * 97)) : pick(P); if (!think && line === S.lastFill) line = P[(P.indexOf(line) + 1) % P.length]; if (!think) S.lastFill = line;
-  startTalk(who, line, think ? '💭' : '💬'); if (think) S.mused = true; else S.fill = n + 1; await speakLine(line, S.agents[who], true, token); stopTalk(who);
+  startTalk(who, line, think ? '💭' : '💬'); logChat(who, line, think ? '💭' : '💬'); if (think) S.mused = true; else S.fill = n + 1; await speakLine(line, S.agents[who], true, token); stopTalk(who);
 }
 async function card(text, sub, ms = 2500) {
  

@@ -2,7 +2,7 @@
 //  rendering
 // =====================================================================
 function addTile(p) {
-  const d = document.createElement('div'); d.className = 'tile' + (p.lead ? ' lead' : ''); d.id = 't-' + p.id; d.tabIndex = 0; d.setAttribute('role', 'button'); d.setAttribute('aria-label', p.name + ' — ' + p.role); d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(p.id); } }; d.style.display = 'none'; d.onclick = () => openDetail(p.id);
+  const d = document.createElement('div'); d.className = 'tile' + (p.lead ? ' lead' : ''); d.id = 't-' + p.id; d.style.setProperty('--ac', p.shirt || '#7c9cff'); d.tabIndex = 0; d.setAttribute('role', 'button'); d.setAttribute('aria-label', p.name + ' — ' + p.role); d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(p.id); } }; d.style.display = 'none'; d.onclick = () => openDetail(p.id);
   d.innerHTML = `${avatarSVG(p, undefined, 't' + p.gid + '_')}<div class="bubble"></div><div class="status"></div><div class="prop"></div><div class="thought"></div><div class="ticker"></div><div class="tbadge"></div><div class="tag"><b>${esc(p.name)}</b><span>${esc(p.role)}</span><span class="tk"></span><span class="cx"></span></div>`;
   $('#stage').appendChild(d); galRefit();
 }
@@ -36,26 +36,33 @@ const layout = () => {
 };
 new ResizeObserver(layout).observe($('#center'));
 
+const whoTag = (id) => { const p = S.agents[id]; return `<span class="who" style="--c:${p && p.shirt ? p.shirt : 'inherit'}">${esc(nameOf(id))}</span>`; };   // each agent's name in its own colour, as on its tile
 function logRow(i) {
-  const e = S.events[i], arrow = e.to ? ` <span class="arrow">→</span> <span class="who">${esc(nameOf(e.to))}</span>` : '';
+  const e = S.events[i], arrow = e.to ? ` <span class="arrow">→</span> ${whoTag(e.to)}` : '';
   const body = e.kind === 'tools' ? e.tools.map((t) => t.name).join(', ') : spoken(e), k = { order: L('tâche', 'task'), report: L('rapport', 'report'), say: '', user: L('brief', 'brief'), tools: L('outils', 'tools') }[e.kind];
-  return `<div class="row ${e.kind}" data-i="${i}"><span class="who">${esc(nameOf(e.agent))}</span>${arrow} <span class="k">${k}</span><div class="txt">${esc(body)}</div></div>`;
+  return `<div class="row ${e.kind}" data-i="${i}" data-a="${esc(e.agent)}">${whoTag(e.agent)}${arrow} <span class="k">${k}</span><div class="txt">${esc(body)}</div></div>`;
 }
 function renderLog(full) {
-  const log = $('#log'), from = S.live ? Math.max(0, S.events.length - 300) : 0;
+  const log = $('#log'); let from = S.live ? Math.max(0, S.events.length - 300) : 0;
+  if (S.live && prefs.logText) { let n = 0; from = S.events.length; while (from > 0 && n < 300) if (!quiet(S.events[--from])) n++; }   // spoken lines only: the last 300 of them, however many tool calls came between
   if (full || S.logTo < from || S.logTo > S.events.length) { log.innerHTML = ''; S.logTo = from; }
   const html = [];
   for (let i = S.logTo; i < S.events.length; i++) {
-    if (S.events[i].kind === 'results' || S.events[i].kind === 'usage' || S.events[i].kind === 'finish' || S.events[i].kind === 'compact') continue;
+    if (S.events[i].kind === 'results' || S.events[i].kind === 'usage' || S.events[i].kind === 'finish' || S.events[i].kind === 'compact' || (prefs.logText && S.events[i].kind === 'tools')) continue;
     html.push(logRow(i));
   }
   log.insertAdjacentHTML('beforeend', html.join('')); S.logTo = S.events.length;
   if (S.live) while (log.children.length > 320) log.firstChild.remove();
   filterLog();
 }
+function logChat(id, line, label) {   // banter is not in the session: with the option on, it is written into the transcript as it is said
+  if (!prefs.logChat) return; const log = $('#log');
+  log.insertAdjacentHTML('beforeend', `<div class="row chat" data-a="${esc(id)}">${whoTag(id)} <span class="k">${esc(label || '')}</span><div class="txt">${esc(line)}</div></div>`);
+  if (S.live) while (log.children.length > 320) log.firstChild.remove(); filterLog();
+}
 function filterLog() { const q = $('#logQ').value.trim().toLowerCase(); for (const r of $('#log').children) r.style.display = !q || r.textContent.toLowerCase().includes(q) ? '' : 'none'; }
 $('#logQ').oninput = filterLog;
-$('#log').onclick = (ev) => { const r = ev.target.closest('.row'); if (r && !S.live) seekTo(+r.dataset.i); };
+$('#log').onclick = (ev) => { const r = ev.target.closest('.row[data-i]'); if (r && !S.live) seekTo(+r.dataset.i); };
 function paintStatus() {
   for (const p of Object.values(S.agents)) {
     const t = $('#t-' + p.id); if (!t) continue; const s = S.status[p.id];
@@ -83,7 +90,7 @@ function recomputeStatus(upTo) {
   }
   S.recomputing = false; later('tok', renderTokens, 50); later('badges', renderBadges, 50);
   const now = S.events[Math.max(0, upTo - 1)];   // agents that finished long before this point are already gone
-  if (prefs.vanish && now) for (const id in doneIdx) if (now.t - S.events[doneIdx[id]].t >= VANISH_MS) S.gone.add(id);
+  if (prefs.vanish && now) for (const id in doneIdx) if (now.t - S.events[doneIdx[id]].t >= vanishMs()) S.gone.add(id);
 }
 function syncUI() {
   $('#bPlay').textContent = S.playing ? '⏸' : '▶';
@@ -148,7 +155,8 @@ function agentState(id, now) {
   if (s === 'done') return { k: 'done', txt: '✓ ' + L('terminé', 'done') };
   if (!s) return { k: 'idle', txt: '' };
   if (S.live && atTail() && r && r.ts && r.name && NEEDS_OK.test(r.name)) { const age = now - r.ts; if (age > (ASKS.test(r.name) ? 4000 : 15000)) return { k: 'blocked', txt: '✋ ' + L('attend vous ? ', 'needs you? ') + fmtShort(age) }; }
-  if (w && w.size) {   // really waiting only while the lead has a sub-agent call pending, or while those agents are still active (background agents never block the lead)
+  const subCall = r && /^(Task|Agent)$/.test(r.name), ownWork = (r && !subCall) || (!r && S.live && la > Math.max(0, ...[...(w || [])].map((c) => S.orderTs[c] || 0)));   // busy with its own command, or acting since it sent them off: background agents do not block it
+  if (w && w.size && !ownWork) {   // really waiting only while the lead has a sub-agent call pending, or while those agents are still active (background agents never block the lead)
     const pendingSub = r && /^(Task|Agent)$/.test(r.name), open = [...w].filter((c) => S.status[c] !== 'done' && (pendingSub || !S.live || now - Math.max(S.lastAct[c] || 0, S.orderTs[c] || 0) < 120000));
     if (open.length) {
       const names = open.map(nameOf); let stale = S.live && pendingSub; for (const c of open) if (!(now - Math.max(S.lastAct[c] || 0, S.orderTs[c] || 0) > 120000)) stale = false;
