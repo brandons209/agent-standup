@@ -65,7 +65,7 @@ const applyStatus = (ev) => {
   if (ev.kind === 'user' || (ev.agent === 'main' && (ev.kind === 'say' || ev.kind === 'tools' || (ev.kind === 'order' && !ev.wf)))) S.turnOver = !!ev.end;   // Claude Code marks the message that closes the lead's turn; anything after it opens the next one (not the agents a workflow launches by itself)
 };
 function recomputeStatus(upTo) {
-  S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.lastTool = {}; S.mainBusyAt = 0; S.turnOver = false; S.th = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.resAt = {}; S.recomputing = true; document.querySelectorAll('.tile').forEach((t) => { clearTimeout(t._byeT); t.classList.remove('bye'); }); closeAllShares();
+  S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.lastTool = {}; S.mainBusyAt = 0; S.turnOver = false; S.th = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.resAt = {}; S.thinkAt = {}; S.recomputing = true; document.querySelectorAll('.tile').forEach((t) => { clearTimeout(t._byeT); t.classList.remove('bye'); }); closeAllShares();
   S.status = {}; S.tc = {}; S.doneAt = {}; S.gone.clear(); S.leaving.clear(); document.querySelectorAll('.tile.vanishing').forEach((t) => t.classList.remove('vanishing')); const doneIdx = {}; document.querySelectorAll('.ticker').forEach((x) => { x.classList.remove('on'); x.innerHTML = ''; });
   for (let i = 0; i < upTo; i++) {
     const e = S.events[i]; applyStatus(e); tally(e); if (e.kind === 'tools') S.tc[e.agent] = (S.tc[e.agent] || 0) + e.tools.length;
@@ -84,7 +84,7 @@ function syncUI() {
 
 // ---------- tool ticker, shared screen, flying messages ----------
 // ---------- what each agent is doing: tool calls with their real outputs ----------
-S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.resAt = {}; S.shares = new Map(); S.vclock = 0;
+S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.resAt = {}; S.thinkAt = {}; S.shares = new Map(); S.vclock = 0;
 const later = (k, fn, ms = 160) => { later.p = later.p || {}; if (later.p[k]) return; later.p[k] = setTimeout(() => { later.p[k] = 0; fn(); }, ms); };   // coalesce bursts of repaints
 const fmtTok = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1000).toFixed(n < 1e4 ? 1 : 0) + 'k' : (n / 1e6).toFixed(n < 1e7 ? 2 : 1) + 'M');
 const tokTotal = (u) => (u ? u.i + u.o + u.w : 0);   // headline = input + output + cache writes; cache reads are cheap and shown separately
@@ -107,6 +107,8 @@ function tally(ev) {   // numbers that pile up over a session: token usage, erro
   else if (ev.kind === 'tools' || ev.kind === 'say') S.lastAct[ev.agent] = ev.ts;
   if (ev.th) S.th[ev.agent] = { text: ev.th, ts: ev.ts }; else if (ev.kind === 'user') delete S.th.main;   // your order starts a new chain of thought: what the lead thought before is no longer what it is on
   if (ev.kind === 'results') S.lastAct[ev.agent] = ev.ts; else if (ev.kind === 'user') S.lastAct.main = ev.ts;   // a result coming back and your own order are signs of life too: the lead is thinking about them
+  if (ev.kind === 'tools' || ev.kind === 'say' || ev.kind === 'report' || (ev.end && ev.agent === 'main')) delete S.thinkAt[ev.agent];   // acting, talking or done: no longer thinking
+  const th = thinkerOf(ev); if (th && !(ev.end && th === 'main')) S.thinkAt[th] = ev.ts;   // what came back, an order, your message: someone now thinks about it
 }
 const tokTip = (u) => `${L('Jetons enregistrés par Claude Code (comptés une fois par message, ce n’est pas une facture)', 'Tokens recorded by Claude Code (counted once per message, not a bill)')}\n${L('entrée', 'input')} ${fmtTok(u.i)} · ${L('sortie', 'output')} ${fmtTok(u.o)} · ${L('écriture cache', 'cache write')} ${fmtTok(u.w)} · ${L('lecture cache', 'cache read')} ${fmtTok(u.r)}`;
 const ctxInfo = (id) => { const c = S.ctx[id]; if (!c) return null; const w = ctxWin(S.model[id], c), p = Math.round((c / w) * 100); return { c, w, p, lvl: p >= 88 ? 'hi' : p >= 70 ? 'mid' : 'lo' }; };
@@ -132,7 +134,7 @@ function agentState(id, now) {
   let s = S.status[id]; const r = S.run[id], w = S.waitOn[id], la = S.lastAct[id];
   if (id === 'main' && !s) {   // the lead is at work until the message that closes its turn, even while it thinks; a transcript without that mark falls back on "quiet for 25 s", and a turn cut short on 3 minutes of silence
     const open = S.live && la && (S.sawEnd ? !S.turnOver && now - la < 180000 : now - la < 25000);
-    if (r || (w && w.size) || open) s = 'working'; else if (S.live && la) return { k: 'done', txt: '✓ ' + L('à vous', 'your turn') };
+    if (r || (w && w.size) || open || (!S.live && S.thinkAt.main && !S.turnOver)) s = 'working'; else if (S.live && la) return { k: 'done', txt: '✓ ' + L('à vous', 'your turn') };
   }
   if (s === 'done') return { k: 'done', txt: '✓ ' + L('terminé', 'done') };
   if (!s) return { k: 'idle', txt: '' };
@@ -144,19 +146,25 @@ function agentState(id, now) {
       return { k: stale ? 'stalled' : 'waiting', txt: (stale ? '⚠ ' + L('bloqué · ', 'stalled · ') : '🔗 ') + L('attend ', 'waiting on ') + names.slice(0, 2).join(', ') + (names.length > 2 ? ' +' + (names.length - 2) : '') };
     }
   }
+  if ((!r || /^(Task|Agent)$/.test(r.name)) && S.thinkAt[id] && !S.speakers.has(id)) return { k: 'working', think: true, txt: '💭 ' + L('réfléchit', 'thinking') };   // between two actions: still at work, thinking
   return { k: 'working', txt: '⚙ ' + (S.act[id] || L('au travail', 'working')) };
 }
 const STATE_CLASSES = ['working', 'waiting', 'blocked', 'stalled', 'done'];
+function celebrate(id) {   // done: a cheer, a little dance, and the character's celebrating picture, for a moment
+  const t = $('#t-' + id); if (!t) return; const pr = t.querySelector('.prop'); pr.textContent = '🎉'; pr.className = 'prop cheer'; t.classList.add('celebrate'); setFrame(t, id); clearTimeout(t._celT);
+  t._celT = setTimeout(() => { t.classList.remove('celebrate'); if (pr.classList.contains('cheer')) { pr.textContent = ''; pr.className = 'prop'; } if (!S.speakers.has(id)) setFrame(t, id); }, 2500);
+}
 function paintStates() {
   const now = Date.now(), n = { working: 0, waiting: 0, blocked: 0, stalled: 0, done: 0 }, ros = [], attn = [];
   for (const p of Object.values(S.agents)) {
     if (p.id === 'user') continue; const t = $('#t-' + p.id); if (!t) continue;
     const st = agentState(p.id, now), shown = t.style.display !== 'none'; if (shown && n[st.k] !== undefined && !S.gone.has(p.id)) { n[st.k]++; if (st.k === 'blocked' || st.k === 'stalled') attn.push(p.id); }
-    STATE_CLASSES.forEach((c) => t.classList.toggle(c, st.k === c));
+    STATE_CLASSES.forEach((c) => t.classList.toggle(c, st.k === c)); t.classList.toggle('thinking', !!st.think);
     const el = t.querySelector('.status'); if (el.textContent !== st.txt) el.textContent = st.txt; el.className = 'status ' + st.k + (isTurn(p.id, st) ? ' turn' : '');
-    const pr = t.querySelector('.prop'), want = { blocked: '✋', stalled: '😰', waiting: '⌛' }[st.k] || '', was = S.prevState[p.id];   // a raised hand, a sweat drop, an hourglass: the call metaphor for "needs you / stuck / waiting"
-    if (st.k === 'done' && was && was !== 'done' && was !== 'idle') { pr.textContent = '🎉'; pr.className = 'prop cheer'; setTimeout(() => { if (pr.classList.contains('cheer')) { pr.textContent = ''; pr.className = 'prop'; } }, 1200); }
-    else if (!pr.classList.contains('cheer')) { if (pr.textContent !== want) pr.textContent = want; pr.className = 'prop ' + (want ? st.k : ''); }
+    const pr = t.querySelector('.prop'), want = { blocked: '✋', stalled: '😰', waiting: '⌛' }[st.k] || (st.think && !t.classList.contains('musing') ? '💭' : ''), was = S.prevState[p.id];   // 💭 only while no thought bubble says it already   // a raised hand, a sweat drop, an hourglass: the call metaphor for "needs you / stuck / waiting"
+    if (st.k === 'done' && was && was !== 'done' && was !== 'idle') celebrate(p.id);
+    else if (!pr.classList.contains('cheer')) { if (pr.textContent !== want) pr.textContent = want; pr.className = 'prop ' + (want ? (st.think ? 'thinking' : st.k) : ''); }
+    if (!S.speakers.has(p.id)) setFrame(t, p.id); const pe = paneOf(p.id), cam = pe && pe.querySelector('.pcam'); if (cam) { cam.classList.toggle('thinking', !!st.think); cam.classList.toggle('celebrate', t.classList.contains('celebrate')); if (!S.speakers.has(p.id)) setFrame(cam, p.id); }
     if (shown && !S.gone.has(p.id)) ros.push({ p, st });
     if (p.id === 'main' && st.k === 'done' && was && was !== 'done' && was !== 'idle' && S.live && S.playing && Date.now() - (S.mainBusyAt || 0) > 45000) confetti();
     if (p.id === 'main') { if (st.k === 'working' || st.k === 'waiting') S.mainBusyAt = S.mainBusyAt || Date.now(); else if (st.k === 'done') S.mainBusyAt = 0; }

@@ -128,7 +128,7 @@ function renderPane(el, id) {
   tl.dataset.k = tk;
   q('.pbadge').textContent = `🖥 ${p.name} ${L('partage son écran', 'is sharing their screen')}`;
   const cam = q('.pcam'); if (el.dataset.cam !== id) { cam.innerHTML = avatarSVG(p, undefined, 'c' + p.gid + '_') + `<div class="tag"><b>${esc(p.name)}</b></div>`; el.dataset.cam = id; }
-  cam.classList.toggle('speaking', S.speakers.has(id));
+  const tile = $('#t-' + id); for (const c of ['speaking', 'thinking', 'celebrate']) cam.classList.toggle(c, c === 'speaking' ? S.speakers.has(id) : !!(tile && tile.classList.contains(c))); setFrame(cam, id);   // the camera in the corner moves like the tile
 }
 function setCaption(id, text) {   // the presenter's line is the caption of its own screen, and its tile bubble steps aside
   const el = paneOf(id); if (!el) return; el.querySelector('.pcap').textContent = text;

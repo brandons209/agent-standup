@@ -45,6 +45,12 @@ setInterval(() => {
 
 // ---------- speaking tiles ----------
 const mouths = new Map();
+// A custom character shows one of its pictures: talking (mouth open) wins, then celebrating, then thinking, else at rest; one it does not have falls back to rest.
+function setFrame(el, id, mouthOpen) {
+  const svg = el && el.querySelector('svg'), c = S.agents[id] && S.agents[id].custom; if (!svg || !c) return; const t = $('#t-' + id);
+  const f = mouthOpen && c.talk ? 'talk' : c.celebrate && t && t.classList.contains('celebrate') ? 'celebrate' : c.think && t && t.classList.contains('thinking') && !S.speakers.has(id) ? 'think' : 'idle';
+  if (svg.dataset.f !== f) svg.dataset.f = f;
+}
 function startTalk(id, text, label) {
   const t = $('#t-' + id); if (!t) return; endThought(id); stopMumble(); TH.next[id] = Date.now() + 8000;   // a spoken line takes the bubble and the floor
   S.spokeAt = performance.now(); S.fill = 0; S.mused = false;
@@ -53,7 +59,7 @@ function startTalk(id, text, label) {
   const pane = paneOf(id), cam = pane && pane.querySelector('.pcam'); if (cam) { setCaption(id, first); cam.classList.add('speaking'); }
   const m = t.querySelector('.mouthE'); let open = false; clearInterval(mouths.get(id));
   mouths.set(id, setInterval(() => {
-    if (!m) { const ct = t.querySelector('.cimg-talk'); if (ct) { const lv0 = S.level[id], op = lv0 ? lv0() > 0.05 : (open = !open); ct.style.display = op ? '' : 'none'; t.querySelector('.cimg').style.display = op ? 'none' : ''; const pc = cam && cam.querySelector('.cimg-talk'), pi = cam && cam.querySelector('.cimg'); if (pc && pi) { pc.style.display = op ? '' : 'none'; pi.style.display = op ? 'none' : ''; } } return; }   // custom character: swap between its two frames
+    if (!m) { const lv0 = S.level[id], op = lv0 ? lv0() > 0.05 : (open = !open); setFrame(t, id, op); if (cam) setFrame(cam, id, op); return; }   // custom character: its open-mouth picture while the voice is loud
     const pm = cam && cam.querySelector('.mouthE'), lv = S.level[id]; if (lv) { const v = lv(); const ry = (.9 + Math.min(4.2, v * 28)).toFixed(1), rx = (4.8 - Math.min(1.1, v * 6)).toFixed(1); m.setAttribute('ry', ry); m.setAttribute('rx', rx); if (pm) { pm.setAttribute('ry', ry); pm.setAttribute('rx', rx); } }
     else { open = !open; m.setAttribute('ry', open ? 4.2 : 1.1); m.setAttribute('rx', open ? 4 : 4.7); if (pm) { pm.setAttribute('ry', open ? 4.2 : 1.1); pm.setAttribute('rx', open ? 4 : 4.7); } }
   }, 70));
@@ -77,7 +83,6 @@ function stopTalk(id) {
   const cam = paneOf(id) && paneOf(id).querySelector('.pcam'); if (cam) { setCaption(id, ''); cam.classList.remove('speaking'); const pm = cam.querySelector('.mouthE'); if (pm) { pm.setAttribute('ry', .9); pm.setAttribute('rx', 4.6); } }
   const t = $('#t-' + id); if (!t) return;
   t.classList.remove('speaking'); const m = t.querySelector('.mouthE'); if (m) { m.setAttribute('ry', .9); m.setAttribute('rx', 4.6); }
-  const ct = t.querySelector('.cimg-talk'); if (ct) { ct.style.display = 'none'; t.querySelector('.cimg').style.display = ''; }
-  const pc = cam && cam.querySelector('.cimg-talk'), pi = cam && cam.querySelector('.cimg'); if (pc && pi) { pc.style.display = 'none'; pi.style.display = ''; }
+  setFrame(t, id); if (cam) setFrame(cam, id);
 }
 const clearSpeaking = () => [...S.speakers].forEach(stopTalk);

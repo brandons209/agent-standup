@@ -22,7 +22,7 @@ async function loadChars() {
   if (pack === 'none') { try { next.dir = (await (await fetch('/api/characters')).json()).dir || ''; } catch {} CHARS = next; return; }   // the drawn characters, whatever is in the folder
   try {
     const base = pack === 'folder' ? '/characters/' : '/packs/' + pack + '/', d = await (await fetch('/api/characters?pack=' + (pack === 'folder' ? '' : pack))).json(); next.dir = d.dir || '';
-    for (const c of d.chars || []) { try { const e = { name: c.stem, idle: await toData(base + encodeURIComponent(c.file)), talk: c.talk ? await toData(base + encodeURIComponent(c.talk)) : null };
+    for (const c of d.chars || []) { try { const get = (f) => (f ? toData(base + encodeURIComponent(f)).catch(() => null) : null), [idle, talk, think, celebrate] = await Promise.all([toData(base + encodeURIComponent(c.file)), get(c.talk), get(c.think), get(c.celebrate)]), e = { name: c.stem, idle, talk, think, celebrate };
       if (c.role === 'lead') next.lead = e; else if (c.role === 'you') next.you = e; else next.pool.push(e); next.n++; } catch {} }
   } catch {}
   CHARS = next;
@@ -107,6 +107,7 @@ const ACC = [
   (t, c) => `<g transform="translate(60 ${t + 3}) rotate(14)"><path d="M0 0L-9-5V5z" fill="${c}"/><path d="M0 0L9-5V5z" fill="${c}"/><circle r="2.6" fill="${mix(c, '#000000', .18)}"/></g>`,
   (t, c) => `<path d="M44 ${t + 2}L40 ${t - 8}M56 ${t + 2}L60 ${t - 8}" stroke="#2c2f40" stroke-width="1.2" stroke-linecap="round"/><circle cx="40" cy="${t - 9}" r="2.4" fill="${c}"/><circle cx="60" cy="${t - 9}" r="2.4" fill="${c}"/>`,
 ];
+const FRAMES = ['idle', 'talk', 'think', 'celebrate'];   // a custom character's pictures: name.png, name-talk.png, name-think.png, name-celebrate.png
 function avatarSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance: duplicate ids made gradients vanish when the first copy was in a hidden element
   const st = !!o, sh = SHAPES[p.shape], fy = sh.fy, top = sh.top, bot = p.shape === 4, c = p.shirt, c1 = mix(c, '#ffffff', .3), c2 = mix(c, '#000000', .2);
   const ink = bot ? '#8ff0ff' : '#2a2233', gid = uid + 'b' + p.gid, sc = SCENES[p.scene], eg = EYES[p.eye], ex = p.shape === 1 ? [43, 57] : [41.5, 58.5];
@@ -131,9 +132,10 @@ function avatarSVG(p, o, uid = '') {   // uid keeps SVG ids unique per instance:
   const lapDark = `<rect x="33" y="46" width="34" height="18" rx="2.8" fill="#3b4152"/><rect x="33" y="46" width="34" height="18" rx="2.8" fill="url(#${uid}lg)" opacity=".18"/><circle cx="50" cy="55" r="2.3" fill="${c1}"/><rect x="29.5" y="63.4" width="41" height="3" rx="1.5" fill="#262a36"/>`;   // for custom characters: darker, so it still shows under a white or cream sprite
   const hands = `<circle class="hand l" cx="38" cy="65.6" r="3.1" fill="${c2}"/><circle class="hand r" cx="62" cy="65.6" r="3.1" fill="${c2}"/>`;
   const sparks = star(22, 28, 3) + star(78, 22, 2.6, '#ff9bb8') + star(70, 40, 1.9, '#9be7ff') + star(30, 46, 1.6, '#ffe58a');
-  const custFig = (c, talking) => { const base = 'x="20" y="6" width="60" height="58" preserveAspectRatio="xMidYMax meet"', px = (u) => (u.startsWith('data:image/svg+xml') ? '' : 'image-rendering:pixelated;');
-    return `<image class="cimg" href="${c.idle}" ${base} style="${px(c.idle)}${talking && c.talk ? 'display:none' : ''}"/>` + (c.talk ? `<image class="cimg cimg-talk" href="${c.talk}" ${base} style="${px(c.talk)}${talking ? '' : 'display:none'}"/>` : ''); };
-  const fig = p.custom ? custFig(p.custom, st && o.m === 2) : `${arm('l')}${bodyShape(p.shape, `url(#${gid})`, c2)}${arm('r')}${face}${acc}`;
+  const custFig = (c, still) => {   // one image per frame the character has; on screen CSS shows the one setFrame picks, a still (video export) gets only the frame it shows
+    const base = 'x="20" y="6" width="60" height="58" preserveAspectRatio="xMidYMax meet"', img = (f) => `<image class="cimg f-${f}" href="${c[f]}" ${base}${c[f].startsWith('data:image/svg+xml') ? '' : ' style="image-rendering:pixelated"'}/>`;
+    return still ? img(c[still] ? still : 'idle') : FRAMES.filter((f) => c[f]).map(img).join(''); };
+  const fig = p.custom ? custFig(p.custom, st && (o.m === 2 ? 'talk' : 'idle')) : `${arm('l')}${bodyShape(p.shape, `url(#${gid})`, c2)}${arm('r')}${face}${acc}`;
   return `<svg viewBox="0 0 100 75" preserveAspectRatio="xMidYMid slice"${st ? ' xmlns="http://www.w3.org/2000/svg" width="400" height="300"' : ''}>
     <defs><linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="0" y1="12" x2="0" y2="72"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c}"/></linearGradient>
       <linearGradient id="${uid}dk${p.scene}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sc.desk[0]}"/><stop offset="1" stop-color="${sc.desk[1]}"/></linearGradient>

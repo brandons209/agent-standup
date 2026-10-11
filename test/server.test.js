@@ -216,3 +216,14 @@ test('how far a session was said is kept per session, never goes back, and outli
     const a2 = await load('a'); assert.notEqual(a2.ep, a.ep); assert.equal(a2.said, t0 + 1000, 'outlives the new feed');
   } finally { srv.close(); require('../server.js').shutdown(); }
 });
+test('a character\'s thinking and celebrating pictures are its frames, not characters of their own', () => {
+  const dir = path.join(tmp, 'chars'); fs.mkdirSync(dir, { recursive: true }); const svg = '<svg xmlns="http://www.w3.org/2000/svg"/>';
+  for (const f of ['lead.svg', 'aj.svg', 'aj-talk.svg', 'aj-think.svg', 'aj-celebrate.svg', 'bo.png', 'bo-think.png']) fs.writeFileSync(path.join(dir, f), svg);
+  process.env.AGENT_STANDUP_CHARACTERS = dir;
+  try {
+    const { chars } = require('../server.js').listCharacters(), by = Object.fromEntries(chars.map((c) => [c.stem, c]));
+    assert.deepEqual(chars.map((c) => c.stem), ['aj', 'bo', 'lead']);
+    assert.deepEqual([by.aj.talk, by.aj.think, by.aj.celebrate], ['aj-talk.svg', 'aj-think.svg', 'aj-celebrate.svg']);
+    assert.deepEqual([by.bo.talk, by.bo.think, by.bo.celebrate], [null, 'bo-think.png', null]);
+  } finally { delete process.env.AGENT_STANDUP_CHARACTERS; }
+});

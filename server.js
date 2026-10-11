@@ -612,7 +612,7 @@ function tts(text, voice, rate, engine, lang) {
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8' };
 
 // ---- Custom characters: the person's own pixel art replaces the drawn characters. Plain image files in one folder, nothing else is ever served from it.
-//   lead.png / claude.png → the lead · you.png → the human · any other image → a pool for the sub-agents · name-talk.png → optional open-mouth frame of name.png · .svg allowed (shown as an image, so its scripts never run)
+//   lead.png / claude.png → the lead · you.png → the human · any other image → a pool for the sub-agents · optional frames of name.png: name-talk.png (open mouth), name-think.png, name-celebrate.png · .svg allowed (shown as an image, so its scripts never run)
 const CHAR_NAME = /^[\w][\w .()\-]{0,78}\.(png|gif|webp|jpe?g|svg)$/i, CHAR_MAX = 300 * 1024, CHAR_TYPES = { png: 'image/png', gif: 'image/gif', webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', svg: 'image/svg+xml' };
 const charactersDir = () => process.env.AGENT_STANDUP_CHARACTERS || path.join(os.homedir(), '.agent-standup', 'characters');
 // lstat, not stat: a symlink is not a regular file, so it is skipped and never served
@@ -622,8 +622,8 @@ function listCharacters(pack) {
   const dir = pack ? packDir(pack) : charactersDir(); let names = []; if (!dir) return { dir: '', max: CHAR_MAX, chars: [] }; try { names = fs.readdirSync(dir); } catch {}
   const ok = names.filter((f) => CHAR_NAME.test(f)).filter((f) => { try { const st = fs.lstatSync(path.join(dir, f)); return st.isFile() && st.size <= CHAR_MAX; } catch { return false; } }).slice(0, 80);
   const stem = (f) => f.replace(/\.[^.]+$/, ''), by = new Map(ok.map((f) => [stem(f).toLowerCase(), f]));
-  const chars = ok.filter((f) => !/-talk$/i.test(stem(f))).map((f) => { const st = stem(f), l = st.toLowerCase();
-    return { stem: st, file: f, talk: by.get(l + '-talk') || null, role: /^(lead|claude)$/.test(l) ? 'lead' : /^(you|human|user)$/.test(l) ? 'you' : 'agent' }; }).sort((a, b) => a.stem.localeCompare(b.stem));
+  const chars = ok.filter((f) => !/-(talk|think|celebrate)$/i.test(stem(f))).map((f) => { const st = stem(f), l = st.toLowerCase();
+    return { stem: st, file: f, talk: by.get(l + '-talk') || null, think: by.get(l + '-think') || null, celebrate: by.get(l + '-celebrate') || null, role: /^(lead|claude)$/.test(l) ? 'lead' : /^(you|human|user)$/.test(l) ? 'you' : 'agent' }; }).sort((a, b) => a.stem.localeCompare(b.stem));
   return { dir, max: CHAR_MAX, chars };
 }
 let audioOwner = { id: null, seen: 0 };

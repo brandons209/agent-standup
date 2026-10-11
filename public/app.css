@@ -162,6 +162,7 @@
   .ticker { display:none; position:absolute; left:6px; right:6px; bottom:30px; font:10.5px/1.3 ui-monospace,Menlo,monospace; color:#fff; background:rgba(15,20,35,.8); border-radius:5px; padding:2px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
   .ticker.on { display:block } .ticker i { font-style:normal; color:#ffd24a } .ticker.flash { animation:flash .25s } @keyframes flash { from { background:#3b5bdb } }
   /* character animation: all state-driven from the tile's classes */
+  .cimg { display:none } svg:not([data-f]) .f-idle, svg[data-f=idle] .f-idle, svg[data-f=talk] .f-talk, svg[data-f=think] .f-think, svg[data-f=celebrate] .f-celebrate { display:inline }   /* a custom character's picture: the one setFrame picks */
   .fig { transform-origin:50px 76px; animation:bob 4.4s ease-in-out infinite; animation-delay:var(--d,0s) } @keyframes bob { 50% { transform:translateY(-.9px) } }
   .tile.speaking .fig { animation:talk .46s ease-in-out infinite } @keyframes talk { 50% { transform:scale(1.025,.985) translateY(-.5px) } }
   .tile.vanishing { pointer-events:none; z-index:3; animation:vanish 1.2s cubic-bezier(.45,0,.75,.35) forwards }
@@ -183,6 +184,10 @@
   .drift { animation:drift 24s ease-in-out infinite alternate } @keyframes drift { to { transform:translateX(9px) } }
   .steam { animation:steam 2.6s ease-in-out infinite } @keyframes steam { 50% { transform:translateY(-1.4px); opacity:.25 } }
   .tile.done .sparks path { animation:tw 1.6s ease-in-out infinite }
+  .tile.thinking .hand { animation:none } .tile.thinking .pupil { transform:translate(.8px,-1.6px) } .tile.thinking .brow.l { transform:translateY(-1.3px) } .tile.thinking .brow.r { transform:rotate(-8deg) translateY(.3px) }   /* thinking: hands still on the keys, eyes up, one brow raised */
+  .tile.thinking:not(.speaking) .fig { animation:ponder 3.6s ease-in-out infinite } @keyframes ponder { 50% { transform:rotate(-2.5deg) translateY(-.5px) } } .prop.thinking { animation:tw 3.2s ease-in-out infinite }
+  .tile.celebrate:not(.speaking) .fig { animation:hop .6s ease-out 3 } @keyframes hop { 35% { transform:translateY(-4px) scale(1.02,.99) } 70% { transform:translateY(0) scale(.99,1.02) } }   /* done: three little jumps */
+  .tile.celebrate .arm { display:inline; transform:rotate(-140deg) } .tile.celebrate .laptop, .tile.celebrate .hands { display:none } .tile.celebrate .sparks, .tile.celebrate .eyes-happy { display:inline } .tile.celebrate .eyes-open { display:none }
   @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important } .confetti, .fly { display:none !important } }
   .tile:focus-visible, .rr:focus-visible, .bcard:focus-visible { outline:2px solid var(--accent); outline-offset:2px }
   .fly { position:fixed; left:0; top:0; font-size:28px; z-index:8; pointer-events:none; filter:drop-shadow(0 3px 4px rgba(0,0,0,.5)) }
