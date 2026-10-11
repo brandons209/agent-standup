@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 116">
+  <!-- Spike, thinking -->
+  <style>
+    .blink { transform-box:fill-box; transform-origin:center; animation:blink 4.5s 2s infinite }
+    @keyframes blink { 0%, 92%, 100% { transform:scaleY(1) } 95% { transform:scaleY(.1) } }
+    .tail { transform-box:fill-box; transform-origin:0% 20%; animation:flick 3s ease-in-out infinite }
+    @keyframes flick { 0%, 100% { transform:rotate(0) } 40% { transform:rotate(-8deg) } 55% { transform:rotate(6deg) } 70% { transform:rotate(0) } }
+    .spines { transform-box:fill-box; transform-origin:50% 100%; animation:sway 3.4s ease-in-out infinite }
+    @keyframes sway { 0%, 100% { transform:rotate(0) } 25% { transform:rotate(2deg) } 75% { transform:rotate(-2deg) } }
+    .flame { transform-box:fill-box; transform-origin:100% 50%; transform:scale(0); animation:burp 6s ease-out infinite }
+    @keyframes burp { 0%, 80%, 100% { transform:scale(0); opacity:0 } 83% { transform:scale(1.1); opacity:1 } 92% { transform:scale(1); opacity:.9 } 97% { transform:scale(.6); opacity:0 } }
+    .muse { transform-box:fill-box; transform-origin:0% 100%; animation:muse 3s ease-in-out infinite }
+    @keyframes muse { 0%, 100% { transform:translateY(0) } 50% { transform:translateY(-2px) } }
+    .dot { animation:dot 1.5s ease-in-out infinite } .dot.b { animation-delay:.25s } .dot.c { animation-delay:.5s }
+    @keyframes dot { 0%, 100% { opacity:.35 } 50% { opacity:1 } }
+  </style>
+  <defs>
+    <g id="scales">
+      <ellipse cx="60" cy="84" rx="20" ry="22"/>
+      <circle cx="58" cy="42" r="21"/>
+      <ellipse cx="40" cy="50" rx="14" ry="10.5"/>
+      <rect x="45" y="94" width="13" height="20" rx="5.5"/>
+      <rect x="64" y="94" width="13" height="20" rx="5.5"/>
+    </g>
+    <path id="spine" d="M-4 2 L0 -6 L4 2 Z"/>
+  </defs>
+
+  <g class="tail">
+    <path d="M76 96 C88 104 100 104 104 94 C106 88 104 82 100 80" fill="none" stroke="#6a3a91" stroke-width="10" stroke-linecap="round"/>
+    <path d="M76 96 C88 104 100 104 104 94 C106 88 104 82 100 80" fill="none" stroke="#a46fd2" stroke-width="7" stroke-linecap="round"/>
+    <path d="M100 82 L94 72 L104 74 L108 66 L110 78 Z" fill="#3ab54a" stroke="#1d6b28" stroke-width="1.4" stroke-linejoin="round"/>
+  </g>
+
+  <g class="spines" fill="#3ab54a" stroke="#1d6b28" stroke-width="1.4" stroke-linejoin="round">
+    <use href="#spine" transform="translate(50 22) rotate(-20) scale(1.1)"/>
+    <use href="#spine" transform="translate(61 20) scale(1.3)"/>
+    <use href="#spine" transform="translate(71 24) rotate(25) scale(1.2)"/>
+    <use href="#spine" transform="translate(77 32) rotate(55) scale(1.05)"/>
+    <use href="#spine" transform="translate(79 66) rotate(80) scale(.9)"/>
+    <use href="#spine" transform="translate(80 77) rotate(90) scale(.85)"/>
+  </g>
+
+  <path d="M72 36 L88 30 L82 39 L90 44 L73 47 Z" fill="#3ab54a" stroke="#1d6b28" stroke-width="1.4" stroke-linejoin="round"/>
+
+  <use href="#scales" fill="none" stroke="#6a3a91" stroke-width="3.2" stroke-linejoin="round"/>
+  <use href="#scales" fill="#a46fd2"/>
+  <ellipse cx="54" cy="34" rx="9" ry="6" fill="#c39ae6" opacity=".8"/>
+
+  <ellipse cx="57" cy="85" rx="13" ry="17" fill="#c5e88a" stroke="#8cb556" stroke-width="1"/>
+  <path d="M46 78 Q57 81 68 78 M45 86 Q57 89 69 86 M47 94 Q57 97 67 94" fill="none" stroke="#8cb556" stroke-width="1" stroke-linecap="round"/>
+  <g fill="#c5e88a" stroke="#6a3a91" stroke-width="1"><path d="M46 112 h4 v2 h-4 Z M51 112 h4 v2 h-4 Z M65 112 h4 v2 h-4 Z M70 112 h4 v2 h-4 Z"/></g>
+
+  <path d="M48 68 C42 72 40 78 42 82" fill="none" stroke="#6a3a91" stroke-width="9" stroke-linecap="round"/>
+  <path d="M48 68 C42 72 40 78 42 82" fill="none" stroke="#a46fd2" stroke-width="6" stroke-linecap="round"/>
+  <path d="M70 68 C76 72 78 78 76 82" fill="none" stroke="#6a3a91" stroke-width="9" stroke-linecap="round"/>
+  <path d="M70 68 C76 72 78 78 76 82" fill="none" stroke="#a46fd2" stroke-width="6" stroke-linecap="round"/>
+
+  <path d="M36 32 L40 24 L46 31 Z" fill="#3ab54a" stroke="#1d6b28" stroke-width="1.4" stroke-linejoin="round"/>
+
+  <g class="blink">
+    <ellipse cx="38" cy="40" rx="4.6" ry="7.6" fill="#fff" stroke="#2f1848" stroke-width="1.2"/>
+    <ellipse cx="38" cy="38.5" rx="3.4" ry="5.3" fill="#3aa346"/>
+    <ellipse cx="38" cy="39.5" rx="1.8" ry="3" fill="#0f3313"/>
+    <circle cx="39.4" cy="35.5" r="1.3" fill="#fff"/>
+    <ellipse cx="54" cy="41" rx="7" ry="9.2" fill="#fff" stroke="#2f1848" stroke-width="1.2"/>
+    <ellipse cx="53.5" cy="39.5" rx="5.4" ry="7" fill="#3aa346"/>
+    <ellipse cx="53.5" cy="42.5" rx="4.4" ry="3.4" fill="#86d47a"/>
+    <ellipse cx="53.5" cy="40" rx="2.8" ry="4" fill="#0f3313"/>
+    <circle cx="56" cy="35.5" r="2" fill="#fff"/><circle cx="51.6" cy="43.5" r=".9" fill="#fff"/>
+  </g>
+  <path d="M46 30 Q53 27 60 30" fill="none" stroke="#2f1848" stroke-width="1.4" stroke-linecap="round"/>
+  <circle cx="29" cy="46" r="1" fill="#6a3a91"/>
+  <g id="mouth"><path d="M33 55.8 Q39 56.6 45 54.8" fill="none" stroke="#2f1848" stroke-width="1.3" stroke-linecap="round"/></g>
+
+  <g class="flame">
+    <path d="M28 55 C22 50 18 54 13 49 C14 54 9 56 5 54 C8 60 4 63 2 62 C8 68 20 66 28 58 Z" fill="#45d06a" stroke="#1d8a3c" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M26 56 C21 54 18 56 15 54 C15 58 11 60 9 60 C14 63 21 62 26 57.5 Z" fill="#b6f5a8"/>
+  </g>
+  <g transform="translate(5.5 -1.5)">
+  <g class="muse">
+    <circle cx="70" cy="22" r="1.8" fill="#fff" stroke="#8a8fa8" stroke-width="1"/>
+    <circle cx="75" cy="16" r="2.8" fill="#fff" stroke="#8a8fa8" stroke-width="1"/>
+    <path d="M82 13 C80 6 88 2 93 6 C96 1 105 2 106 8 C112 8 114 15 109 18 C111 23 104 26 100 23 C97 27 89 26 88 22 C82 23 79 17 82 13 Z" fill="#fff" stroke="#8a8fa8" stroke-width="1.2" stroke-linejoin="round"/>
+    <circle class="dot" cx="89" cy="15" r="1.6" fill="#8a8fa8"/><circle class="dot b" cx="95.5" cy="15" r="1.6" fill="#8a8fa8"/><circle class="dot c" cx="102" cy="15" r="1.6" fill="#8a8fa8"/>
+  </g>
+  </g>
+</svg>
