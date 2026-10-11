@@ -103,7 +103,27 @@ $('#musicVol').oninput = (e) => { prefs.musicVol = +e.target.value; savePrefs();
 $('#tok').onclick = () => openRecap();
 $('#bMenu').onclick = (e) => { e.stopPropagation(); $('#menu').classList.toggle('on'); };
 document.addEventListener('click', (e) => { if (!e.target.closest('#menu') && !e.target.closest('#bMenu')) $('#menu').classList.remove('on'); });
-$('#bLog').onclick = () => { document.body.classList.toggle('log'); $('#bLog').classList.toggle('on'); };
+const applyLog = () => {
+  const b = document.body, bot = prefs.logPos === 'bottom';
+  b.classList.toggle('log', !!prefs.log); $('#bLog').classList.toggle('on', !!prefs.log); b.classList.toggle('logb', bot);
+  b.style.setProperty('--logw', prefs.logW + 'px'); b.style.setProperty('--logh', prefs.logH + 'px');
+  $('#logDock').title = bot ? L('Ancrer à droite', 'Dock on the right') : L('Ancrer en bas', 'Dock at the bottom');
+};
+$('#bLog').onclick = () => { prefs.log = !prefs.log; savePrefs(); applyLog(); };
+$('#logDock').onclick = () => { prefs.logPos = prefs.logPos === 'bottom' ? 'right' : 'bottom'; savePrefs(); applyLog(); };
+$('#logGrip').onpointerdown = (e) => {
+  const g = e.currentTarget, m = $('main'); g.setPointerCapture(e.pointerId); e.preventDefault();
+  g.onpointermove = (ev) => {
+    const r = m.getBoundingClientRect();
+    if (prefs.logPos === 'bottom') document.body.style.setProperty('--logh', Math.round(Math.max(120, Math.min(0.6 * r.height, r.bottom - ev.clientY))) + 'px');
+    else document.body.style.setProperty('--logw', Math.round(Math.max(240, Math.min(640, 0.6 * r.width, r.right - ev.clientX))) + 'px');
+  };
+  g.onpointerup = g.onpointercancel = () => {
+    g.onpointermove = g.onpointerup = g.onpointercancel = null;
+    const v = parseInt(document.body.style.getPropertyValue(prefs.logPos === 'bottom' ? '--logh' : '--logw'));
+    if (v) prefs[prefs.logPos === 'bottom' ? 'logH' : 'logW'] = v; savePrefs();
+  };
+};
 $('#bMute').onclick = toggleMute;
 $('#bPlay').onclick = togglePlay;
 $('#mRecap').onclick = () => { $('#menu').classList.remove('on'); openRecap(); };
@@ -230,7 +250,7 @@ if (EMBED) $('#mBrowser').style.display = '';
 
 (async function init() {
   if (!LANGS.some((l) => l[0] === prefs.lang)) prefs.lang = 'en'; await loadLocale(prefs.lang); await loadChars();
-  document.body.classList.toggle('rost', prefs.roster !== false); document.body.classList.toggle('react', !!prefs.reactions); setView(prefs.view); menuInit(); addEventListener('click', () => { try { if (prefs.notify && !EMBED && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} }, { once: true }); applyLang(); applyMute(); TTS.init().then(updateHint);
+  document.body.classList.toggle('rost', prefs.roster !== false); document.body.classList.toggle('react', !!prefs.reactions); applyLog(); setView(prefs.view); menuInit(); addEventListener('click', () => { try { if (prefs.notify && !EMBED && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} }, { once: true }); applyLang(); applyMute(); TTS.init().then(updateHint);
   loadHealth().then(() => {   // French by default only if translation can actually work; otherwise stay in English without a warning
     const h = S.health || {};
     if (!prefs.langChosen && FR() && h.claude === null && !h.apiKey) { prefs.lang = 'en'; applyLang(); }
