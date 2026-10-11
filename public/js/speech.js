@@ -45,7 +45,7 @@ setInterval(() => {
 
 // ---------- speaking tiles ----------
 const mouths = new Map();
-// A custom character shows one of its pictures: talking (mouth open) wins, then celebrating, then thinking, else at rest; one it does not have falls back to rest.
+// a custom character's picture: talking wins, then celebrating, then thinking, else at rest; a missing one falls back to rest
 function setFrame(el, id, mouthOpen) {
   const svg = el && el.querySelector('svg'), c = S.agents[id] && S.agents[id].custom; if (!svg || !c) return; const t = $('#t-' + id);
   const f = mouthOpen && c.talk ? 'talk' : c.celebrate && t && t.classList.contains('celebrate') ? 'celebrate' : c.think && t && t.classList.contains('thinking') && !S.speakers.has(id) ? 'think' : 'idle';

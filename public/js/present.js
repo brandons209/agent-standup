@@ -66,9 +66,8 @@ const lineHtml = (l, view) => view === 'editor'
   : `<div class="tl ${l.c}">${l.c === 'cmd' ? '<span class="ps">❯</span> ' : l.c === 'tool' ? '<span class="dotg">●</span> ' : l.c === 'run' ? '<span class="spin"></span>' : ''}${esc(l.t)}</div>`;
 
 // ---------- screen sharing: a real video-call presentation (window + presenter camera) ----------
-// One pane per agent that shares its screen (one at a time, or up to four with ⚙ "Several screens at once").
-// A pane stays while its agent is busy: a call running, or thinking between two calls until it speaks its report, finishes, or its turn ends.
-// Another agent only takes a pane after the one there was up for a moment, and the swap is a fade of the content, not a hide and show.
+// one pane per sharing agent, up to four with ⚙; a pane stays while its agent is busy (a call running, or thinking between calls),
+// and another agent takes it only after SHARE_DWELL, with a fade instead of a close and reopen
 const SHARE_DWELL = 3000, SHARE_GRACE = 1500, shareMaxMs = () => (prefs.shareS ?? 90) * 1000;   // shareMaxMs: thinking longer than this ends the share
 const shareCap = () => (prefs.multiShare && !document.body.classList.contains('narrow') ? 4 : 1);
 const paneOf = (id) => (S.shares.get(id) || {}).el || null, camOf = (id) => { const p = paneOf(id); return p && p.querySelector('.pcam'); };

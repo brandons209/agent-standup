@@ -1,5 +1,5 @@
 // Builds docs/index.html (the GitHub Pages landing page) from landing/template.html,
-// pulling the character art straight out of the app (public/js/cast.js, public/app.css) so the two never drift apart.
+// with the character art taken from the app (public/js/cast.js, public/app.css), so the landing shows the same characters.
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..');
 const js = fs.readFileSync(path.join(root, 'public/js/cast.js'), 'utf8'), app = fs.readFileSync(path.join(root, 'public/app.css'), 'utf8');
