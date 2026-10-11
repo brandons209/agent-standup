@@ -16,7 +16,7 @@ jobs:
           node --check server.js
           node --check extension.js
           node --check bin/agent-standup.js
-          node -e "new Function('return async function(){' + require('fs').readFileSync('public/index.html','utf8').split('<script>')[1].split('</script>')[0] + '}')"
+          for f in public/js/*.js; do node --check "$f"; done
       - name: One version everywhere
         run: |
           v=$(node -p "require('./package.json').version")

@@ -1,13 +1,11 @@
 // Builds docs/index.html (the GitHub Pages landing page) from landing/template.html,
-// pulling the character art straight out of public/index.html so the two never drift apart.
+// pulling the character art straight out of the app (public/js/cast.js, public/app.css) so the two never drift apart.
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..');
-const app = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
-const sep = '// =====================================================================\n';
-const js = app.slice(app.indexOf(sep + '//  cast: soft mascots'), app.indexOf(sep + '//  state'));
+const js = fs.readFileSync(path.join(root, 'public/js/cast.js'), 'utf8'), app = fs.readFileSync(path.join(root, 'public/app.css'), 'utf8');
 const cssStart = app.indexOf('/* character animation'), cssEndMark = '@media (prefers-reduced-motion:reduce) { .tile *, .tile { animation:none !important } }';
 const css = app.slice(cssStart, app.indexOf(cssEndMark) + cssEndMark.length);
-if (!js || cssStart < 0) throw new Error('art markers not found in public/index.html');
+if (!js.includes('//  cast: soft mascots') || cssStart < 0) throw new Error('art markers not found in public/js/cast.js or public/app.css');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 const out = fs.readFileSync(path.join(root, 'landing/template.html'), 'utf8')
   .replace('/*ART_CSS*/', () => css).replace('/*ART_JS*/', () => js).replace(/__VERSION__/g, version);

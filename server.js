@@ -720,7 +720,7 @@ function start(port = PORT) {
     const file = path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname);
     let fst = null; try { fst = fs.statSync(file); } catch {}
     if (!file.startsWith(PUBLIC + path.sep) || !fst || !fst.isFile()) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
+    res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });   // the page's scripts change with each update: a webview must not keep running old ones
     res.end(fs.readFileSync(file));
   } catch (e) { if (res.headersSent) return res.destroy(); json({ error: String(e.message || e) }, 500); }
   }).listen(port, '127.0.0.1', function () { console.log(`Agent Standup → http://localhost:${this.address().port}`); });

@@ -3,7 +3,8 @@
 //   node scripts/i18n.js check [code ...]   → for every locale (or the given ones): missing / unused / empty / placeholder-or-emoji mismatches. Exit code 1 on problems.
 //   node scripts/i18n.js stub <code>        → creates public/locales/<code>.json with every key empty, ready to translate
 const fs = require('fs'), path = require('path');
-const root = path.join(__dirname, '..'), dir = path.join(root, 'public/locales'), html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+const root = path.join(__dirname, '..'), dir = path.join(root, 'public/locales'), jsDir = path.join(root, 'public/js');
+const html = [path.join(root, 'public/index.html'), ...fs.readdirSync(jsDir).filter((f) => f.endsWith('.js')).sort().map((f) => path.join(jsDir, f))].map((f) => fs.readFileSync(f, 'utf8')).join('\n');   // the markup and every script
 const unesc = (s) => s.replace(/\\(u[0-9a-fA-F]{4}|['"\\nrt])/g, (m, c) => (c[0] === 'u' ? String.fromCharCode(parseInt(c.slice(1), 16)) : { n: '\n', r: '\r', t: '\t' }[c] || c));
 const decode = (s) => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
