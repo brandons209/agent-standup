@@ -108,10 +108,13 @@ document.addEventListener('click', (e) => { if (!e.target.closest('#menu') && !e
 const applyLog = () => {
   const b = document.body, bot = prefs.logPos === 'bottom';
   b.classList.toggle('log', !!prefs.log); $('#bLog').classList.toggle('on', !!prefs.log); b.classList.toggle('logb', bot);
-  b.style.setProperty('--logw', prefs.logW + 'px'); b.style.setProperty('--logh', prefs.logH + 'px');
+  b.style.setProperty('--logw', prefs.logW + 'px'); b.style.setProperty('--logh', prefs.logH + 'px'); b.style.setProperty('--logf', (prefs.logFont || 12.5) + 'px');
+  $('#logSmaller').title = L('Texte plus petit', 'Smaller text'); $('#logBigger').title = L('Texte plus grand', 'Larger text');
   $('#logDock').title = bot ? L('Ancrer à droite', 'Dock on the right') : L('Ancrer en bas', 'Dock at the bottom');
   $('#logText').classList.toggle('on', !!prefs.logText); $('#logText').title = prefs.logText ? L('Afficher aussi les outils', 'Show tool calls too') : L('Seulement ce qui est dit', 'Spoken lines only');
 };
+const logFont = (d) => { prefs.logFont = Math.max(11, Math.min(20, (prefs.logFont || 12.5) + d)); savePrefs(); applyLog(); };
+$('#logSmaller').onclick = () => logFont(-1); $('#logBigger').onclick = () => logFont(1);
 $('#logText').onclick = () => { prefs.logText = !prefs.logText; savePrefs(); applyLog(); renderLog(true); };
 $('#bLog').onclick = () => { prefs.log = !prefs.log; savePrefs(); applyLog(); };
 $('#logDock').onclick = () => { prefs.logPos = prefs.logPos === 'bottom' ? 'right' : 'bottom'; savePrefs(); applyLog(); };
@@ -119,8 +122,8 @@ $('#logGrip').onpointerdown = (e) => {
   const g = e.currentTarget, m = $('main'); g.setPointerCapture(e.pointerId); e.preventDefault();
   g.onpointermove = (ev) => {
     const r = m.getBoundingClientRect();
-    if (prefs.logPos === 'bottom') document.body.style.setProperty('--logh', Math.round(Math.max(120, Math.min(0.6 * r.height, r.bottom - ev.clientY))) + 'px');
-    else document.body.style.setProperty('--logw', Math.round(Math.max(240, Math.min(640, 0.6 * r.width, r.right - ev.clientX))) + 'px');
+    if (prefs.logPos === 'bottom') document.body.style.setProperty('--logh', Math.round(Math.max(120, Math.min(0.75 * r.height, r.bottom - ev.clientY))) + 'px');
+    else document.body.style.setProperty('--logw', Math.round(Math.max(240, Math.min(0.75 * r.width, r.right - ev.clientX))) + 'px');
   };
   g.onpointerup = g.onpointercancel = () => {
     g.onpointermove = g.onpointerup = g.onpointercancel = null;
