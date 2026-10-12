@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 116">
+  <!-- Aurelia -->
+  <style>
+    .blink { transform-box:fill-box; transform-origin:center; animation:blink 4.6s 2.2s infinite }
+    @keyframes blink { 0%, 92%, 100% { transform:scaleY(1) } 95% { transform:scaleY(.1) } }
+    .mane { transform-box:fill-box; transform-origin:30% 0%; animation:sway 3s ease-in-out infinite }
+    .tail { transform-box:fill-box; transform-origin:0% 0%; animation:sway 2.5s ease-in-out infinite }
+    @keyframes sway { 0%, 100% { transform:rotate(0) } 25% { transform:rotate(3deg) } 75% { transform:rotate(-3deg) } }
+    .scoop { transform-box:fill-box; transform-origin:30% 20%; animation:wobble 3.3s ease-in-out infinite }
+    .scoop.b { animation-delay:.35s } .scoop.c { animation-delay:.7s }
+    @keyframes wobble { 0%, 30%, 100% { transform:scale(1) } 8% { transform:scale(1.07, .93) } 16% { transform:scale(.96, 1.04) } 23% { transform:scale(1.02, .98) } }
+    .bow { transform-box:fill-box; transform-origin:50% 55%; animation:wiggle 5.2s ease-in-out infinite }
+    @keyframes wiggle { 0%, 78%, 100% { transform:rotate(0) } 83% { transform:rotate(-9deg) } 88% { transform:rotate(7deg) } 93% { transform:rotate(-3deg) } }
+  </style>
+  <defs>
+    <g id="coat">
+      <ellipse cx="72" cy="82" rx="25" ry="16"/>
+      <path d="M52 62 L66 60 L70 76 L54 80 Z"/>
+      <circle cx="44" cy="46" r="22"/>
+      <ellipse cx="28" cy="56" rx="13" ry="10"/>
+      <rect x="50" y="86" width="9" height="27" rx="3.5"/>
+      <rect x="82" y="86" width="9" height="27" rx="3.5"/>
+    </g>
+    <path id="farlegs" d="M61 88 h8 v23 a3.5 3.5 0 0 1 -3.5 3.5 h-1 a3.5 3.5 0 0 1 -3.5 -3.5 Z M92 86 h8 v25 a3.5 3.5 0 0 1 -3.5 3.5 h-1 a3.5 3.5 0 0 1 -3.5 -3.5 Z"/>
+    <path id="hoof" d="M0 0 h9 v3.5 a3.5 3.5 0 0 1 -3.5 3.5 h-2 a3.5 3.5 0 0 1 -3.5 -3.5 Z"/>
+    <path id="hoofs" d="M3 1.2 v4.4 M5.6 1.2 v4.4" fill="none" stroke="#eefaff" stroke-width=".9" stroke-linecap="round"/>
+    <pattern id="hair" patternUnits="userSpaceOnUse" width="14" height="14" patternTransform="rotate(14)">
+      <rect width="14" height="14" fill="#f98b2f"/><rect x="5" width="3.6" height="14" fill="#fdbb72"/><rect x="8.6" width="3" height="14" fill="#fff0bf"/>
+    </pattern>
+  </defs>
+
+  <g class="tail" stroke="#d9611a" stroke-width="1.6" stroke-linejoin="round" fill="url(#hair)">
+    <g class="scoop c"><path d="M99 99 C101 94 109 94 112 99 C114 103 113 108 109 110.6 C107 112.4 103 112.6 101 110.8 C99.6 112.8 96.6 113.6 94.4 112.8 C97.2 111 97.8 108.4 97.6 105.6 C97.4 103.4 97.8 101 99 99 Z"/></g>
+    <g class="scoop b"><circle cx="108.6" cy="91.6" r="8.4"/></g>
+    <g class="scoop"><circle cx="104" cy="78.6" r="9.4"/></g>
+  </g>
+
+  <use href="#farlegs" fill="#b3d6f7" stroke="#4a86c4" stroke-width="1.6"/>
+  <g fill="#8fc0ee" stroke="#4a86c4" stroke-width="1"><use href="#hoof" x="61" y="107.5"/><use href="#hoof" x="91.5" y="107.5"/></g>
+  <use href="#coat" fill="none" stroke="#4a86c4" stroke-width="3.2" stroke-linejoin="round"/>
+  <use href="#coat" fill="#cde6fb"/>
+  <ellipse cx="40" cy="38" rx="9" ry="6" fill="#e8f4fe" opacity=".85"/>
+  <g fill="#a3cdf4" stroke="#4a86c4" stroke-width="1"><use href="#hoof" x="50" y="106"/><use href="#hoof" x="82" y="106"/></g>
+  <use href="#hoofs" x="50" y="106"/><use href="#hoofs" x="82" y="106"/>
+
+  <g transform="translate(80 78)" stroke-linejoin="round">
+    <path d="M-4.6 -1.4 L4.6 -1.4 L4.6 7.2 L-4.6 7.2 Z" fill="#7f74c4" stroke="#3c2f9a" stroke-width=".7"/>
+    <path d="M-7 -.2 L0 -7.8 L7 -.2 L4.4 1.8 L0 -3.4 L-4.4 1.8 Z" fill="#fcd02a" stroke="#c98a10" stroke-width=".5"/>
+    <path d="M0 2 C-1.8 .6 -1.4 -1 0 -.2 C1.4 -1 1.8 .6 0 2 Z" fill="#3c2f9a"/>
+    <g fill="#fff"><circle cx="0" cy="3.3" r="1.1"/><circle cx="1.1" cy="4.1" r="1.1"/><circle cx=".7" cy="5.4" r="1.1"/><circle cx="-.7" cy="5.4" r="1.1"/><circle cx="-1.1" cy="4.1" r="1.1"/></g>
+    <circle cx="0" cy="4.5" r=".7" fill="#fcd02a"/>
+  </g>
+
+  <g class="bow" stroke="#3c2f9a" stroke-width="1.2" stroke-linejoin="round">
+    <path d="M95 71 C93 76 92 80 90 83 L93.6 82 L94.6 85 C96 81 96.6 76 96.4 71.4 Z" fill="#6c61b6"/>
+    <path d="M95 70 C91 64 84 63 84 68 C84 73 90 74 95 70 Z" fill="#7f74c4"/>
+    <path d="M96 70 C99 63 107 62 107 67 C107 72 101 73 96 70 Z" fill="#7f74c4"/>
+    <path d="M87 67 C88 66 91 66.4 93 68.6 M98 68.4 C100 66 103 65.4 104.4 66" fill="none" stroke="#a49ce0" stroke-width=".9" stroke-linecap="round"/>
+    <ellipse cx="95.5" cy="70.3" rx="2.4" ry="2.8" fill="#9187d4"/>
+  </g>
+
+  <g class="mane" stroke="#d9611a" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M34 24 C44 15 60 15 68 24 C72 30 73 38 71 45 C69 44 67 44 64 45 C64 36 60 29 52 26 C46 24 40 24 34 24 Z" fill="#f98b2f"/>
+    <path d="M52 20 C60 21 66 26 68.6 33 C69.4 36 69.6 39 69.4 42 C68 36 65 29 59 25 C57 23.4 54.6 21.8 52 20 Z" fill="#fff0bf" stroke="none"/>
+    <path d="M60 85 C59 90 61 94 65 95.6 C65.4 92.6 67 90 70 87 Z" fill="url(#hair)"/>
+    <circle cx="66.4" cy="80.6" r="5" fill="url(#hair)"/>
+    <circle cx="67" cy="71.2" r="5.6" fill="url(#hair)"/>
+    <circle cx="66.6" cy="61" r="6" fill="url(#hair)"/>
+    <circle cx="65.2" cy="50" r="6.6" fill="url(#hair)"/>
+  </g>
+
+  <path d="M53 31 C53 23 56 16 62 11.6 C66 16 68 24 66.4 32 Z" fill="#cde6fb" stroke="#4a86c4" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M57 29 C57 24 59 19.6 61.8 17 C64 20.6 64.6 25.6 63.8 30 Z" fill="#a3cdf4"/>
+
+  <g class="blink">
+    <ellipse cx="32" cy="45" rx="4.6" ry="8" fill="#fff" stroke="#2c2450" stroke-width="1.2"/>
+    <ellipse cx="31" cy="47" rx="3.4" ry="5.6" fill="#6f5bd0"/>
+    <ellipse cx="31" cy="48" rx="1.8" ry="3.2" fill="#2a1a6e"/>
+    <circle cx="32.4" cy="44" r="1.3" fill="#fff"/>
+    <ellipse cx="48" cy="46" rx="7" ry="9.5" fill="#fff" stroke="#2c2450" stroke-width="1.2"/>
+    <ellipse cx="46.5" cy="48" rx="5.4" ry="7.2" fill="#6f5bd0"/>
+    <ellipse cx="46.5" cy="51" rx="4.4" ry="3.6" fill="#b4a6f2"/>
+    <ellipse cx="46.5" cy="48.5" rx="2.8" ry="4.2" fill="#2a1a6e"/>
+    <circle cx="49" cy="44" r="2" fill="#fff"/><circle cx="44.6" cy="52" r=".9" fill="#fff"/>
+    <path d="M40 39.5 Q48 33 56 39.5 L59 36.5 M53 36 L55.5 33.5 M49 35 L50.5 32" fill="none" stroke="#2c2450" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M28 38.5 L26 36.4 M30.5 37.5 L29.5 35" fill="none" stroke="#2c2450" stroke-width="1.4" stroke-linecap="round"/>
+  </g>
+  <g fill="#8fc0ee" opacity=".6"><ellipse cx="25" cy="58" rx="5" ry="2.6"/><ellipse cx="45" cy="60" rx="4.4" ry="2.4"/></g>
+  <g fill="#4f8fd0"><circle cx="22" cy="57" r=".55"/><circle cx="24.6" cy="56" r=".55"/><circle cx="26.6" cy="58.2" r=".55"/><circle cx="23.4" cy="59.2" r=".5"/><circle cx="42.4" cy="59.4" r=".55"/><circle cx="45" cy="58.6" r=".55"/><circle cx="47.4" cy="60.2" r=".55"/><circle cx="44.2" cy="61.4" r=".5"/></g>
+  <circle cx="18.5" cy="53" r=".9" fill="#5d93c8"/>
+  <g id="mouth"><path d="M20.6 58.6 Q27.6 62 35 57.4 Q33.4 65.6 27.4 65.8 Q22 65.6 20.6 58.6 Z" fill="#fff" stroke="#2c2450" stroke-width="1.2" stroke-linejoin="round"/><path d="M21.8 61.6 Q27.6 64 33.6 60.6" fill="none" stroke="#9fb6cf" stroke-width=".7"/></g>
+
+  <g stroke="#d9611a" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M24 38 C22 26 32 16 46 16 C56 16 63 21 65 29 C62 31 60 34 59 40 C57 35 53 31 47 31 C42 30 37 31 33 33 C30 34.5 27 36 24 38 Z" fill="#f98b2f"/>
+    <path d="M42 17 C43 13 46.6 10 51 9 C49.4 11.6 49.2 14 50 16.8 Z" fill="#f98b2f"/>
+    <path d="M32 23 C38 18.6 47 17.6 54 19.6 C59 21 62 25 63.4 29.4 C61.4 30.4 60.2 32 59.6 34.4 C57.6 29.4 53 25.6 47 25 C41 24.4 36 25.2 32 23 Z" fill="#fdbb72" stroke="none"/>
+    <path d="M41 21.4 C47 20.4 53 21.4 57.4 24.6 C59.4 26.2 60.8 28.4 61.6 30.4 C59 27 55 24.6 50 23.6 C47 23 44 22.6 41 21.4 Z" fill="#fff0bf" stroke="none"/>
+    <path d="M28 33.6 C32 28.6 38 26.6 44 27 C40 28 36 30 33 32.6 Z" fill="#fff0bf" stroke="none"/>
+  </g>
+</svg>
