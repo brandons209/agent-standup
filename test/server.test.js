@@ -101,14 +101,15 @@ test('a live call followed record by record ends with exactly what a fresh load 
   const { port, stop } = await serve(), q = 'proj=-f&id=s';
   try {
     const first = await load(port, q), have = new Map(first.events.map((e) => [e.k, e])), seen = []; let seq = first.seq, late = 0; const ep = first.ep;
-    assert.equal(typeof ep, 'string'); assert.ok(Number.isInteger(seq)); assert.equal(have.size, first.events.length);
+    assert.equal(typeof ep, 'string'); assert.ok(Number.isInteger(seq)); assert.equal(have.size, first.events.length); assert.equal(first.marks, 1, 'before the lead has written anything, its turn is open');   // marks: the turns of this transcript end with a mark, so the lead is at work until one comes
+    const marks = [];
     for (const [file, rec] of steps.slice(1)) {
       fs.appendFileSync(file, line(rec)); await wait(280);   // the server does not build a timeline twice within 250 ms
-      const d = await load(port, q + '&after=' + seq + '&ep=' + ep); assert.equal(d.ep, ep); assert.ok(d.seq >= seq); assert.deepEqual(Object.keys(d).sort(), ['agents', 'ep', 'events', 'id', 'seq']);
+      const d = await load(port, q + '&after=' + seq + '&ep=' + ep); assert.equal(d.ep, ep); assert.ok(d.seq >= seq); assert.deepEqual(Object.keys(d).filter((k) => k !== 'marks').sort(), ['agents', 'ep', 'events', 'id', 'seq']); marks.push(d.marks || 0);
       for (const e of d.events) { seen.push([have.has(e.k) ? 'changed' : 'new', e.kind, e.agent, e.end || 0]); if (!have.has(e.k) && [...have.values()].some((x) => x.ts > e.ts)) late++; have.set(e.k, e); }   // what the page does: a known key is replaced in place, an unknown one is added
       seq = d.seq; assert.deepEqual((await load(port, q + '&after=' + seq + '&ep=' + ep)).events, []);   // asked again with the new number: nothing
     }
-    const fresh = await load(port, q); assert.equal(fresh.ep, ep); assert.equal(fresh.seq, seq);
+    const fresh = await load(port, q); assert.equal(fresh.ep, ep); assert.equal(fresh.seq, seq); assert.equal(marks[0], 0, 'a transcript whose records carry no stop reason is not said to mark its turns'); assert.equal(marks[marks.length - 1], 1); assert.equal(fresh.marks, 1);
     assert.equal(new Set(fresh.events.map((e) => e.k)).size, fresh.events.length);   // keys are unique
     assert.deepEqual([...have.keys()].sort(), fresh.events.map((e) => e.k).sort()); for (const e of fresh.events) assert.deepEqual(have.get(e.k), e);
     fs.mkdirSync(path.join(tmp, 'projects', '-f2'), { recursive: true }); fs.cpSync(dir, path.join(tmp, 'projects', '-f2'), { recursive: true });   // the same files read for the first time by a server that never saw them grow: same keys, same events
@@ -138,6 +139,52 @@ test('the lead\'s turn ends on end_turn or on an interruption, and only the lead
     assert.ok(ev.every((e) => e.end === undefined || e.end === 1));
   } finally { stop(); }
 });
+test('a turn that ends on a message Claude Code writes itself is over: the API is down, the limit is reached, a refusal, nothing to answer; a message of the model that is cut is not the end', async () => {
+  const dir = path.join(tmp, 'projects', '-x'); fs.mkdirSync(path.join(dir, 's', 'subagents'), { recursive: true });
+  const err = (s, text, stop = 'stop_sequence') => ({ ...said(s, text, { stop }), isApiErrorMessage: true });   // written by Claude Code itself, in the place of the model's answer
+  const synthetic = (r) => ({ ...r, message: { ...r.message, model: '<synthetic>' } });
+  fs.writeFileSync(path.join(dir, 's.jsonl'), [typed(0, 'one'), said(1, 'Looking.'), err(2, 'API Error: 529 Overloaded.'), typed(3, 'two'), err(4, 'You have hit your limit'), typed(5, 'three'), err(6, 'API Error: the safeguards flagged this message', 'refusal'),
+    typed(7, 'four'), synthetic(said(8, 'No response requested.', { stop: 'stop_sequence' })), typed(9, 'five'), said(10, 'A long answer that was cut', { stop: 'max_tokens' }), typed(11, 'six'), said(12, 'Stopped by a safety check in the middle', { stop: 'refusal' }), said(13, 'and it goes on.', { stop: 'tool_use' }),
+    typed(14, 'seven'), used(15, 'toolu_w', 'Bash', { command: 'sleep 60' }), err(16, 'API Error: Connection lost mid-response.'), result(17, 'toolu_w', 'ok'), said(18, 'Back, and done.', { stop: 'end_turn' })].map(line).join(''));   // the connection dropped while a call was out: the lead goes on when it answers
+  fs.writeFileSync(path.join(dir, 's', 'subagents', 'agent-a1.jsonl'), [typed(1, 'sub order'), err(1.5, 'API Error: 500')].map(line).join(''));   // a sub-agent that fails does not end the lead's turn
+  const { port, stop } = await serve();
+  try {
+    const ev = (await load(port, 'proj=-x&id=s')).events.filter((e) => e.kind === 'say' || e.kind === 'user');
+    assert.deepEqual(ev.map((e) => e.agent + ' ' + e.text + (e.end ? ' END' : '')), ['user one', 'main Looking.', 'a1 API Error: 500', 'main API Error: 529 Overloaded. END', 'user two', 'main You have hit your limit END', 'user three', 'main API Error: the safeguards flagged this message END', 'user four', 'main No response requested. END', 'user five', 'main A long answer that was cut', 'user six', 'main Stopped by a safety check in the middle', 'main and it goes on.', 'user seven', 'main API Error: Connection lost mid-response.', 'main Back, and done. END']);
+  } finally { stop(); }
+});
+test('a pack name that is not a pack is answered as such, whatever the word', async () => {
+  const { port, stop } = await serve();
+  try {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'nope']) {
+      const list = await get(port, '/api/characters?pack=' + name); assert.equal(list.status, 200, name); assert.deepEqual(JSON.parse(list.body).chars, [], name);
+      assert.equal((await get(port, '/packs/' + name + '/x.png')).status, 404, name);
+    }
+    const ponies = JSON.parse((await get(port, '/api/characters?pack=ponies')).body);
+    assert.deepEqual(ponies.chars.filter((c) => c.role !== 'lead' && c.role !== 'you').map((c) => c.stem), ['applejack', 'aurelia', 'fluttershy', 'pinkie-pie', 'rainbow-dash', 'rarity', 'starlight-glimmer', 'trixie']);
+    assert.deepEqual(ponies.chars.filter((c) => c.role === 'lead').map((c) => c.stem), ['lead']); assert.deepEqual(ponies.chars.filter((c) => c.role === 'you').map((c) => c.stem), ['you']);
+    assert.ok(ponies.chars.every((c) => c.talk && c.think && c.celebrate));
+    assert.ok(JSON.parse((await get(port, '/api/characters?pack=cats')).body).chars.length > 0);
+    assert.deepEqual(JSON.parse((await get(port, '/api/packs')).body).map((p) => p.name), ['ponies', 'cats']);
+  } finally { stop(); }
+});
+test('own agent names: the name given at launch, or the person\'s own agent type; never a stock type', async () => {
+  const dir = path.join(tmp, 'projects', '-n'), subs = path.join(dir, 's', 'subagents'); fs.mkdirSync(subs, { recursive: true });
+  const kids = [['a1', 'code-reviewer', {}, 3], ['a2', 'general-purpose', {}, 4], ['a3', 'general-purpose', { name: 'Athena' }, 5], ['a4', 'code-reviewer', {}, 6], ['a5', 'my-plugin:db_migrator', {}, 7], ['a6', 'Explore', {}, 8]];
+  fs.writeFileSync(path.join(dir, 's.jsonl'), [typed(0, 'review it'), ...kids.map(([id, type, extra, s]) => used(s, 'toolu_' + id, 'Agent', { prompt: 'Do ' + id, description: 'Task ' + id, subagent_type: type, ...extra }, { id: 'mN' }))].map(line).join(''));
+  for (const [id, type, , s] of kids) {
+    fs.writeFileSync(path.join(subs, `agent-${id}.jsonl`), [typed(s + 10, 'Do ' + id), said(s + 11, 'On it.')].map(line).join(''));
+    fs.writeFileSync(path.join(subs, `agent-${id}.meta.json`), JSON.stringify({ agentType: type, description: 'Task ' + id, toolUseId: 'toolu_' + id }));
+  }
+  const { port, stop } = await serve();
+  try {
+    const tl = await load(port, 'proj=-n&id=s'), own = Object.fromEntries(tl.agents.map((a) => [a.id, a.own || null]));
+    assert.deepEqual(own, { main: null, a1: 'Code Reviewer', a2: null, a3: 'Athena', a4: 'Code Reviewer 2', a5: 'Db Migrator', a6: null });
+    assert.ok(!tl.events.some((e) => 'nm' in e), 'the launch name stays on the server side');
+    const t0 = Date.now(), [v, h] = await Promise.all([get(port, '/api/voices'), get(port, '/api/health')]);
+    assert.equal(v.status, 200); assert.equal(h.status, 200); assert.ok(Array.isArray(JSON.parse(v.body).voices)); assert.ok(Date.now() - t0 < 20000);
+  } finally { stop(); }
+});
 test('compaction summaries, workflow agents, titles and a transcript rewritten in place', async () => {
   const dir = path.join(tmp, 'projects', '-w'), main = path.join(dir, 's.jsonl'), run = path.join(dir, 's', 'subagents', 'workflows', 'wf_run1'); fs.mkdirSync(run, { recursive: true });
   const wfAgent = (id, phase, recs) => { fs.writeFileSync(path.join(run, `agent-${id}.jsonl`), recs.map(line).join('')); fs.writeFileSync(path.join(run, `agent-${id}.meta.json`), JSON.stringify({ agentType: 'workflow-subagent', description: 'check ' + id, workflowPhase: phase })); };
@@ -162,6 +209,20 @@ test('compaction summaries, workflow agents, titles and a transcript rewritten i
     const size = fs.statSync(main).size; fs.writeFileSync(main, [typed(0, 'a different conversation'), said(1, 'With other lines.'), said(2, 'x'.repeat(size + 5000), { stop: 'end_turn' })].map(line).join('')); await wait(280); assert.ok(fs.statSync(main).size > size);   // rewritten in place and longer than before: the bytes after the old length must not be read as a continuation
     assert.deepEqual(await load(port, q + '&after=' + d.seq + '&ep=' + d.ep), { resync: true });
     const again = await load(port, q); assert.notEqual(again.ep, tl.ep); assert.deepEqual(again.events.filter((e) => e.agent === 'main' || e.agent === 'user').filter((e) => e.kind !== 'order').map((e) => e.kind + (e.end ? ' end' : '')), ['user', 'say', 'say end']);
+  } finally { stop(); }
+});
+test('the list of sessions: a line that goes on with a tool call is not the end of the turn', async () => {
+  const dir = path.join(tmp, 'projects', '-b'), f = path.join(dir, 's.jsonl'); fs.mkdirSync(dir, { recursive: true });
+  const { port, stop } = await serve(), row = async (proj = '-b') => { await wait(1300); return JSON.parse((await get(port, '/api/board')).body).find((r) => r.proj === proj); }, state = async (proj) => (await row(proj)).state;   // the list is worked out at most once every 1.2 s
+  try {
+    fs.writeFileSync(f, [typed(0, 'Write the file'), said(1, 'I write it now.', { stop: 'tool_use' })].map(line).join('')); assert.equal(await state(), 'working');   // the call itself is written when it is whole, many seconds later for a long file
+    fs.appendFileSync(f, line(used(2, 'toolu_w', 'Bash', { command: 'ls' })) + line(result(3, 'toolu_w', 'ok')) + line(said(4, 'It is written.', { stop: 'end_turn' }))); assert.equal(await state(), 'turn');
+    fs.appendFileSync(f, line(typed(5, 'Thanks')) + line(said(6, 'A line that does not say why it stopped, in a session that does.'))); assert.equal(await state(), 'working');   // before a tool call: the call may still come
+    const ago = (Date.now() - 60000) / 1000; fs.utimesSync(f, ago, ago); assert.equal(await state(), 'turn');   // none came for 45 s: that was its last word
+    fs.appendFileSync(f, line(typed(7, 'Go on')) + line(used(8, 'toolu_x', 'Bash', { command: 'sleep 60' }))); assert.equal(await state(), 'working');
+    fs.appendFileSync(f, line(typed(9, '[Request interrupted by user for tool use]'))); assert.equal((await row()).state, 'turn');   // Esc: your turn there, and you know it
+    fs.appendFileSync(f, line(typed(10, 'Again')) + line(said(11, 'Done.', { stop: 'end_turn' }))); assert.equal((await row()).state, 'turn');
+    fs.mkdirSync(path.join(tmp, 'projects', '-b2'), { recursive: true }); fs.writeFileSync(path.join(tmp, 'projects', '-b2', 's.jsonl'), [typed(0, 'Hello'), said(1, 'A session that never says why its messages stop.')].map(line).join('')); assert.equal(await state('-b2'), 'turn');   // as before
   } finally { stop(); }
 });
 test('a pinned session is that session or nothing, whatever was written later elsewhere', async () => {
@@ -198,7 +259,7 @@ test('the reasoning before a line or a call rides on it when the transcript keep
   const srv = require('../server.js').start(0); await new Promise((r) => srv.once('listening', r)); const port = srv.address().port;
   try {
     const ev = JSON.parse((await get(port, '/api/session?proj=-th&id=s3')).body).events.filter((e) => e.kind === 'tools' || e.kind === 'say');
-    assert.deepEqual(ev.map((e) => [e.kind, e.th || null]), [['tools', 'The query scans the whole table. I should check the index.'], ['say', null]]);
+    assert.deepEqual(ev.map((e) => [e.kind, e.th || null]), [['tools', 'The query scans the whole table.\nI should check the index.'], ['say', null]]);   // the line breaks of its notes are kept
   } finally { srv.close(); require('../server.js').shutdown(); }
 });
 test('how far a session was said is kept per session, never goes back, and outlives a reload of its feed', async () => {

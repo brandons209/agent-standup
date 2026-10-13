@@ -24,6 +24,36 @@ function short(t, max = 230) {
   const cut = s.slice(0, max), end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
   return end > 80 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, '') + '…';
 }
+// The wrap-up, for the ear: a Markdown message as a few plain sentences. What the page shows with layout (headings, lists, tables), a voice can only say with full stops.
+// Kept: the first sentence of each paragraph and of each list item, in the order of the message (then second sentences if there is room); a short heading or a "…:" line, as a sentence, in front of what it introduces.
+// Dropped: tables, code blocks, rules, long headings, emphasis marks, emoji, the seconds of a clock time, and what the voice has already read (heard: the text read so far).
+function gist(md, heard = '', max = 280) {   // max: 300 characters with the lead-in, 15 to 20 s of speech
+  const bare = (x) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''), said = bare(heard), blocks = [], units = []; let cur = null, fence = false, wrapped = false, intro = [];   // bare: letters and digits only, the same sentence whatever the marks around it
+  for (const raw of String(md).split('\n')) {
+    const l = raw.replace(/^\s*(?:>\s*)*/, '').trimEnd();   // a quoted line is read like any other
+    if (/^(?:```|~~~)/.test(l)) { fence = !fence; cur = null; blocks.push(null); continue; }
+    if (fence) continue;   // code: for the eye only
+    if (!l || /^(?:[-*_=]\s*){3,}$/.test(l)) { cur = null; continue; }   // an empty line or a rule ends the paragraph
+    if (l.split('|').length > 2) { cur = null; blocks.push(null); continue; }   // a table row (null: something was skipped here)
+    const h = l.match(/^#{1,6}\s+(.+?)[\s#]*$/) || l.match(/^\*\*([^*]*[^*.!?])\*\*:?$/), li = l.match(/^(?:[-*+•]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.+)$/);   // a line all in bold is a heading too, unless it is a sentence
+    if (h) { blocks.push({ h: 1, t: h[1].replace(/^\d+[.)]\s+/, '') }); cur = null; } else if (!li && cur && wrapped) cur.t += ' ' + l; else blocks.push(cur = { t: li ? li[1] : l });   // each line is a block of its own (a paragraph, a list item), unless the line above was cut at the margin
+    wrapped = !h && l.length > 60 && !/[.!?…:;]["')»*_]*$/.test(l);
+  }
+  const end = (s) => (/[.!?…]["')»]*$/.test(s) ? s : s.replace(/[\s:;,–—-]+$/, '') + '.');   // every piece ends like a sentence: that is where the voice breathes
+  const fresh = (s) => { const n = bare(s), k = n ? said.indexOf(n.slice(0, 16)) : 0; return k < 0 || said.length - k < n.length / 2; };   // not read yet, or cut before its half: said whole. Past its half, it is not said twice
+  for (const b of blocks) {
+    if (!b) { intro = intro.filter((x) => x.h); continue; }   // "Here is the table:" has nothing left to introduce
+    const eye = (b.t.match(/`[^`]+`/g) || []).some((c) => c.length > 42 || (/\s/.test(c) && /[-=(){}$;|&<>\\]/.test(c)));   // a command or a snippet in the line: kept only if there is nothing else to say
+    const t = plain(b.t.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<\/?[a-z][^>]*>/gi, ' ').replace(/\*+|~~|__/g, '')).replace(/\s*[\u2190-\u21FF]\s*/g, ', ').replace(/[\p{Extended_Pictographic}\uFE0F\u200D\u2700-\u27BF]/gu, '').replace(/\b(\d{1,2}:\d{2}):\d{2}\b/g, '$1').replace(/\s+/g, ' ').replace(/^[\s,;:.–—-]+/, '').trim();
+    if (b.h) { if (t && t.length <= 40 && fresh(t)) intro = [{ h: 1, s: end(t) }]; continue; }   // a short heading becomes a sentence; a long one says again what follows it
+    const all = t.split(/(?<=[.!?…]["')\]»]*)(?<!\b(?:e\.g|i\.e|vs|cf|ex)\.)\s+(?=["“«(]?[\p{Lu}\d])/u).filter(Boolean), colon = /:$/.test(t) ? all.pop() : '', sens = all.filter(fresh);
+    sens.forEach((s, r) => units.push({ s: end(s), r: eye ? 99 : r, pre: r ? [] : intro }));   // r: its rank, the first sentence of each block comes before any second one
+    intro = (all.length ? [] : intro).concat(colon && colon.length <= 60 && fresh(colon) ? [{ s: end(colon) }] : []);   // "The fix has two parts:" waits for the item it announces, and is dropped with it
+  }
+  let n = 0; const keep = new Set(), cost = (u) => u.pre.reduce((a, x) => a + x.s.length + 1, u.s.length + 1);
+  for (const u of units.map((u, i) => ({ ...u, i })).sort((a, b) => a.r - b.r || a.i - b.i)) { if (n + cost(u) > max || (u.r > 98 && n)) { if (u.r) break; continue; } keep.add(u.i); n += cost(u); }   // whole sentences only, up to max characters
+  return units.filter((u, i) => keep.has(i)).map((u) => u.pre.map((x) => x.s).concat(u.s).join(' ')).join(' ') || (units[0] ? short(units[0].s, max) : '');   // back in the order of the message
+}
 // make code-ish text pronounceable
 const PER = /^(?:s|sec|ms|min|h|hr|j|jour|d|day|mois|mo|month|an|yr|year)$/i;
 function slashSay(m, pre, lead, body) {   // word/word (pre: the character before it, put back as it is): only a file path is named by its last part; anything else keeps every word, so the voice says what the caption shows ("and/or", "client/server", "2/3")

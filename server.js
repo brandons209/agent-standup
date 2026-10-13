@@ -8,7 +8,7 @@ const os = require('os');
 const crypto = require('crypto');
 const kokoro = require('./kokoro.js');   // natural voices, installed on demand (see kokoro.js)
 const zlib = require('zlib');
-const { execFileSync } = require('child_process');
+const { execFileSync, execFile } = require('child_process');
 
 const PORT = process.env.PORT || 4747;
 // Same place Claude Code writes to: honours CLAUDE_CONFIG_DIR (custom config dirs are common on Linux); AGENT_STANDUP_PROJECTS overrides it.
@@ -180,12 +180,13 @@ let boardMemo = { at: 0, rows: [] };
 function parseTail(file, st) {
   const sig = st.mtimeMs + ':' + st.size, hit = boardCache.get(file); if (hit && hit.sig === sig) return hit;
   const { text, cut } = readTail(file, 192 * 1024), lines = text.split('\n'); if (cut) lines.shift();
-  const pend = new Map(); let lastType = null, lastTool = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined;
+  const pend = new Map(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined;
   for (const l of lines) {
     if (!l) continue; let r; try { r = JSON.parse(l); } catch { continue; }
     if (r.type === 'custom-title' && typeof r.customTitle === 'string') custom = r.customTitle; else if (r.type === 'ai-title' && typeof r.aiTitle === 'string') ai = r.aiTitle;   // a session is renamed, or named, long after its row was first shown: the latest one read wins
     const t = Date.parse(r.timestamp) || 0, bl = blocks(r);
-    if (r.type === 'assistant' || r.type === 'user') { lastType = r.type; lastTool = bl.some((b) => b.type === 'tool_use'); if (t) lastTs = t; }
+    if (r.type === 'assistant' || r.type === 'user') { lastType = r.type; lastTool = bl.some((b) => b.type === 'tool_use'); lastStop = (r.type === 'assistant' && r.message && r.message.stop_reason) || null; if (lastStop) stops = true; if (t) lastTs = t;
+      esc = r.type === 'user' && bl.some((b) => b.type === 'text' && /^\s*\[Request interrupted/i.test(b.text || '')); if (esc) pend.clear(); }   // Esc: the turn stops there, and no call is waited for any more
     for (const b of bl) { if (b.type === 'tool_use') pend.set(b.id, { name: b.name, ts: t }); else if (b.type === 'tool_result') pend.delete(b.tool_use_id); }
   }
   if (!hit && !custom) {   // first look at this file: a little further back than the lines read above, and without needing whole lines
@@ -193,7 +194,7 @@ function parseTail(file, st) {
     custom = un([...big.matchAll(/"type":"custom-title","customTitle":"((?:[^"\\]|\\.)*)"/g)].pop()); if (!ai) ai = un([...big.matchAll(/"type":"ai-title","aiTitle":"((?:[^"\\]|\\.)*)"/g)].pop());
   }
   if (!custom && !ai && first == null) first = firstPrompt(file) || (st.size > 64 * 1024 ? '' : null);   // '' = looked for and not there; a file that has just been created is looked at again
-  const out = { sig, title: custom || ai || first || null, custom, ai, first, lastType, lastTool, lastTs, pending: [...pend.values()] };   // a title the person typed wins over the generated one, and both over the first prompt
+  const out = { sig, title: custom || ai || first || null, custom, ai, first, lastType, lastTool, lastStop, stops, esc, lastTs, pending: [...pend.values()] };   // a title the person typed wins over the generated one, and both over the first prompt
   boardCache.set(file, out); if (boardCache.size > 200) boardCache.delete(boardCache.keys().next().value); return out;
 }
 function firstPrompt(file) {   // the first thing the person typed, read record by record: a pattern over the raw text ran from a user record into the assistant's first answer and took that as the title
@@ -224,7 +225,8 @@ function boardRows0() {
     if (age < 30 * 60e3) {
       if (lp) { ageMs = now - (lp.ts || st.mtimeMs); tool = lp.name;
         state = SUBTOOL.test(lp.name) ? 'waiting' : (ASKS.test(lp.name) && ageMs > 4000) || (APPROVAL.test(lp.name) && ageMs > 15000) ? 'blocked' : 'working'; }
-      else if (p.lastType === 'assistant' && !p.lastTool) state = 'turn';
+      else if (p.esc) state = 'turn';   // you stopped it (Esc): it is your turn there, not "working" for the next ten minutes
+      else if (p.lastType === 'assistant' && !p.lastTool && p.lastStop !== 'tool_use' && !(p.lastStop == null && p.stops && age < 45000)) state = 'turn';   // a line whose message goes on with a tool call is not the end of the turn; with no stop reason on it (older Claude Code), its call gets 45 s to appear
       else state = age < 10 * 60e3 ? 'working' : 'idle';
     }
     let subActive = 0, subTotal = 0;
@@ -310,6 +312,7 @@ function parseRecord(st, r) {
   if (r.type === 'user') {
     st.ended = false;
     const items = [], wf = r.toolUseResult && typeof r.toolUseResult === 'object' && typeof r.toolUseResult.runId === 'string' ? r.toolUseResult.runId : '';   // tool results: the real output that appeared on the agent's screen
+    if (st.out) for (const b of blocks(r)) if (b.type === 'tool_result') st.out.delete(b.tool_use_id);
     for (const b of blocks(r)) if (b.type === 'tool_result' && wf) push({ ts, agent, kind: 'wfrun', toolId: b.tool_use_id, run: wf });   // the answer to a Workflow call names the run it started: its agents are in subagents/workflows/<run>/
     for (const b of blocks(r)) if (b.type === 'tool_result' && (st.toolName[b.tool_use_id] === 'Agent' || st.toolName[b.tool_use_id] === 'Task') && !(st.bg && st.bg[b.tool_use_id]) && !/^\s*Async agent launched/i.test(resultText(b.content))) push({ ts, agent, kind: 'agentdone', toolId: b.tool_use_id });   // a synchronous call: the lead got the sub-agent's answer back, so it has finished (async launches answer immediately and are not a completion)
     for (const b of blocks(r)) if (b.type === 'tool_result' && st.toolName[b.tool_use_id] && !NO_RESULT.has(st.toolName[b.tool_use_id])) {
@@ -319,30 +322,40 @@ function parseRecord(st, r) {
     if (items.length) push({ ts, agent, kind: 'results', items });
     const typed = blocks(r).filter((b) => b.type === 'text').map((b) => b.text).join('\n').replace(HARNESS, ''), cut = /^\s*\[Request interrupted[^\]]*\]/i.test(typed);   // what the human typed, without the blocks the harness wraps around it
     if (agent !== 'main') { if (!st.prompt && typed.trim() && !st.raw.length) st.prompt = { ts, text: typed.trim() }; return; }   // a sub-agent's first user message is the order, emitted from the parent's side (kept here for the agents of a workflow, whose order is in no other file)
-    if (cut && st.act >= 0) st.raw[st.act].end = 1;   // Esc: the turn stops there, without the end_turn mark. The last thing the lead said or did closes it
+    if (cut && st.out) st.out.clear(); if (cut && st.act >= 0) st.raw[st.act].end = 1;   // Esc: the turn stops there, without the end_turn mark. The last thing the lead said or did closes it
     const txt = typed.replace(/^\s*\[Request interrupted[^\]]*\]\s*/i, '').trim();
-    if (txt && !/^<(system-reminder|command-|local-command|task-notification)/.test(txt) && !r.isMeta && !r.isCompactSummary) push({ ts, agent: 'user', kind: 'user', text: txt });   // not the summary Claude Code writes when it compacts: thousands of characters the human never typed
+    if (txt && !/^<(system-reminder|command-|local-command|task-notification)/.test(txt) && !r.isMeta && !r.isCompactSummary) { if (st.out) st.out.clear(); push({ ts, agent: 'user', kind: 'user', text: txt }); }   // a call that never got its answer is not waited for across your next message · not the summary Claude Code writes when it compacts: thousands of characters the human never typed
   } else if (r.type === 'assistant') {
     const m = r.message || {}; let said = null; st.ended = m.stop_reason === 'end_turn';   // the agent closed its turn: silence after this is idleness, not a long command
+    if (agent === 'main') { st.lead = 1; if (m.stop_reason) st.stops = 1; }   // this transcript says why each message stopped: its turns end with a mark, and until one comes the lead is at work (see marks, below)
     if (m.id && m.usage) {   // the same message is repeated once per content block with identical numbers: keep one per message id
       const u = m.usage, prev = st.msgUsage.get(m.id);
       st.msgUsage.set(m.id, { ts: prev ? prev.ts : ts, u: { i: u.input_tokens || 0, o: u.output_tokens || 0, r: u.cache_read_input_tokens || 0, w: u.cache_creation_input_tokens || 0 }, model: m.model });
     }
     const th = () => { const t = st.th; st.th = ''; return t ? { th: t } : {}; };   // what the agent was thinking before this line or call, when Claude Code kept it (most of the time it only keeps a signature): the call shows it as an inner thought
     for (const b of blocks(r)) {
-      if (b.type === 'thinking' && typeof b.thinking === 'string' && b.thinking.trim()) st.th = clip(b.thinking.replace(/\s+/g, ' ').trim(), 900);
+      if (b.type === 'thinking' && typeof b.thinking === 'string' && b.thinking.trim()) st.th = clip(b.thinking.replace(/[^\S\n]+/g, ' ').replace(/ ?\n[\n ]*/g, '\n').trim(), 900);   // line breaks are kept: each line of its notes is a thought of its own
       else if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) { said = push({ ts, agent, kind: 'say', text: b.text.trim(), ...th() }); st.act = st.raw.length - 1; st.sayOf = m.id; st.sayAt = st.act; }
       else if (b.type === 'tool_use') {
-        st.toolName[b.id] = b.name; if (b.input && b.input.run_in_background) (st.bg = st.bg || {})[b.id] = true;
-        if (b.name === 'Agent' || b.name === 'Task') push({ ts, agent, kind: 'agentcall', toolId: b.id, bg: !!(b.input && b.input.run_in_background), text: (b.input && b.input.prompt) || '', title: (b.input && b.input.description) || '' });
+        st.toolName[b.id] = b.name; (st.out = st.out || new Set()).add(b.id); if (b.input && b.input.run_in_background) (st.bg = st.bg || {})[b.id] = true;   // out: the calls that have no answer yet
+        if (b.name === 'Agent' || b.name === 'Task') push({ ts, agent, kind: 'agentcall', toolId: b.id, bg: !!(b.input && b.input.run_in_background), text: (b.input && b.input.prompt) || '', title: (b.input && b.input.description) || '', ...(b.input && typeof b.input.name === 'string' && b.input.name.trim() ? { nm: b.input.name.trim() } : {}) });
         else { push({ ts, agent, kind: 'tool', tool: toolLabel(b, ts), ...th() }); st.act = st.raw.length - 1; }
       }
     }
-    if (agent === 'main' && m.stop_reason === 'end_turn') {   // the lead's turn is over: Claude Code writes one record per content block, each with the message's stop reason, so the mark goes on the line this record carries (a thinking block carries none)
+    if (agent === 'main' && (m.stop_reason === 'end_turn' || ((r.isApiErrorMessage || (m.model === '<synthetic>' && m.stop_reason === 'stop_sequence')) && !(st.out && st.out.size)))) {   // also a turn that ends on a message Claude Code writes itself, in the place of the model's: the API is down, the limit is reached, the request was refused, or there was nothing to answer. Nothing follows it, unless a call of the lead is still out: the connection dropped while its agents worked, and it goes on when they answer. (A message of the model that a safety check cuts is not the end either: Claude Code tells the model, which goes on.) The lead's turn is over: Claude Code writes one record per content block, each with the message's stop reason, so the mark goes on the line this record carries (a thinking block carries none)
       if (!said && m.id && st.sayOf === m.id) said = st.raw[st.sayAt];   // ...or on the line the same message brought in an earlier record
       if (said) said.end = 1;
     }
   }
+}
+// A sub-agent the person named keeps that name on screen: the name given when it was launched, or else its type when that type is the person's own (.claude/agents/code-reviewer.md → "Code Reviewer").
+// The types Claude Code ships are not names: those agents get a first name from the page, as before.
+const STOCK_AGENT = /^(general-purpose|explore|plan|claude|agent|task|fork|main|default|worker|subagent|workflow-subagent|statusline-setup|output-style-setup|claude-code-guide|verification|magic-docs)$/i;
+function ownName(s, type) {
+  const raw = String(s || '').split(':').pop().trim(); if (!raw || (type && STOCK_AGENT.test(raw))) return '';   // a plugin's agent is written plugin:agent
+  let n = raw.replace(/[_\-]+/g, ' ').replace(/[^\p{L}\p{N} .'’&+]/gu, ' ').replace(/\s+/g, ' ').trim(); if (!/[\p{L}\p{N}]/u.test(n)) return '';
+  if (n === n.toLowerCase()) n = n.replace(/(^|\s)\p{Ll}/gu, (m) => m.toUpperCase());
+  return n.length > 26 ? n.slice(0, 25).trimEnd() + '…' : n;
 }
 const metaCache = new Map();   // meta file path → { mtime, value }
 function readMeta(f) {
@@ -365,6 +378,10 @@ function buildTimeline(proj, id, files = []) {
   for (const j of subs.journals) { const st = readNew(j.file, 'wf:' + j.run, true), run = runs[j.run]; files.push(j.file); if (st && run) for (const e of st.raw) if (run.agents[e.child]) run.done.add(run.agents[e.child]); }
   const childByTool = {};   // Agent tool_use id → the sub-agent it created, so we know who ordered whom
   for (const a of Object.values(agents)) if (a.toolUseId) childByTool[a.toolUseId] = a.id;
+  const called = {}, born = {}; for (const st of states) if (st) { if (st.raw.length) born[st.agent] = st.raw[0].ts; for (const e of st.raw) if (e.kind === 'agentcall' && e.nm && childByTool[e.toolId]) called[childByTool[e.toolId]] = e.nm; }
+  const sameName = {}; for (const a of Object.values(agents).filter((x) => x.id !== 'main').sort((x, y) => (born[x.id] || Infinity) - (born[y.id] || Infinity) || (x.id < y.id ? -1 : 1))) {   // in the order they started, so that a second agent of the same name is the one numbered 2 and stays so
+    const n = ownName(called[a.id]) || ownName(a.type, true); if (n) { const k = n.toLowerCase(); sameName[k] = (sameName[k] || 0) + 1; a.own = sameName[k] > 1 ? n + ' ' + sameName[k] : n; }
+  }
   const runByTool = {}; for (const st of states) if (st) for (const e of st.raw) if (e.kind === 'wfrun' && runs[e.run] && !runs[e.run].by) { runs[e.run].by = e.agent; runs[e.run].toolId = e.toolId; runByTool[e.toolId] = runs[e.run]; }   // Workflow tool_use id → the run it started
 
   const lastTs = {}, stOf = {}; for (const st of states) if (st) { lastTs[st.agent] = st.lastTs || 0; stOf[st.agent] = st; }
@@ -404,7 +421,8 @@ function buildTimeline(proj, id, files = []) {
     else { merged.push(e.kind === 'tool' ? { ts: e.ts, agent: e.agent, kind: 'tools', tools: [e.tool], ...(e.end ? { end: 1 } : {}), ...(e.th ? { th: e.th } : {}), k: e.k } : e); lastReal = merged.length - 1; }
   }
   const real = merged.find((e) => e.kind !== 'usage' && e.kind !== 'finish' && e.kind !== 'compact'), first = real ? real.ts : 0, last = merged.length ? merged[merged.length - 1].ts : 0;   // time zero = the first thing said or done
-  return { id, proj, agents: Object.values(agents), events: merged.map((e) => ({ ...e, t: Math.max(0, e.ts - first) })), durationMs: last - first, recentUntil };
+  const marks = states[0] && (states[0].stops || !states[0].lead) ? { marks: 1 } : {};   // a session whose turns end with a mark, also before the lead has written anything: a session that has not closed a turn yet is not one without marks, and its lead is not "done" each time it thinks for a while
+  return { id, proj, agents: Object.values(agents), events: merged.map((e) => ({ ...e, t: Math.max(0, e.ts - first) })), durationMs: last - first, recentUntil, ...marks };
 }
 
 // Ask the local `claude` CLI (uses the user's existing login) to map a JSON array of strings to another array. Cached.
@@ -522,25 +540,25 @@ const quips = (texts, lang) => claudeMap('q' + lang, `Each string is a work repo
 
 // ---- text-to-speech, generated on the machine and cached as wav:
 //      macOS → `say`, Windows → System.Speech (SAPI voices) through PowerShell, Linux → espeak-ng.
-let sayVoices = null;
+let sayVoices = null, sayVoicesJob = null;
 const WIN = process.platform === 'win32', MAC = process.platform === 'darwin';
 const PS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'];
+const VOICES_CMD = MAC ? ['say', ['-v', '?'], 5000] : WIN ? ['powershell.exe', [...PS, "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.GetInstalledVoices() | ForEach-Object { $_.VoiceInfo.Name + '|' + $_.VoiceInfo.Culture.Name }"], 20000] : ['espeak-ng', ['--voices'], 5000];
+function parseVoices(out) {
+  const voices = [];
+  if (MAC) { for (const line of out.split('\n')) { const m = line.match(/^(.+?)\s{2,}([a-z]{2}_[A-Z]{2})\s+#/); if (m) voices.push({ name: m[1].trim(), locale: m[2] }); } }
+  else if (WIN) { for (const line of out.split(/\r?\n/)) { const [name, loc] = line.trim().split('|'); if (name && loc) voices.push({ name, locale: loc.replace('-', '_') }); } }
+  else for (const line of out.split('\n').slice(1)) { const c = line.trim().split(/\s+/); if (c[1] && /^(fr|en)/.test(c[1])) voices.push({ name: c[1], locale: c[1].replace('-', '_').replace(/^(\w{2})$/, (m) => m + '_' + m.toUpperCase()) }); }
+  return { available: voices.length > 0, voices, platform: process.platform };
+}
 function listVoices() {
   if (sayVoices) return sayVoices;
-  const voices = [];
-  try {
-    if (MAC) {
-      const out = execFileSync('say', ['-v', '?'], { encoding: 'utf8', timeout: 5000 });
-      for (const line of out.split('\n')) { const m = line.match(/^(.+?)\s{2,}([a-z]{2}_[A-Z]{2})\s+#/); if (m) voices.push({ name: m[1].trim(), locale: m[2] }); }
-    } else if (WIN) {
-      const out = execFileSync('powershell.exe', [...PS, "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.GetInstalledVoices() | ForEach-Object { $_.VoiceInfo.Name + '|' + $_.VoiceInfo.Culture.Name }"], { encoding: 'utf8', timeout: 20000, windowsHide: true });
-      for (const line of out.split(/\r?\n/)) { const [name, loc] = line.trim().split('|'); if (name && loc) voices.push({ name, locale: loc.replace('-', '_') }); }
-    } else {
-      const out = execFileSync('espeak-ng', ['--voices'], { encoding: 'utf8', timeout: 5000 });
-      for (const line of out.split('\n').slice(1)) { const c = line.trim().split(/\s+/); if (c[1] && /^(fr|en)/.test(c[1])) voices.push({ name: c[1], locale: c[1].replace('-', '_').replace(/^(\w{2})$/, (m) => m + '_' + m.toUpperCase()) }); }
-    }
-  } catch {}
-  return (sayVoices = { available: voices.length > 0, voices, platform: process.platform });
+  let out = ''; try { out = execFileSync(VOICES_CMD[0], VOICES_CMD[1], { encoding: 'utf8', timeout: VOICES_CMD[2], windowsHide: true }); } catch {}
+  return (sayVoices = parseVoices(out));
+}
+function loadVoices() {   // the same list for the page, asked without waiting: the first answer of the system takes a second or more, and the session the page asks for at the same moment must not wait behind it
+  if (sayVoices) return Promise.resolve(sayVoices);
+  return sayVoicesJob || (sayVoicesJob = new Promise((resolve) => { try { execFile(VOICES_CMD[0], VOICES_CMD[1], { encoding: 'utf8', timeout: VOICES_CMD[2], windowsHide: true }, (err, out) => resolve(sayVoices || (sayVoices = parseVoices(err ? '' : String(out))))); } catch { resolve(sayVoices || (sayVoices = parseVoices(''))); } }));
 }
 const ttsDir = path.join(os.tmpdir(), 'agent-standup-tts-' + (process.getuid ? process.getuid() : 'user'));
 try { fs.mkdirSync(ttsDir, { recursive: true, mode: 0o700 }); } catch {}
@@ -605,7 +623,7 @@ function tts(text, voice, rate, engine, lang) {
   if (kk) { if (!kokoro.hasVoice(voice)) return Promise.reject(new Error('unknown voice')); }
   else { const vs = listVoices(); if (!vs.available || !vs.voices.some((v) => v.name === voice)) return Promise.reject(new Error('unknown voice')); }
   text = String(text).slice(0, kk ? 1500 : 700); rate = Math.max(90, Math.min(360, Math.round(+rate || 180)));
-  const key = crypto.createHash('sha1').update([kk ? 'kokoro' : 'system', voice, rate, text].join('|')).digest('hex'), file = path.join(ttsDir, key + '.wav');
+  const key = crypto.createHash('sha1').update([kk ? 'kokoro2' : 'system', voice, rate, text].join('|')).digest('hex'), file = path.join(ttsDir, key + '.wav');   // kokoro2: older clips of long lines may be cut short
   if (fs.existsSync(file)) return Promise.resolve(file);
   if (ttsJobs.has(key)) return ttsJobs.get(key);
   fs.mkdirSync(ttsDir, { recursive: true });
@@ -622,8 +640,8 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 const CHAR_NAME = /^[\w][\w .()\-]{0,78}\.(png|gif|webp|jpe?g|svg)$/i, CHAR_MAX = 300 * 1024, CHAR_TYPES = { png: 'image/png', gif: 'image/gif', webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', svg: 'image/svg+xml' };
 const charactersDir = () => process.env.AGENT_STANDUP_CHARACTERS || path.join(os.homedir(), '.agent-standup', 'characters');
 // lstat, not stat: a symlink is not a regular file, so it is skipped and never served
-// Built-in character packs, shipped with the app (examples/<folder>): picked in ⚙ → Characters, or copied into the person's own folder as a start
-const PACKS = { starter: 'characters', cats: 'cats' }, packDir = (name) => (PACKS[name] ? path.join(__dirname, 'examples', PACKS[name]) : null);
+// Built-in character packs, shipped with the app (examples/<folder>): picked in ⚙ → Characters
+const PACKS = { ponies: 'characters/mane6', cats: 'cats' }, packDir = (name) => (Object.prototype.hasOwnProperty.call(PACKS, name) ? path.join(__dirname, 'examples', PACKS[name]) : null);   // own keys only: 'constructor' is not a pack
 function listCharacters(pack) {
   const dir = pack ? packDir(pack) : charactersDir(); let names = []; if (!dir) return { dir: '', max: CHAR_MAX, chars: [] }; try { names = fs.readdirSync(dir); } catch {}
   const ok = names.filter((f) => CHAR_NAME.test(f)).filter((f) => { try { const st = fs.lstatSync(path.join(dir, f)); return st.isFile() && st.size <= CHAR_MAX; } catch { return false; } });
@@ -673,7 +691,7 @@ function start(port = PORT) {
     if (url.pathname === '/api/voices') {
       if (url.searchParams.get('engine') === 'openai') return json({ available: !!ttsSettings(), engine: 'openai', platform: process.platform });
       if (url.searchParams.get('engine') === 'kokoro') { const st = kokoro.status(); if (st.installed && !st.gaveUp) kokoro.warm(); return json({ available: st.installed && !st.gaveUp, ready: st.ready, voices: kokoro.voices(), platform: process.platform, engine: 'kokoro' }); }
-      return json(listVoices());
+      return loadVoices().then((v) => json(v));
     }
     if (url.pathname === '/api/kokoro/install' && req.method === 'POST') return json(kokoro.install());
     if (url.pathname === '/api/kokoro') return json(kokoro.status());
@@ -715,8 +733,8 @@ function start(port = PORT) {
       }
       if (ep == null) return json({ id: tl.id, agents: tl.agents, total: tl.events.length, events: tl.events.slice(+after) });   // a page loaded before 1.25.7 still asks by position
       const a = +after; if (ep !== tl.ep || !(a >= 0 && a <= tl.seq)) return json({ resync: true });   // not the feed this page was following (restart, session dropped from memory, transcript rewritten): it loads the session again
-      if (a === tl.seq) { if (!entry.idle) entry.idle = JSON.stringify({ id: tl.id, agents: tl.agents, ep: tl.ep, seq: tl.seq, events: [] }); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(entry.idle); }   // nothing new, which is the answer to nearly every poll: written once
-      return json({ id: tl.id, agents: tl.agents, ep: tl.ep, seq: tl.seq, events: feedSince(entry, a) });   // new events and changed ones alike, whole, under the key they always had
+      if (a === tl.seq) { if (!entry.idle) entry.idle = JSON.stringify({ id: tl.id, agents: tl.agents, ep: tl.ep, seq: tl.seq, marks: tl.marks, events: [] }); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(entry.idle); }   // nothing new, which is the answer to nearly every poll: written once
+      return json({ id: tl.id, agents: tl.agents, ep: tl.ep, seq: tl.seq, marks: tl.marks, events: feedSince(entry, a) });   // new events and changed ones alike, whole, under the key they always had
     }
     const pk = url.pathname.match(/^\/packs\/([a-z]+)\/(.*)$/);
     if (url.pathname.startsWith('/characters/') || (pk && packDir(pk[1]))) {   // only plain image files of the characters folder (or of a built-in pack), by exact name

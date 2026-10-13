@@ -5,8 +5,8 @@ async function loadSession(proj, id) {
   pause(); const mine = (S.loadN = (S.loadN || 0) + 1);
   const r = await fetch(`/api/session?proj=${encodeURIComponent(proj)}&id=${id}`), data = await r.json();
   if (mine !== S.loadN || data.error) return false; S.saidSrv = +r.headers.get('x-said') || 0;
-  closeAllShares(); S.term = {}; S.focus = null; S.agents = {}; S.castN = 0; for (const k in nameBook) delete nameBook[k]; [{ id: 'user' }, ...data.agents].forEach((a) => (S.agents[a.id] = persona(a)));
-  clearThoughts(); Object.assign(TH, { since: {}, next: {}, said: {}, last: 0 }); S.events = data.events; stampT(0); S.byK = new Map(data.events.map((e) => [e.k, e])); S.seq = data.seq || 0; S.pollFails = 0; S.narrAt = 0; S.narrBy = {}; S.galN = 0; S.ep = data.ep || ''; S.sawEnd = data.events.some((e) => e.end); S.late = []; S.pos = 0; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
+  closeAllShares(); S.term = {}; S.focus = null; S.agents = {}; S.castN = 0; S.castSeed = hash(id); for (const k in nameBook) delete nameBook[k]; [{ id: 'user' }, ...data.agents].forEach((a) => (S.agents[a.id] = persona(a)));   // the cast order is seeded by the session, before the personas are built
+  clearThoughts(); Object.assign(TH, { since: {}, next: {}, said: {}, last: 0 }); S.events = data.events; stampT(0); S.byK = new Map(data.events.map((e) => [e.k, e])); S.seq = data.seq || 0; S.pollFails = 0; S.narrAt = 0; S.narrBy = {}; S.galN = 0; S.ep = data.ep || ''; S.sawEnd = !!data.marks || data.events.some((e) => e.end); S.late = []; S.pos = 0; S.joinAt = Date.now(); S.idx = 0; S.status = {}; S.tc = {}; S.cur = { proj, id }; S.logTo = 0; S.detail = null; $('#detail').classList.remove('on');
   const opt = $('#sessions').selectedOptions[0]; S.title = (S.live ? niceProj(proj) : opt && opt.dataset.title) || '';
   if (proj === '_demo') S.events.forEach((e) => { if (e.fr) trMem.set(baseText(e), e.fr); });   // the demo ships its own French
   $('#subtitle').textContent = S.title; recomputeStatus(0); buildStage(); renderHighlights(); setFocus('main'); renderLog(true); computeGantt(); layout(); paintStatus(); prefetchTr(0); return true;
@@ -58,6 +58,7 @@ setInterval(async () => {
     if (switched || !S.cur) return;
     var cur = S.cur, d = await (await fetch(`/api/session?proj=${encodeURIComponent(cur.proj)}&id=${cur.id}&after=${S.seq}&ep=${encodeURIComponent(S.ep)}${S.since ? '&said=' + S.since : ''}`)).json();
     if (d.error || cur !== S.cur) return; if (d.resync) { S.cur = null; return; }   // the server no longer has our place (restarted, transcript rewritten): reload next tick
+    if (d.marks) S.sawEnd = true;   // the server says it keeps the end-of-turn marks, even on a batch with no new events
     if (!d.events || !d.events.length) { S.seq = d.seq; S.pollFails = 0; return; }
     for (const a of d.agents) if (!S.agents[a.id]) { S.agents[a.id] = persona(a); addTile(S.agents[a.id]); }
     const from = S.events.length, fresh = [], changed = [];   // the session is not written in order: what is new goes at the end (the order the call got it in), what the server corrected is corrected in place

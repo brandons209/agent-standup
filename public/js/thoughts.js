@@ -6,30 +6,37 @@
 const TH = { since: {}, next: {}, said: {}, last: 0, voice: null };
 const THINK = {
   en: { run: ['Still running… {x}.', 'Come on… {x}.', '{x}. Any second now.'], err: ['Why did that fail?', 'That error again… what am I missing?', 'Not what I expected from “{x}”.'], two: ['{a}, then {b}… what links them?', '{a} and {b}. It has to be in one of them.'], one: ['Something in {a} does not add up.', '{a}… where was that part again?'], again: ['Back to {a}. Again.', '{a}, once more. I am missing something.'],
-    todo: ['One thing at a time: {x}.', '{x}… then the next one.'], next: ['After this: {x}.'], grep: ['Where is “{x}” hiding?', '“{x}”… it has to be somewhere.'], web: ['“{x}”… let’s see what comes up.'], task: ['{x}. Stay on it.', '{x}… getting there, I think.'], many: ['{n} calls in. What do I know so far?'] },
+    todo: ['One thing at a time: {x}.', '{x}… then the next one.'], next: ['After this: {x}.'], grep: ['Where is “{x}” hiding?', '“{x}”… it has to be somewhere.'], web: ['“{x}”… let’s see what comes up.'], grep0: ['It has to be somewhere in here.', 'Where is that thing hiding?'], task: ['{x}. Stay on it.', '{x}… getting there, I think.'] },
   fr: { run: ['Toujours en cours… {x}.', 'Allez… {x}.', '{x}. Ça arrive.'], err: ['Pourquoi ça a planté ?', 'Encore cette erreur… qu’est-ce que je rate ?', 'Pas ce que j’attendais de « {x} ».'], two: ['{a}, puis {b}… quel est le lien ?', '{a} et {b}. C’est forcément dans l’un des deux.'], one: ['Il y a un truc dans {a} qui ne colle pas.', '{a}… c’était où, déjà ?'], again: ['Retour à {a}. Encore.', '{a}, une fois de plus. Je rate quelque chose.'],
-    todo: ['Une chose à la fois : {x}.', '{x}… puis la suite.'], next: ['Après ça : {x}.'], grep: ['Où se cache « {x} » ?', '« {x} »… c’est forcément quelque part.'], web: ['« {x} »… voyons ce que ça donne.'], task: ['{x}. On reste dessus.', '{x}… j’y arrive, je crois.'], many: ['{n} appels. Qu’est-ce que je sais, à ce stade ?'] },
+    todo: ['Une chose à la fois : {x}.', '{x}… puis la suite.'], next: ['Après ça : {x}.'], grep: ['Où se cache « {x} » ?', '« {x} »… c’est forcément quelque part.'], web: ['« {x} »… voyons ce que ça donne.'], grep0: ['C’est forcément quelque part là-dedans.', 'Où est-ce que ça se cache ?'], task: ['{x}. On reste dessus.', '{x}… j’y arrive, je crois.'] },
 };
 function thoughtFor(id) {
-  const now = Date.now(), W = THINK[FR() ? 'fr' : 'en'], seen = (TH.said[id] = TH.said[id] || []), cut = (x, n) => { x = String(x || '').replace(/\s+/g, ' ').trim(); return (x.length > n ? x.slice(0, n).replace(/\s+\S*$/, '') + '…' : x).replace(/[.\s]+$/, ''); };
+  const now = Date.now(), W = THINK[FR() ? 'fr' : 'en'], seen = (TH.said[id] = TH.said[id] || []), cut = (x, n) => { x = String(x || '').replace(/\s+/g, ' ').trim(); return (x.length > n ? x.slice(0, n).replace(/\s+\S*$/, '') : x).replace(/[.…,;:\s]+$/, ''); };   // the line it goes into brings its own punctuation
   const real = realThought(id); if (real) return real;   // its own words first, always: the rest is only for when there are none (left)
-  const buf = (S.term[id] || []).slice(-8), last = buf[buf.length - 1], r = S.run[id], hot = [], out = [], add = (to, k, v) => { for (const tpl of W[k]) to.push(tpl.replace(/\{(\w+)\}/g, (m, key) => v[key])); };
-  const what = (e) => { const d = e.tool.d || {}; return cut(d.note || (d.kind === 'cmd' ? String(d.text || '').trim().split(/\s+/).slice(0, 3).join(' ') : base(d.file) || e.tool.name), 60); };
+  const buf = (S.term[id] || []).slice(-8), last = buf[buf.length - 1], r = S.run[id], hot = [], out = [], add = (to, k, v) => { for (const tpl of W[k]) to.push(tpl.replace(/\{(\w+)\}/g, (m, key) => v[key]).replace(/([?!])[.…]+/g, '$1').replace(/([?!]) (\p{Ll})/u, (m, a, b) => a + ' ' + b.toUpperCase())); };   // "Why is it slow?" keeps its own mark, without a full stop after it
+  const cmd = (t) => String(t || '').trim().replace(/^(?:cd\s+\S+\s*(?:&&|;)\s*)+/, '').replace(/^(?:[A-Za-z_]\w*=\S*\s+)+/, '').split(/\s+(?:&&|\|\||[|;>])/)[0].split(/\s+/).slice(0, 3).join(' ');   // the command itself: not the folder it starts from, nor what it is piped into
+  const what = (e) => { const d = e.tool.d || {}; return cut(d.note || (d.kind === 'cmd' ? cmd(d.text) : base(d.file) || e.tool.name), 60); }, fname = (f) => (f.length > 30 ? f.slice(0, 14) + '…' + f.slice(-13) : f);
   if (last && last.k === 'cmd' && r && r.id === last.id && now - (r.ts || now) > 20000) add(hot, 'run', { x: what(last) });   // a command that takes its time
   if (last && last.err) add(hot, 'err', { x: what(last) });
-  const files = buf.filter((e) => /^(read|edit|write)$/.test(e.k)).map((e) => base((e.tool.d || {}).file)).filter(Boolean), uniq = [...new Set(files)], f = uniq[uniq.length - 1];
+  const files = buf.filter((e) => /^(read|edit|write)$/.test(e.k)).map((e) => fname(base((e.tool.d || {}).file))).filter(Boolean), uniq = [...new Set(files)], f = uniq[uniq.length - 1];
   if (f && files.filter((x) => x === f).length >= 3) add(out, 'again', { a: f }); else if (uniq.length > 1) add(out, 'two', { a: uniq[uniq.length - 2], b: f }); else if (f) add(out, 'one', { a: f });
   const td = S.todos[id] || [], cur = td.find((x) => x.s === 'in_progress'), nx = td.find((x) => x.s === 'pending'); if (cur) add(out, 'todo', { x: cut(cur.c, 70) }); if (nx) add(out, 'next', { x: cut(nx.c, 70) });
-  const g = buf.slice(-3).reverse().find((e) => e.k === 'grep' && (e.tool.d || {}).pattern); if (g) add(out, 'grep', { x: cut(g.tool.d.pattern, 30) });
+  const g = buf.slice(-3).reverse().find((e) => e.k === 'grep' && (e.tool.d || {}).pattern); if (g) { const pat = String(g.tool.d.pattern).trim(); if (/^[\p{L}\p{N}][\p{L}\p{N} _.-]{1,28}$/u.test(pat)) add(out, 'grep', { x: pat }); else add(out, 'grep0', {}); }   // a regular expression between quotes reads like noise
   const w = buf.slice(-3).reverse().find((e) => e.k === 'web' && (e.tool.d || {}).query); if (w) add(out, 'web', { x: cut(w.tool.d.query, 50) });
-  const p = S.agents[id]; if (isSub(id) && p && p.role && !/^agent$/i.test(p.role)) add(out, 'task', { x: cut(p.role, 60) });
-  if ((S.tc[id] || 0) >= 15) add(out, 'many', { n: S.tc[id] });
+  const p = S.agents[id]; if (isSub(id) && p && p.role && p.role !== p.type && !/^(agent|explore|plan|claude|general-purpose)$/i.test(p.role)) add(out, 'task', { x: cut(p.role, 60) });   // a task with a title of its own, not the kind of agent
   const fresh = (a) => a.filter((x) => !seen.includes(x)), h = fresh(hot), o = fresh(out), pool = h.length && (!o.length || Math.random() < 0.6) ? h : o; if (!pool.length) return null;
   const line = pool[Math.floor(Math.random() * pool.length)]; seen.push(line); if (seen.length > 6) seen.shift(); return line;
 }
 function realThought(id, peek) {   // the next sentence of the agent's own reasoning for the work it is on (kept by the session for some of its steps); null when there is none, or when all of it has been shown
   const th = S.th[id]; if (!th || Date.now() - th.ts > 600000) return null;
-  if (!th.ss) { th.ss = (th.text.match(/[^.!?]+(?:[.!?]+|$)/g) || []).map((x) => x.trim()).filter((x) => x.length >= 12).map((x) => (x.length > 150 ? x.slice(0, 150).replace(/\s+\S*$/, '') + '…' : x)); th.i = 0; }
+  if (!th.ss) {   // a sentence ends on . ! ? … followed by a space and a capital: "db/schema.sql", "1.25.8" and "example.com" stay whole
+    const ss = [], lines = th.text.split('\n').map((l) => plain(l.replace(/^\s*(?:[-*•]|\d{1,2}[.)])\s+/, '')).replace(/\s+/g, ' ').trim()).filter(Boolean);   // each line of its notes on its own (a list item, a step), without its mark
+    lines.forEach((t, k) => {
+      const re = /[.!?…]+["”’»)]*\s+(?=["“«(]?[A-ZÀ-ÖØ-Þ])/g; let from = 0, m; while ((m = re.exec(t))) { ss.push(t.slice(from, m.index + m[0].length).trim()); from = m.index + m[0].length; }
+      const tail = t.slice(from).trim(); if (tail && (k < lines.length - 1 || th.text.length < 880 || /[.!?…]["”’»)]*$/.test(tail))) ss.push(tail);   // the server keeps the first 900 characters: a last sentence cut there is left out
+    });
+    th.ss = ss.filter((x) => x.length >= 12).map((x) => (x.length > 120 ? x.slice(0, 120).replace(/\s+\S*$/, '') + '…' : x)); th.i = 0;
+  }
   return th.i < th.ss.length ? (peek ? th.ss[th.i] : th.ss[th.i++]) : null;
 }
 function showThought(id, text) {
@@ -44,7 +51,7 @@ const clearThoughts = () => { document.querySelectorAll('.tile.musing').forEach(
 function stopMumble() { const v = TH.voice; if (v) { TH.voice = null; try { v.src.stop(); } catch {} } }
 async function mumble(id, text) {   // lips closed: the mouth does not move, the music does not make room, and anyone who starts to speak cuts it
   const p = S.agents[id], t = $('#t-' + id); if (!p || !t || !prefs.voice || AUD.off() || !AUD.ctx || S.speakers.size || TH.voice) return;
-  if (!TTS.server || prefs.vstyle === 'animal' || prefs.vstyle === 'sims') { AUD.murmur(0.5 + (p.vi % 5) / 10, Math.min(2.2, estMs(text) / 1000), 0.4); return; }
+  if (!TTS.server || prefs.vstyle === 'animal' || prefs.vstyle === 'sims') { const o = AUD.murmur(0.5 + (p.vi % 5) / 10, Math.min(2.2, estMs(text) / 1000), 0.4); if (o) { TH.voice = { id, src: o }; o.addEventListener('ended', () => { if (TH.voice && TH.voice.src === o) TH.voice = null; }); } return; }   // the babble is a voice too: whoever starts to speak cuts it
   const fr = frVoice(text), voice = TTS.voiceFor(p, fr), token = S.token; if (!voice) return; let buf; try { buf = await TTS.buf(speakable(plain(text)), voice, TTS.rate(), true, fr); } catch { return; }   // made like a line prepared ahead: it never delays a real one
   if (token !== S.token || S.speakers.size || TH.voice || !t.classList.contains('musing')) return;   // someone spoke meanwhile, or the thought is gone
   const c = AUD.ctx, src = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain(); src.buffer = buf; lp.type = 'lowpass'; lp.frequency.value = 1100; g.gain.value = 0.2; let stops = [];
@@ -57,8 +64,8 @@ setInterval(() => {   // who gets a thought: someone at work for a while and sil
   const ready = [];
   for (const p of Object.values(S.agents)) {
     const id = p.id, t = $('#t-' + id); if (id === 'user' || !t) continue;
-    if (t.style.display === 'none' || S.gone.has(id) || agentState(id, now).k !== 'working') { delete TH.since[id]; continue; }
-    TH.since[id] = TH.since[id] || now; if (!S.speakers.has(id) && !t.classList.contains('musing') && now - TH.since[id] > 15000 && now > (TH.next[id] || 0)) ready.push(id);
+    if (t.style.display === 'none' || S.gone.has(id) || agentState(id, now).k !== 'working') { delete TH.since[id]; endThought(id); continue; }   // done, or waiting: the thought goes with the work
+    TH.since[id] = TH.since[id] || now; if (!S.speakers.has(id) && !t.classList.contains('musing') && now - TH.since[id] > 15000 && now > (TH.next[id] || 0) && !S.events.slice(S.pos).some((e) => e.agent === id && SPK.has(e.kind))) ready.push(id);   // not when a line of its own is about to be read
   }
   if (!ready.length || now - TH.last < 5000 || document.querySelectorAll('.tile.musing').length >= 2) return;
   const own = ready.filter((id) => realThought(id, true)), from = own.length ? own : ready;   // whoever has reasoning of its own to show goes first

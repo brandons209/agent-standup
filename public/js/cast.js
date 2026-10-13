@@ -18,7 +18,7 @@ const mix = (a, b, t) => { const A = hexRGB(a), B = hexRGB(b); return '#' + A.ma
 let CHARS = { lead: null, you: null, pool: [], dir: '', n: 0 };
 const toData = (url) => fetch(url).then((r) => r.blob()).then((b) => new Promise((res) => { const f = new FileReader(); f.onload = () => res(f.result); f.readAsDataURL(b); }));
 async function loadChars() {
-  if (!['none', 'folder', 'starter', 'cats'].includes(prefs.charPack)) {   // drawn characters by default; someone who already had images in their folder keeps them
+  if (!['none', 'folder', 'ponies', 'cats'].includes(prefs.charPack)) {   // drawn characters by default; someone who already had images in their folder keeps them
     let n = 0; try { n = ((await (await fetch('/api/characters')).json()).chars || []).length; } catch {} prefs.charPack = n ? 'folder' : 'none'; savePrefs(); const sel = $('#charPack'); if (sel) sel.value = prefs.charPack;
   }
   const pack = prefs.charPack, next = { lead: null, you: null, pool: [], dir: '', n: 0, pack };
@@ -30,12 +30,19 @@ async function loadChars() {
   } catch {}
   CHARS = next;
 }
+const castOrder = () => {   // the pool shuffled by the session: every call starts with other characters, the same session always with the same ones (a reload, a second window)
+  const seed = (typeof S !== 'undefined' && S.castSeed) || 0, key = seed + '|' + CHARS.pool.map((c) => c.name).join(',');
+  if (castOrder.key === key) return castOrder.order;
+  let a = seed >>> 0; const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };   // mulberry32
+  const o = CHARS.pool.slice(); for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = o[i]; o[i] = o[j]; o[j] = t; }
+  castOrder.key = key; return (castOrder.order = o);
+};
 const customFor = (id) => {   // sub-agents take the pool in turn, skipping pictures held by an agent still on the call; with more agents than pictures, the one held least
   if (id === 'main') return CHARS.lead; if (id === 'user') return CHARS.you; if (!CHARS.pool.length) return null;
   const held = new Map(CHARS.pool.map((c) => [c.name, 0]));
   for (const k in S.agents) { const c = S.agents[k].custom; if (k !== id && c && held.has(c.name) && !S.gone.has(k)) held.set(c.name, held.get(c.name) + 1); }
-  const start = (S.castN = (S.castN || 0) + 1) - 1, n = CHARS.pool.length; let best = null;
-  for (let k = 0; k < n; k++) { const c = CHARS.pool[(start + k) % n]; if (!best || held.get(c.name) < held.get(best.name)) best = c; }
+  const ord = castOrder(), start = (S.castN = (S.castN || 0) + 1) - 1, n = ord.length; let best = null;
+  for (let k = 0; k < n; k++) { const c = ord[(start + k) % n]; if (!best || held.get(c.name) < held.get(best.name)) best = c; }
   return best;
 };
 function renderCharInfo() {
@@ -48,7 +55,7 @@ function persona0(a, custom) {
   const h = hash(a.id), base = { ...a };
   if (a.id === 'main') return { ...base, name: 'Claude', role: L('Chef', 'Lead'), shirt: '#e8845f', shape: 0, acc: 1, eye: 0, glasses: false, scene: 6, prop: 1, acc2: '#f5c04a', lead: true, vi: 0, gid: 'main' };
   if (a.id === 'user') return { ...base, name: L('Vous', 'You'), role: L('Humain', 'Human'), shirt: '#8a94c9', shape: 1, acc: 2, eye: 1, glasses: false, scene: 7, prop: 1, acc2: '#ff7a6b', vi: 3, gid: 'user' };
-  return { ...base, name: a.name || uniqueName(a.id, h, custom && charName(custom.name)), roleEn: a.roleEn || a.role, role: (FR() && a.roleFr) || a.roleEn || a.role, shirt: PAL[(h >>> 6) % 8], shape: (h >>> 3) % 5, acc: (h >>> 9) % 6, eye: (h >>> 12) % 3, glasses: ((h >>> 15) % 4) === 0,
+  return { ...base, name: a.name || uniqueName(a.id, h, (typeof prefs !== 'undefined' && prefs.ownNames && a.own) || (custom && charName(custom.name))), roleEn: a.roleEn || a.role, role: (FR() && a.roleFr) || a.roleEn || a.role, shirt: PAL[(h >>> 6) % 8], shape: (h >>> 3) % 5, acc: (h >>> 9) % 6, eye: (h >>> 12) % 3, glasses: ((h >>> 15) % 4) === 0,   // ⚙ own names: an agent you defined or named keeps its own name, its picture stays the character's
            scene: (h >>> 18) % 6, prop: (h >>> 21) % 3, acc2: PAL[(h >>> 24) % 8], vi: h >>> 4, gid: h.toString(36) };
 }
 

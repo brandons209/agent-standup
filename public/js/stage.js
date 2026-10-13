@@ -92,7 +92,7 @@ function paintStatus() {
   const prev = $('.row.now'); if (prev) prev.classList.remove('now');
   const now = $(`.row[data-i="${S.idx}"]`); if (now) { now.classList.add('now'); if (!S.live && document.body.classList.contains('log')) now.scrollIntoView({ block: 'nearest' }); }   // live, the transcript follows its newest line instead (renderLog)
   later('detail', renderDetail); later('tree', renderTree); later('meet', renderMeet, 400); drawGantt();
-  $('#seek').value = S.idx; $('#pos').textContent = `${Math.min(S.idx + 1, S.events.length)} / ${S.events.length}`;
+  const sk = $('#seek'); sk.max = Math.max(0, S.events.length - 1); sk.value = S.idx; $('#pos').textContent = `${Math.min(S.idx + 1, S.events.length)} / ${S.events.length}`;   // the range follows the session: outside a live call nothing ever set it, and the slider did nothing
 }
 const applyStatus = (ev) => {
   if ((ev.kind === 'tools' || ev.kind === 'say') && S.status[ev.agent] === 'done') {   // a finished agent at work again (continued, or wrongly thought done): back on the call
@@ -141,7 +141,7 @@ function ctxWin(model, ctx) { const base = WIN1M.test(model || '') ? 1e6 : 2e5; 
 function tally(ev) {   // numbers that pile up over a session: token usage, errors, last sign of life
   if (ev.kind === 'compact') { S.compacts[ev.agent] = (S.compacts[ev.agent] || 0) + 1; delete S.ctxWarned[ev.agent]; }
   const det = loopStep(S.rep, ev); if (det) { S.loops[ev.agent] = det; later('badges', renderBadges, 300); } else if (S.loops[ev.agent] && (ev.kind === 'results' ? (S.loops[ev.agent].kind === 'errors' && ev.items.every((it) => !it.err)) : (ev.kind === 'tools' && S.rep[ev.agent].n < 2))) { delete S.loops[ev.agent]; later('badges', renderBadges, 300); }
-  if (ev.kind === 'usage') { const c = ev.u.i + ev.u.r + ev.u.w; if (c > 0 && ev.model !== '<synthetic>') { S.ctx[ev.agent] = c; S.model[ev.agent] = ev.model; later('tok', renderCtx, 300); } const u = (S.usage[ev.agent] = S.usage[ev.agent] || { i: 0, o: 0, r: 0, w: 0 }); u.i += ev.u.i; u.o += ev.u.o; u.r += ev.u.r; u.w += ev.u.w; later('tok', renderTokens, 300); }
+  if (ev.kind === 'usage') { const c = ev.u.i + ev.u.r + ev.u.w; if (c > 0 && ev.model !== '<synthetic>') { S.ctx[ev.agent] = c; S.model[ev.agent] = ev.model; } const u = (S.usage[ev.agent] = S.usage[ev.agent] || { i: 0, o: 0, r: 0, w: 0 }); u.i += ev.u.i; u.o += ev.u.o; u.r += ev.u.r; u.w += ev.u.w; later('tok', renderTokens, 300); }   // renderTokens also redraws the context chips; one key, so nothing is dropped
   else if (ev.kind === 'results') ev.items.forEach((it) => { if (it.err) { S.errs[ev.agent] = (S.errs[ev.agent] || 0) + 1; later('badges', renderBadges, 300); oops(ev.agent); noteTrouble(ev.agent, false); } else noteTrouble(ev.agent, true); });
   else if (ev.kind === 'tools' || ev.kind === 'say') S.lastAct[ev.agent] = ev.ts;
   if (ev.th) S.th[ev.agent] = { text: ev.th, ts: ev.ts }; else if (ev.kind === 'user') delete S.th.main;   // your order starts a new chain of thought: what the lead thought before is no longer what it is on

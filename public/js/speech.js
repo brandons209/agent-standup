@@ -52,7 +52,7 @@ function setFrame(el, id, mouthOpen) {
   if (svg.dataset.f !== f) svg.dataset.f = f;
 }
 function startTalk(id, text, label) {
-  const t = $('#t-' + id); if (!t) return; endThought(id); stopMumble(); TH.next[id] = Date.now() + 8000;   // a spoken line takes the bubble and the floor
+  const t = $('#t-' + id); if (!t) return; endThought(id); stopMumble(); TH.next[id] = Math.max(TH.next[id] || 0, Date.now() + 8000);   // a spoken line takes the bubble and the floor
   S.spokeAt = performance.now(); S.fill = 0; S.mused = false;
   if (!S.speakers.size && !(S.focusLock > Date.now())) setFocus(id); S.gone.delete(id); if (S.doneAt[id] != null) S.doneAt[id] = S.clock; t.style.display = ''; t.classList.add('speaking'); S.speakers.add(id); S.say[id] = { text, label }; AUD.duck(true);
   const shown0 = pieces(text), first = shown0.length > 1 ? shown0[0] : text; const b = t.querySelector('.bubble'); b.innerHTML = (label ? `<small>${esc(label)}</small>` : '') + esc(first);

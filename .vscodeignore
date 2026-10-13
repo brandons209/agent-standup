@@ -6,7 +6,7 @@ scripts/**
 .github/**
 
 examples/**
-!examples/characters/**
+!examples/characters/mane6/**
 !examples/cats/**
 
 bin/**
@@ -21,3 +21,5 @@ node_modules/**
 package-lock.json
 .gitignore
 .claude/**
+research_notes/**
+reports/**

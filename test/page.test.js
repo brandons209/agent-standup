@@ -104,6 +104,55 @@ test('characters: no picture is shown twice among the agents on the call, and a 
   const here = ['a3', 'a4', 'a5', 'a6', 'a7'].map(pic); assert.equal(new Set(here).size, 5, here.join());
   assert.doesNotMatch(run(`S.agents.a6.name`), / \d$/, 'a freed picture comes with its plain name');
 });
+test('the cast order is seeded by the session: another session starts elsewhere, the same session always with the same cast', { timeout: 5000 }, () => {
+  const { run } = page(), pool = ['applejack', 'fluttershy', 'pinkie-pie', 'rainbow-dash', 'rarity', 'twilight', 'trixie', 'starlight', 'aurelia'];
+  run(`CHARS = { lead: null, you: null, pool: ${JSON.stringify(pool.map((n) => ({ name: n, idle: n })))} };`);
+  const cast = (id) => { run(`S.castSeed = hash(${JSON.stringify(id)}); S.castN = 0; S.agents = {}; for (const k in nameBook) delete nameBook[k];`);
+    for (const a of ['a1', 'a2', 'a3']) run(`S.agents['${a}'] = persona({ id: '${a}' })`);
+    return JSON.parse(run(`JSON.stringify(['a1', 'a2', 'a3'].map((a) => S.agents[a].custom.name))`)); };
+  const one = cast('s1'), two = cast('abc');
+  assert.notDeepEqual(one.slice(0, 3), two.slice(0, 3), `${one} vs ${two}`);
+  assert.deepEqual(cast('s1'), one, 'the same session, reloaded, gets the same cast');
+  assert.deepEqual(cast('abc'), two);
+  assert.equal(new Set(one).size, 3, one.join());
+});
+test('own names: a sub-agent you named keeps its own name when the pref is on', { timeout: 5000 }, () => {
+  const { run } = page();
+  run(`CHARS = { lead: null, you: null, pool: [{ name: 'applejack', idle: 'a' }, { name: 'rarity', idle: 'r' }] }; S.agents = {}; prefs.ownNames = false;`);
+  const off = JSON.parse(run(`{ const p = persona({ id: 'x', own: 'Code Reviewer' }); JSON.stringify([p.name, charName(p.custom.name)]); }`));
+  assert.equal(off[0], off[1], 'off: named after its character');
+  run(`for (const k in nameBook) delete nameBook[k]; S.castN = 0; prefs.ownNames = true;`);
+  const on = JSON.parse(run(`{ const p = persona({ id: 'x', own: 'Code Reviewer' }); JSON.stringify([p.name, charName(p.custom.name)]); }`));
+  assert.equal(on[0], 'Code Reviewer', 'on: the name the person gave it');
+  assert.equal(on[1], off[1], 'the picture stays the character’s');
+  assert.equal(run(`persona({ id: 'y', own: 'Code Reviewer' }).name`), 'Code Reviewer 2', 'two of them are numbered');
+});
+test('a thought is whole sentences of the agent’s own notes; a wrap-up gist is short plain speech', { timeout: 5000 }, () => {
+  const { run } = page();
+  run(`S.th = { a: { text: 'The migration touches db/schema.sql and the seed data. It has to run before the tests start.', ts: Date.now() } };`);
+  assert.equal(run('realThought("a")'), 'The migration touches db/schema.sql and the seed data.', 'a file name does not end a sentence');
+  assert.equal(run('realThought("a")'), 'It has to run before the tests start.');
+  run(`S.th = { b: { text: '- check the parser\\n- then rerun the suite', ts: Date.now() } };`);
+  assert.deepEqual(JSON.parse(run('JSON.stringify([realThought("b"), realThought("b"), realThought("b")])')), ['check the parser', 'then rerun the suite', null], 'one thought per line');
+  const md = '## What was done\n\nThe slow query now uses the index added in 1.25.8, so the login answers at once.\n\n- the query was rewritten\n- the cache is warmed at boot\n\n| file | lines |\n|---|---|\n| a.js | 12 |\n\n```\nconst x = 1;\n```\n';
+  const g = run(`gist(${JSON.stringify(md)}, '')`);
+  assert.ok(g.length <= 280, g.length + ': ' + g);
+  assert.doesNotMatch(g, /[|`#]|const x/, g);
+  assert.match(g, /index/, g);
+});
+test('the slider follows the session outside a live call, and the token counts move live', { timeout: 5000 }, () => {
+  const timers = [], { run, get } = page('?live=1', timers);
+  run(`drawGantt = () => {}; renderMeet = () => {}; renderTree = () => {}; renderDetail = () => {}; paintStates = () => {};
+    S.events = [{ kind: 'say', agent: 'main', ts: 0, t: 0 }]; S.idx = 0; paintStatus();`);
+  assert.equal(run('$("#seek").max'), 0);
+  run(`S.events = [{ kind: 'say', agent: 'main', ts: 0, t: 0 }, { kind: 'say', agent: 'main', ts: 1, t: 1 }, { kind: 'say', agent: 'main', ts: 2, t: 2 }]; paintStatus();`);
+  assert.equal(run('$("#seek").max'), 2, 'the range follows the session');
+  get('t-main').innerHTML = '<div class="tk"></div><div class="cx"></div>';
+  run(`S.agents = { main: { id: 'main', name: 'C', gid: 0 } }; S.usage = {}; S.ctx = {}; S.model = {}; later.p = {};`);
+  run(`tally({ kind: 'usage', agent: 'main', u: { i: 100, o: 40, r: 5, w: 0 }, model: 'm' }); tally({ kind: 'usage', agent: 'main', u: { i: 200, o: 60, r: 5, w: 0 }, model: 'm' });`);
+  timers.splice(0).forEach((f) => f());
+  assert.match(get('tok').textContent, /⚡ 400/, 'the token count moved');
+});
 test('a full transcript message renders markdown and nothing else', { timeout: 5000 }, () => {
   const { run } = page(), md = (s) => run(`mdHTML(${JSON.stringify(s)})`);
   const ok = (h) => (h.match(/<[^>]*>/g) || []).every((t) => /^<\/?(p|br|b|i|code|pre|ul|ol|li|blockquote|u)( class="mdh"| title="[^"<>]*")?>$/.test(t));
