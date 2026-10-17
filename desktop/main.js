@@ -1,11 +1,17 @@
 // Agent Standup desktop app: the same local server as the extension, in its own window, with an indicator in the menu bar (macOS) or tray (Windows, Linux)
 // that shows what your agents are doing and notifies you when one may need you. Nothing leaves your machine.
-const { app, BrowserWindow, Tray, Menu, nativeImage, shell, Notification } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, Notification, session } = require('electron');
 const path = require('path'), fs = require('fs');
 const core = require('./core/server.js');
 const SELFTEST = process.argv.includes('--selftest') ? process.argv[process.argv.indexOf('--selftest') + 1] : null;   // renders the window to a PNG and quits: used to check a build
-let win = null, tray = null, port = 0, quitting = false, lastNeeds = 0, trayTimer = null;
+let win = null, tray = null, port = 0, quitting = false, lastNeeds = 0, trayTimer = null, notifyFailed = false;
 const extra = new Set();   // windows opened for one session each
+// Links the page may open in the browser: the same sites as the VS Code extension (extension.js), https only. Anything else is refused.
+const DONATE_HOSTS = /^(www\.)?(buymeacoffee\.com|ko-fi\.com|paypal\.me|paypal\.com|github\.com)$/;
+function openOutside(url) { try { const u = new URL(url); if (u.protocol === 'https:' && DONATE_HOSTS.test(u.hostname)) shell.openExternal(u.href); } catch {} }
+// What the page may ask the browser for: its own notification while the window is hidden, and its Copy buttons. Camera, microphone, screen, location and the rest are refused, and only the app's own page gets anything.
+const PERMISSIONS = new Set(['notifications', 'clipboard-sanitized-write']);
+const ownPage = (u) => { try { return !!port && new URL(u).origin === `http://localhost:${port}`; } catch { return false; } };
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();   // a second copy only brings the first one to the front
@@ -14,20 +20,21 @@ else app.on('second-instance', () => showWindow());
 function showWindow() { if (!win) createWindow(); if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
 const winOpts = { width: 1280, height: 820, minWidth: 420, minHeight: 360, backgroundColor: '#12131a', title: 'Agent Standup',
   webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, autoplayPolicy: 'document-user-activation-required' } };
-function guard(wc) {   // links to the app open a window of their own; other https links open in the browser
+function guard(wc) {   // links to the app open a window of their own; links to the sites above open in the browser, anything else is refused
   wc.setWindowOpenHandler(({ url }) => {
     if (url.startsWith(`http://localhost:${port}/`)) {
       const pin = new URL(url).searchParams.get('pin'), same = pin && [...extra].find((w) => !w.isDestroyed() && new URL(w.webContents.getURL()).searchParams.get('pin') === pin);
       if (same) { same.show(); same.focus(); return { action: 'deny' }; }   // one window per session: the one already open comes to the front
       const w = new BrowserWindow({ ...winOpts, show: true }); guard(w.webContents); extra.add(w); w.on('closed', () => extra.delete(w)); w.loadURL(url); return { action: 'deny' };
     }
-    try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {} return { action: 'deny' };
+    openOutside(url); return { action: 'deny' };
   });
-  wc.on('will-navigate', (e, url) => { if (!url.startsWith(`http://localhost:${port}/`)) { e.preventDefault(); try { if (new URL(url).protocol === 'https:') shell.openExternal(url); } catch {} } });
+  wc.on('will-navigate', (e, url) => { if (!url.startsWith(`http://localhost:${port}/`)) { e.preventDefault(); openOutside(url); } });
 }
 function createWindow() {
   win = new BrowserWindow({ ...winOpts, show: !SELFTEST });
   win.loadURL(`http://localhost:${port}/`);
+
   guard(win.webContents);
   win.on('close', (e) => { if (!quitting && !SELFTEST && process.platform !== 'linux') { e.preventDefault(); win.hide(); } });   // closing the window keeps the indicator running (not on Linux: many desktops have no tray to come back from)
   win.on('closed', () => { win = null; });
@@ -42,7 +49,12 @@ function refreshTray() {
   const text = [c.needs ? `✋${c.needs}` : '', c.working ? `⚙${c.working}` : '', !c.needs && !c.working && c.turn ? '✓' : ''].filter(Boolean).join(' ');
   if (process.platform === 'darwin') tray.setTitle(text ? ' ' + text : '');
   tray.setToolTip('Agent Standup' + (text ? ' — ' + [c.needs && `${c.needs} may need you`, c.working && `${c.working} working`, !c.needs && !c.working && c.turn && 'your turn'].filter(Boolean).join(', ') : ''));
-  if (c.needs > lastNeeds && !BrowserWindow.getFocusedWindow() && Notification.isSupported()) new Notification({ title: 'Agent Standup', body: 'An agent may be waiting for you ✋' }).show();
+
+  if (c.needs > lastNeeds && !BrowserWindow.getFocusedWindow() && Notification.isSupported()) {
+    const n = new Notification({ title: 'Agent Standup', body: 'An agent may be waiting for you ✋' });
+    n.on('failed', (e, err) => { if (!notifyFailed) console.warn('notification not shown:', err); notifyFailed = true; });   // macOS refuses it when notifications are off for the app, or the app is not signed
+    n.show();
+  }
   lastNeeds = c.needs;
 }
 function createTray() {
@@ -59,6 +71,8 @@ function createTray() {
 app.whenReady().then(async () => {
   if (!gotLock) return;
   const srv = core.start(0); await new Promise((r) => srv.once('listening', r)); port = srv.address().port;
+  session.defaultSession.setPermissionRequestHandler((wc, perm, cb, details) => cb(PERMISSIONS.has(perm) && ownPage(details && details.requestingUrl)));
+  session.defaultSession.setPermissionCheckHandler((wc, perm, origin) => PERMISSIONS.has(perm) && ownPage(origin));
   if (process.platform === 'darwin' && app.dock) app.dock.setIcon(nativeImage.createFromPath(path.join(__dirname, 'core/media/icon.png')));
   createWindow(); createTray();
   if (SELFTEST) {

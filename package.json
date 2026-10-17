@@ -149,11 +149,11 @@
   "qna": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/Atoll92/agent-standup.git"
+    "url": "https://github.com/brandons209/agent-standup.git"
   },
-  "homepage": "https://atoll92.github.io/agent-standup/",
+  "homepage": "https://github.com/brandons209/agent-standup#readme",
   "bugs": {
-    "url": "https://github.com/Atoll92/agent-standup/issues"
+    "url": "https://github.com/brandons209/agent-standup/issues"
   },
   "l10n": "./l10n"
 }

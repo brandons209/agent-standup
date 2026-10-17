@@ -1,16 +1,17 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
   pull_request:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # the tests take a few minutes; a hung browser should not hold a runner for six hours
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Syntax
         run: |
           node --check server.js
