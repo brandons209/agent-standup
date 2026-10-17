@@ -83,10 +83,18 @@ test('a sub-agent that left the call shares no screen; new work from an agent th
 test('liveStart: a reload starts after what this session already said', { timeout: 5000 }, () => {
   const { run } = page(); run('recomputeStatus = () => {}; paintStatus = () => {}; trNew = () => {};');
   const now = Date.now(), ev = (dt, kind = 'say') => ({ ts: now + dt, kind, agent: 'main', text: 'x' });
-  const setup = (evs, said, x = '') => run(`S.events = ${JSON.stringify(evs)}; S.saidSrv = ${said}; S.locked = false; S.join = false; S.since = 0; ${x}`);
+  const setup = (evs, said, x = '') => run(`S.events = ${JSON.stringify(evs)}; S.saidSrv = ${said}; S.join = false; S.since = 0; ${x}`);
   setup([ev(-30000), ev(-20000), ev(-10000, 'tools')], now - 10000); assert.equal(run('liveStart()'), 3);
   setup([ev(-30000), ev(-20000), ev(-10000), ev(-5000, 'tools')], now - 20000); assert.equal(run('liveStart()'), 2);
-  setup([ev(-60000), ev(-1000)], 0, 'S.locked = true;'); assert.equal(run('liveStart()'), 2);
+  setup([ev(-60000), ev(-1000)], 0, 'S.join = true;'); assert.equal(run('liveStart()'), 2);   // joining now: what came before is past
+});
+test('the live call starts silent: sound stays off until the first click turns it on', { timeout: 5000 }, () => {
+  const { run } = page();
+  run('S.live = true; S.hush = true; AUD.muted = false; AUD.init = () => {}; S.owner = null; syncUI = () => {};');
+  assert.equal(run('AUD.off()'), true, 'hushed: nothing is heard');
+  run('joinSound()');
+  assert.equal(run('S.hush'), false, 'the first click turns the sound on');
+  assert.equal(run('AUD.off()'), false);
 });
 test('toolLine says what a tool call does in plain words', { timeout: 5000 }, () => {
   const { run } = page(), W = `LEAD.en`;
@@ -181,7 +189,7 @@ test('a line that turns into a report while it is read is answered once; an agen
   run(`paintStatus = () => {}; trNew = () => {}; warmTTS = () => {}; prefetchQuips = () => {}; syncUI = () => {}; AUD.init = () => {}; AUD.ding = () => {}; AUD.join = () => {}; fly = () => {}; popTile = () => {};
     startTalk = () => {}; stopTalk = () => {}; renderLog = () => {}; wrapUp = async () => false; smallTalk = async () => {};
     window.__conv = []; converse = async (g) => { __conv.push(g.k + ':' + g.kind); }; window.__qu = []; doneQuip = async (id) => { __qu.push(id); }; window.__rel = []; speakLine = () => new Promise((r) => __rel.push(r));
-    S.live = true; S.locked = false; S.agents = { a: { id: 'a', name: 'A' }, b: { id: 'b', name: 'B' }, c: { id: 'c', name: 'C' } };
+    S.live = true; S.agents = { a: { id: 'a', name: 'A' }, b: { id: 'b', name: 'B' }, c: { id: 'c', name: 'C' } };
     S.events = [{ k: 's1', ts: Date.now(), agent: 'a', kind: 'say', text: 'I have finished checking the module carefully.' }]; stampT(0); S.byK = new Map(S.events.map((e) => [e.k, e])); S.late = []; S.pos = 0; run(0);`);
   for (let k = 0; k < 20; k++) await new Promise((r) => setImmediate(r));   // the line is being read: its voice has not ended
   run(`{ const e = S.events[0], was = { kind: e.kind, n: 0, end: e.end }; Object.assign(e, { kind: 'report', to: 'main' }); amend(e, was); }`); await flush();
@@ -210,7 +218,7 @@ test('a lead whose turn closed while its background agents work stays on the cal
   assert.notEqual(run(`agentState('main', Date.now()).k`), 'waiting', 'replayed: the turn is over there');
   run(`S.live = true; recomputeStatus(3); S.run.main = { id: 'b1', ts: Date.now(), name: 'Bash', start: 0 }`);
   assert.equal(run(`agentState('main', Date.now()).k`), 'working', 'a lead busy with its own command is not parked');
-  run(`logRow = () => ''; S.locked = false; S.recomputing = false; S.pos = 0;
+  run(`logRow = () => ''; S.recomputing = false; S.pos = 0;
     { const e = { k: 'o9', ts: Date.now(), agent: 'main', to: 'a1', kind: 'order', toolId: 'toolu_z', bg: false, text: 'Check it.', title: 'check' };
       S.events = [e]; S.byK = new Map([['o9', e]]); stampT(0); recomputeStatus(1);
       const had = !!(S.run.main && S.run.main.id === 'toolu_z');

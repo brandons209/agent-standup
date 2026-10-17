@@ -9,7 +9,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><div class="logo">🎥</div><div><b>Agent Standup</b><small id="subtitle"></small></div></div>
+  <div class="brand"><div class="logo">🎥</div><div><b>Agent Standup</b><small id="subtitle"></small><span id="why"></span></div></div>
   <span id="pill">REPLAY</span><button id="tok" class="tok" style="display:none"></button><button id="ctxp" class="ctxp" style="display:none"></button><span id="board" aria-live="polite"></span><span id="meet" class="meet"></span>
   <div class="sp"></div>
   <div class="seg" id="viewSeg"><button data-v="call" class="on" data-ic="👥" data-fr="Appel" data-en="Call">Appel</button><button data-v="tree" data-ic="🌳" data-fr="Arbre" data-en="Tree">Arbre</button><button data-v="board" data-ic="🗂" data-fr="Sessions" data-en="Sessions">Sessions</button></div>
@@ -21,6 +21,7 @@
   <button class="ic" id="bMenu" title="Réglages">⚙</button>
 </header>
 <div id="sline"></div>
+<button id="attn" hidden></button>
 
 <div id="menu">
   <input id="menuQ" type="search" placeholder="Search settings…" aria-label="Search settings" style="margin:4px 8px 2px;width:calc(100% - 16px)">
@@ -42,6 +43,7 @@
   <button class="mi" data-t="roster"><span data-fr="Liste des agents (à gauche)" data-en="Agents list (left)">Liste des agents (à gauche)</span><i class="sw"></i></button>
   <button class="mi" data-t="reactions"><span data-fr="Barre de réactions (👍 👏 ☕)" data-en="Reactions bar (👍 👏 ☕)">Barre de réactions (👍 👏 ☕)</span><i class="sw"></i></button>
   <button class="mi" data-t="askCard"><span data-fr="Une carte avec ce que la session vous demande" data-en="A card with what the session asks you">Une carte avec ce que la session vous demande</span><i class="sw"></i></button>
+  <button class="mi" data-t="focusLayout"><span data-fr="Mise en page concentrée : petites caméras, grand écran partagé" data-en="Focus layout: small cameras, big shared screen">Mise en page concentrée : petites caméras, grand écran partagé</span><i class="sw"></i></button>
   <button class="mi" data-t="banter"><span data-fr="Petites répliques et animations" data-en="Little lines & animations">Petites répliques et animations</span><i class="sw"></i></button>
   <div class="box"><div class="lbl"><span data-fr="Bavardage entre agents" data-en="Chatter between agents">Bavardage entre agents</span></div><select id="chatSel"><option value="quiet" data-fr="Discret" data-en="Quiet">Discret</option><option value="normal" data-fr="Normal" data-en="Normal">Normal</option><option value="lively" data-fr="Animé" data-en="Lively">Animé</option></select></div>
   <button class="mi" data-t="logChat"><span data-fr="Le bavardage apparaît dans la transcription" data-en="Show chatter in the transcript">Le bavardage apparaît dans la transcription</span><i class="sw"></i></button>
@@ -84,7 +86,7 @@
     <div id="toasts" role="status" aria-live="polite"></div>
     <div id="askc" role="status" aria-live="polite"></div>
     <div id="empty"><h2 id="eT"></h2><p id="eP"></p><button class="cta" id="eDemo"></button></div>
-    <div id="gate"><h2 id="gT"></h2><p id="gP"></p><button class="cta" id="gB"></button></div>
+    <div id="gate"><button class="cta" id="gB"></button></div>
     <div id="detail"><div class="hd"><b id="dname"></b><button class="ic" id="dclose">✕</button></div><div id="dbody"></div></div>
   </section>
   </div>

@@ -2,7 +2,7 @@
 //  state
 // =====================================================================
 const S = { owner: null, errRun: {}, exQ: [], agents: {}, events: [], idx: 0, playing: false, token: 0, status: {}, tc: {}, cur: null, live: true, userPaused: false, boost: 1, stopAt: 0,
-            speakers: new Set(), say: {}, lastTool: {}, level: {}, detail: null, collapsed: new Set(), title: '', idle: false, locked: true, logTo: 0, trOk: true,
+            speakers: new Set(), say: {}, lastTool: {}, level: {}, detail: null, collapsed: new Set(), title: '', idle: false, hush: false, logTo: 0, trOk: true,
             clock: 0, doneAt: {}, gone: new Set(), leaving: new Set(), demo: false, hold: false, late: [], byK: new Map(), pos: 0 };
 const vanishMs = () => (prefs.vanishS ?? 30) * 1000;   // a finished agent leaves the call this long after (playback time)
 // Live: how far the call is behind the real session, and what to do about it (speak faster, say less, skip decoration) so it keeps the rhythm of the real conversation

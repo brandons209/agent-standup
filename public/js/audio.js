@@ -3,7 +3,7 @@
 // =====================================================================
 const AUD = {
   ctx: null, muted: false, live: new Set(), lastClick: 0,
-  off() { return this.muted || !!(S.owner && S.owner !== CID); },   // muted here, or another window holds the sound
+  off() { return this.muted || !!S.hush || !!(S.owner && S.owner !== CID); },   // muted here, not turned on yet (S.hush: no click since the page opened), or another window holds the sound
   init() {
     if (this.ctx) { this.ctx.resume(); return; }
     let c; try { c = this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }

@@ -14,7 +14,7 @@ const visibleTiles = () => [...$('#stage').children].filter((t) => t.style.displ
 const galRefit = () => { if (!document.body.classList.contains('gallery')) return; const n = visibleTiles(); if (n !== S.galN) { S.galN = n; layout(); } };
 const layout = () => {
   if (!$('#stage').offsetParent) return;   // hidden (board or tree view): nothing to measure; setView lays it out on the way back
-  const st = $('#stage'), w = st.clientWidth - 28 || 600, nar = $('#center').clientWidth < 480, cols = nar ? (w >= 300 ? 2 : 1) : Math.max(1, Math.floor((w + 12) / 212)), colw = (w - 12 * (cols - 1)) / cols;
+  const st = $('#stage'), w = st.clientWidth - 28 || 600, nar = $('#center').clientWidth < 480, foc = !nar && document.body.classList.contains('focusl'), cols = nar ? (w >= 300 ? 2 : 1) : Math.max(1, Math.floor((w + 12) / (foc ? 162 : 212))), colw = (w - 12 * (cols - 1)) / cols;   // foc: ⚙ → Focus layout, small cameras and no big spotlight tile
   const rh = Math.round(colw * (nar ? 0.66 : 0.74)); st.style.setProperty('--cols', cols); st.style.setProperty('--rh', rh + 'px'); // Spotlight size: the biggest block (k columns × fr rows) that stays close to 3:2 and leaves room beside it for the others.
   const gal = !nar && document.body.classList.contains('gallery');
   if (gal) {   // gallery: equal tiles, the column count that makes them biggest while all fit without scrolling
@@ -30,6 +30,7 @@ const layout = () => {
     if (area > best) { best = area; k = kk; fr = rr; }
   }
   if (nar) { k = cols; fr = cols > 1 ? 2 : 1; }   // side panel: small tiles, a banner-sized spotlight
+  else if (foc) { k = 1; fr = 1; }
   else if (best < 0) { k = Math.min(2, cols); fr = Math.min(2, maxRows); }
   st.style.setProperty('--fcols', k); st.style.setProperty('--fr', fr);
   }
@@ -242,7 +243,7 @@ function paintStates() {
   paintPill();
   const b = $('#board'), parts = [['working', '⚙', L('au travail', 'working')], ['waiting', '🔗', L('en attente', 'waiting')], ['blocked', '✋', L('vous attendent', 'need you')], ['stalled', '⚠', L('bloqués', 'stalled')], ['done', '✓', L('terminés', 'done')]]
     .filter(([k]) => n[k] && !S.pillSess).map(([k, i, l]) => `<span class="${k}" title="${n[k]} ${l}">${i} ${n[k]}<em> ${l}</em></span>`).join('');
-  if (b.innerHTML !== parts) b.innerHTML = parts; S.nBlocked = n.blocked + n.stalled; S.attn = attn; paintRoster(ros); return n;
+  if (b.innerHTML !== parts) b.innerHTML = parts; S.nBlocked = n.blocked + n.stalled; S.attn = attn; paintRoster(ros); paintAttn(now); paintWhy(); return n;
 }
 const RORDER = { blocked: 0, stalled: 1, working: 2, waiting: 3, idle: 4, done: 5 };
 function paintRoster(ros) {   // a fixed list beside the call: who is doing what, urgent first, readable even with dozens of agents

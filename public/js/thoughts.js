@@ -60,7 +60,7 @@ async function mumble(id, text) {   // lips closed: the mouth does not move, the
   src.onended = () => { AUD.live.delete(src); stops.forEach((o) => { try { o.stop(); } catch {} }); if (TH.voice && TH.voice.src === src) TH.voice = null; }; src.start();
 }
 setInterval(() => {   // who gets a thought: someone at work for a while and silent; two at most on screen, a few seconds apart, each agent every half minute or so
-  const now = Date.now(); if (!S.live || !S.playing || S.locked || S.recomputing || !prefs.banter || prefs.chat === 'quiet' || S.hurry || S.boost > 1 || (document.hidden && !S.exporting) || !atTail()) return;
+  const now = Date.now(); if (!S.live || !S.playing || S.recomputing || !prefs.banter || prefs.chat === 'quiet' || S.hurry || S.boost > 1 || (document.hidden && !S.exporting) || !atTail()) return;
   const ready = [];
   for (const p of Object.values(S.agents)) {
     const id = p.id, t = $('#t-' + id); if (id === 'user' || !t) continue;

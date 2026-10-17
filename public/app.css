@@ -14,7 +14,7 @@
   @media (max-width:720px) { .ctxp { display:none !important } } @media (max-width:620px) { .tok { display:none !important } } @media (max-width:560px) { #bCoffee { display:none !important } } @media (max-width:480px) { header { gap:6px; padding-left:8px; padding-right:8px } }   /* narrow: the coffee link stays in ⚙ › Tools */
   .logo { width:26px; height:26px; border-radius:8px; background:#d97757; display:grid; place-items:center; font-size:15px; flex:none }
   .brand b { font:700 14px "Comic Sans MS","Chalkboard SE",system-ui,sans-serif; white-space:nowrap }
-  .brand small { display:block; color:var(--dim); font-size:11px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .brand small { display:block; color:var(--dim); font-size:11px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } #why { display:none; color:var(--dim); font-size:11px; white-space:nowrap; cursor:default } #why.on { display:inline }
   .sp { flex:1 }
   .tok { font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px; background:var(--panel2); color:#c3c6d4; white-space:nowrap } .tok:hover { color:#fff }
   .tbadge { position:absolute; top:30px; right:6px; display:flex; gap:4px; z-index:2; pointer-events:none } .tbadge span { font-size:10.5px; padding:1px 7px; border-radius:99px; background:rgba(14,15,24,.78); backdrop-filter:blur(6px) }
@@ -30,6 +30,8 @@
   :is(#pill, #sline).working { color:var(--gold) } :is(#pill, #sline).turn { color:#0b1020; background:var(--accent) } #pill:is(.working, .blocked, .stalled, .turn, .idle) { letter-spacing:0 } :is(#pill, #sline):focus-visible { outline:2px solid var(--accent); outline-offset:-2px }
   @media (max-width:1080px) { #pill { display:none } #sline { display:-webkit-box } } @media (max-width:760px) { #sline::after { content:attr(data-sub); font-weight:400; opacity:.8 } } @media (max-width:400px) { #sline { -webkit-line-clamp:3 } }
   @media (min-width:1081px) { header .brand { min-width:150px } #pill { flex-shrink:20 } .tok, .ctxp { flex-shrink:0 } }   /* wide: a long status gives way before the name and the counters */
+  #attn { flex:none; display:flex; align-items:center; gap:8px; width:100%; min-width:0; padding:5px 12px; border-bottom:1px solid #ff8a80; background:#c0392b; color:#fff; font-weight:600; font-size:12.5px; text-align:left } #attn[hidden] { display:none } #attn:hover { filter:brightness(1.1) } #attn:focus-visible { outline:2px solid #fff; outline-offset:-3px }
+  #attn .aw { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } #attn .am { flex:none; padding:0 8px; border-radius:99px; background:rgba(0,0,0,.25); font-size:11.5px } #attn .ak { flex:none; opacity:.8; font-weight:500; font-size:11px }   /* what needs you, here or in another session: one line in every view, a click goes there (G) */
   @keyframes pulse { 50% { opacity:.3 } }
   .seg { display:flex; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:2px }
   .seg button { padding:4px 11px; border-radius:6px; color:var(--dim); font-size:12.5px }
@@ -53,7 +55,7 @@
   .rr { display:flex; flex-direction:column; gap:2px; padding:6px 9px; border-radius:9px; border-left:3px solid transparent; background:var(--panel2); cursor:pointer; min-width:0 }
   .rr:hover { background:#2a2f45 } .rr.sel { outline:1px solid var(--accent) }
   .rr .n { display:flex; align-items:center; gap:7px; min-width:0 } .rr .dot { width:9px; height:9px; border-radius:50%; flex:none } .rr b { font-size:12.5px } .rr .ro { color:var(--dim); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0 }
-  .rr .st { font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .rr .st { font-size:11.5px; overflow:hidden; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical }   /* two lines before it is cut; the whole text is in the tooltip */
   .rr.k-working { border-left-color:var(--gold) } .rr.k-working .st { color:var(--gold) } .rr.k-waiting { border-left-color:#8fd3ff } .rr.k-waiting .st { color:#8fd3ff }
   .rr.k-blocked { border-left-color:#ff5252; background:rgba(192,57,43,.28) } .rr.k-blocked .st { color:#fff; font-weight:700 } .rr.k-stalled { border-left-color:#ffb347 } .rr.k-stalled .st { color:#ffb347; font-weight:700 }
   .rr.k-done { opacity:.82 } .rr.k-done .st { color:var(--ok) } .rr.turn { opacity:1; border-left-color:var(--accent) } .rr.turn .st { color:var(--accent); font-weight:700 } .rr.k-idle .st { color:var(--dim) } .rr.speaking { box-shadow:0 0 0 2px rgba(124,156,255,.5) }
@@ -94,6 +96,7 @@
   /* ---------- screen sharing (presentation mode) ---------- */
   #shares { display:none; flex:0 1 auto; min-height:96px; overflow:hidden; height:clamp(min(190px, 70cqh),46cqh,430px); background:radial-gradient(ellipse at 50% 0,#1b2033,#0b0d14); border-bottom:1px solid var(--line); padding:12px 16px; gap:10px; grid-template-columns:repeat(var(--sc,1),minmax(0,1fr)); grid-auto-rows:minmax(0,1fr) }
   #shares.on { display:grid; animation:fadein .3s } #shares.pic, #shares[data-n="3"], #shares[data-n="4"] { height:clamp(min(240px, 70cqh),60cqh,640px) }
+  body.focusl #shares { height:clamp(240px,58vh,900px) } body.focusl #shares.pic { height:clamp(260px,68vh,1000px) } body.focusl #shares[data-n="2"], body.focusl #shares[data-n="3"], body.focusl #shares[data-n="4"] { height:clamp(240px,74vh,1000px) }   /* Focus layout: the shared screen gets the room the characters gave up */
   #shares[data-n="2"], #shares[data-n="3"], #shares[data-n="4"] { --sc:2 } #shares[data-n="3"] .pane:last-child { grid-column:span 2 } #shares:not([data-n="1"]) .pwin { flex-basis:100% }   /* several screens: two columns, the third one across */
   .pane { position:relative; display:flex; justify-content:center; min-width:0; min-height:0; overflow:hidden; transition:opacity .18s } .pane.swap { opacity:0 }   /* changing hands: the content fades, the stage stays */
   .pwin { flex:0 1 900px; display:flex; flex-direction:column; border-radius:10px; overflow:hidden; background:#0d1117; box-shadow:0 18px 50px rgba(0,0,0,.6), 0 0 0 2px rgba(240,160,32,.55) }
@@ -142,7 +145,7 @@
   footer { display:none; height:44px; flex:none; align-items:center; gap:12px; padding:0 14px; border-top:1px solid var(--line) }
   body.replay footer { display:flex }
   input[type=range] { accent-color:var(--accent) } #seek { flex:1; min-width:40px } #pos, footer label.dim { white-space:nowrap; flex:none } @media (max-width:520px) { footer { gap:8px; padding:0 8px } footer label.dim { display:none } }   /* narrow: the 1× 2× 4× 8× buttons are the speed control */
-  @media (max-width:760px) { aside { position:absolute; right:0; top:0; bottom:0; z-index:6; box-shadow:-10px 0 30px rgba(0,0,0,.5) } .brand small { display:none } body.logb aside { left:0; right:0; top:auto; bottom:0; height:45vh; width:auto } #logGrip { display:none } }
+  @media (max-width:760px) { aside { position:absolute; right:0; top:0; bottom:0; z-index:6; box-shadow:-10px 0 30px rgba(0,0,0,.5) } .brand small, #why { display:none } body.logb aside { left:0; right:0; top:auto; bottom:0; height:45vh; width:auto } #logGrip { display:none } }
   @media (max-width:720px) { .brand b { display:none } }
   @media (max-width:480px) { #viewSeg button { font-size:0; padding:4px 6px } #viewSeg button::before { content:attr(data-ic); font-size:14px } }   /* Call / Tree / Sessions stay one click away in a side panel, as icons */
   @media (max-width:360px) { .brand { display:none } header { gap:4px } }
@@ -162,6 +165,7 @@
   .tag b, .tag span { background:rgba(14,15,24,.78); backdrop-filter:blur(6px); padding:2px 9px; border-radius:99px; font-size:11.5px; white-space:nowrap }
   .tag span { color:#e3e6f0; font-size:10.5px; overflow:hidden; text-overflow:ellipsis; min-width:0 }
   .status { position:absolute; top:6px; right:6px; font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:99px; background:rgba(14,15,24,.8); backdrop-filter:blur(6px) }
+  #stage .tile .status { white-space:normal; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.3; border-radius:10px } #stage .tile .status:empty { display:none }   /* what a tile is doing: two lines before it is cut */
   .status.working { color:var(--gold) } .status.done { color:var(--ok) } .status.turn { color:#0b1020; background:var(--accent) }
   .status.waiting { color:#8fd3ff } .status.blocked { color:#fff; background:#c0392b; font-weight:700 } .status.stalled { color:#1b1d27; background:#ffb347; font-weight:700 }
   .tile.waiting { border-color:rgba(110,190,255,.85) } .tile.blocked { border-color:#ff5252 !important; animation:slowp 1.2s ease-in-out infinite } .tile.stalled { border-color:#ffb347 !important }
@@ -220,9 +224,10 @@
   .fly { position:fixed; left:0; top:0; font-size:28px; z-index:8; pointer-events:none; filter:drop-shadow(0 3px 4px rgba(0,0,0,.5)) }
 
   /* ---------- overlays ---------- */
-  #gate, #empty { position:absolute; inset:0; z-index:4; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; padding:24px; background:rgba(18,19,26,.82); backdrop-filter:blur(3px) }
-  #gate.on, #empty.on { display:flex } #empty { background:var(--bg) } #empty.on ~ #gate { display:none }   /* no session at all: nothing to join, the empty state and its demo button are what there is to see */
-  #gate h2, #empty h2 { margin:0; font:800 22px "Comic Sans MS","Chalkboard SE",system-ui,sans-serif } #gate p, #empty p { margin:0; color:var(--dim); max-width:380px } #eP b { color:var(--text) }
+  #empty { position:absolute; inset:0; z-index:4; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; padding:24px; background:var(--bg) }
+  #empty.on { display:flex } #empty.on ~ #gate { display:none }   /* no session at all: the empty state and its demo button are what there is to see */
+  #empty h2 { margin:0; font:800 22px "Comic Sans MS","Chalkboard SE",system-ui,sans-serif } #empty p { margin:0; color:var(--dim); max-width:380px } #eP b { color:var(--text) }
+  #gate { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:7; display:none } #gate.on { display:block } #gate .cta { padding:7px 16px; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.45); white-space:nowrap }   /* the call plays at once, silent: this chip (or any click) turns its sound on, which a browser allows only after one */
   .cta { background:var(--accent); color:#0b1020; font-weight:700; padding:10px 22px; border-radius:99px; font-size:14px } .cta:hover { filter:brightness(1.1) } .cta:empty { display:none }
   .btn { background:var(--panel2); border:1px solid var(--line); padding:6px 12px; border-radius:8px } .btn:hover { border-color:var(--accent) }
   #menu { position:absolute; top:52px; right:10px; z-index:12; width:280px; background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.55); padding:6px; display:none; max-height:calc(100vh - 62px); max-height:calc(100dvh - 62px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin }   /* never taller than the window: it scrolls instead of being cut off */

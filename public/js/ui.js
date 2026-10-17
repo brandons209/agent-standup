@@ -8,15 +8,15 @@ function applyLang() {
   document.querySelectorAll('#viewSeg button').forEach((b) => { b.title = b.textContent; });   // in a narrow window they are icons: the name stays as a tooltip
   const sel = $('#langSel'); if (!sel.options.length) sel.innerHTML = LANGS.map(([c, n]) => `<option value="${c}">${n}</option>`).join(''); sel.value = prefs.lang;
   [['#bPlay', L('Pause / Lecture (espace)', 'Pause / Play (space)')], ['#bLog', 'Transcript'], ['#bGallery', L('Galerie (G)', 'Gallery (G)')], ['#bMute', L('Son (touche M)', 'Sound (M key)')], ['#bMenu', L('Réglages', 'Settings')], ['#dclose', L('Fermer', 'Close')], ['#officeVol', L('Volume de l’ambiance', 'Ambience volume')], ['#musicVol', L('Volume de la musique', 'Music volume')], ['#liveProj', L('Projet à suivre', 'Project to follow')], ['#reactBar', L('Réactions', 'Reactions')], ['#logQ', L('Rechercher dans la transcription', 'Search the transcript')], ['#roster', L('Agents', 'Agents')]].forEach(([q, t]) => { const el = $(q); if (!el) return; el.title = t; el.setAttribute('aria-label', t); }); $('#logQ').placeholder = L('Rechercher…', 'Search…'); $('#menuQ').placeholder = L('Chercher un réglage…', 'Search settings…'); document.querySelectorAll('#reactBar button').forEach((b) => b.setAttribute('aria-label', b.dataset.e));
-  $('#gT').textContent = L('Rejoindre l’appel', 'Join the call'); $('#gP').textContent = L('Cliquez pour activer le son et suivre votre session Claude Code en direct.', 'Click to enable sound and follow your Claude Code session live.'); $('#gB').textContent = L('▶ Rejoindre', '▶ Join');
+  $('#gB').textContent = L('🔊 Activer le son', '🔊 Turn on sound'); $('#gB').title = L('Ou cliquez n’importe où dans l’appel', 'Or click anywhere in the call');
   $('#eDemo').textContent = L('▶ Voir la démo', '▶ Watch the demo'); $('#eT').textContent = S.ended ? L('Cette session est terminée.', 'This session has ended.') : L('En attente d’une session', 'Waiting for a session'); $('#eP').innerHTML = watched() ? esc(L('Lancez Claude Code dans {0} : l’appel démarrera tout seul.', 'Start Claude Code in {0} — the call will start by itself.')).replace('{0}', `<b>${esc(watched())}</b>`) : esc(L('Lancez Claude Code dans ce dossier : l’appel démarrera tout seul.', 'Start Claude Code in this folder — the call will start by itself.'));
   for (const id in S.agents) { const a = S.agents[id], p = persona0(a.src || a, a.custom); Object.assign(a, { name: p.name, role: p.role }); const t = $('#t-' + id); if (t) { t.querySelector('.tag span').textContent = p.role; t.querySelector('.tag b').textContent = p.name; if (id === 'main' || id === 'user') t.querySelector('.tag span').textContent = p.role; } }
   document.querySelectorAll('#menu .mi[data-t]').forEach((b) => b.querySelector('.sw').classList.toggle('on', !!prefs[b.dataset.t])); renderCoffee(); renderTokens(); updateHint(); renderLog(true); syncUI();
 }
 const elsewhere = () => !!(S.owner && S.owner !== CID);
 function applyMute() {
-  const b = $('#bMute'); b.textContent = AUD.muted ? '🔇' : elsewhere() ? '🔈' : '🔊';
-  b.title = elsewhere() ? L('Le son est joué dans une autre fenêtre — cliquer pour le reprendre ici', 'Sound is playing in another window — click to take it over here') : L('Son (touche M)', 'Sound (M key)');
+  const b = $('#bMute'); b.textContent = AUD.muted || S.hush ? '🔇' : elsewhere() ? '🔈' : '🔊';
+  b.title = S.hush ? L('Le son s’active à votre premier clic dans l’appel', 'Sound turns on with your first click in the call') : elsewhere() ? L('Le son est joué dans une autre fenêtre — cliquer pour le reprendre ici', 'Sound is playing in another window — click to take it over here') : L('Son (touche M)', 'Sound (M key)');
   AUD.apply(); if (AUD.off()) { synth && synth.cancel(); AUD.stopAll(); }
 }
 async function audioSync(claim) {   // heartbeat + ownership: avoids two Agent Standup windows talking at the same time
@@ -27,7 +27,7 @@ async function audioSync(claim) {   // heartbeat + ownership: avoids two Agent S
 }
 const claimAudio = () => { S.owner = CID; applyMute(); audioSync(true); };
 setInterval(() => audioSync(false), 1500);
-function toggleMute() { if (elsewhere()) { AUD.muted = false; claimAudio(); return; } AUD.muted = !AUD.muted; applyMute(); }
+function toggleMute() { if (S.hush) return joinSound(); if (elsewhere()) { AUD.muted = false; claimAudio(); return; } AUD.muted = !AUD.muted; applyMute(); }
 function setView(v) { prefs.view = v; savePrefs(); document.body.classList.toggle('tree', v === 'tree'); document.body.classList.toggle('board', v === 'board'); if (v === 'board') renderBoardView(); document.querySelectorAll('#viewSeg button').forEach((b) => b.classList.toggle('on', b.dataset.v === v)); renderTree(); if (v === 'call') layout(); }
 
 $('#viewSeg').onclick = (e) => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); };
@@ -56,7 +56,7 @@ function menuInit() {
     $('#menuNone').style.display = q && !secs.some((sc) => sc.items.some((e) => !e.classList.contains('mhide'))) ? '' : 'none';
   };
 }
-$('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b) return; prefs[b.dataset.t] = !prefs[b.dataset.t]; savePrefs(); if (prefs[b.dataset.t] && ['voice', 'office', 'music', 'notify'].includes(b.dataset.t)) claimAudio(); b.querySelector('.sw').classList.toggle('on', prefs[b.dataset.t]); AUD.apply(); if (b.dataset.t === 'office') $('#officeBox').style.display = prefs.office ? '' : 'none'; if (b.dataset.t === 'customLaptop') { for (const k in imgCache) delete imgCache[k]; buildStage(); paintStatus(); } if (b.dataset.t === 'ownNames') renameAgents(); if (b.dataset.t === 'reactions') document.body.classList.toggle('react', prefs.reactions); if (b.dataset.t === 'roster') { document.body.classList.toggle('rost', prefs.roster); paintStates(); } if (b.dataset.t === 'notify') { prefs.notifyChosen = true; savePrefs(); } if (b.dataset.t === 'notify' && prefs.notify) askNotify(); if (b.dataset.t === 'vanish') $('#vanishBox').style.display = prefs.vanish ? '' : 'none'; if (b.dataset.t === 'vanish' && !prefs.vanish) { S.gone.clear(); paintStatus(); } if (b.dataset.t === 'askCard') paintAsk(Date.now());
+$('#menu').onclick = (e) => { const b = e.target.closest('.mi[data-t]'); if (!b) return; prefs[b.dataset.t] = !prefs[b.dataset.t]; savePrefs(); if (prefs[b.dataset.t] && ['voice', 'office', 'music', 'notify'].includes(b.dataset.t)) claimAudio(); b.querySelector('.sw').classList.toggle('on', prefs[b.dataset.t]); AUD.apply(); if (b.dataset.t === 'office') $('#officeBox').style.display = prefs.office ? '' : 'none'; if (b.dataset.t === 'customLaptop') { for (const k in imgCache) delete imgCache[k]; buildStage(); paintStatus(); } if (b.dataset.t === 'ownNames') renameAgents(); if (b.dataset.t === 'reactions') document.body.classList.toggle('react', prefs.reactions); if (b.dataset.t === 'roster') { document.body.classList.toggle('rost', prefs.roster); paintStates(); } if (b.dataset.t === 'notify') { prefs.notifyChosen = true; savePrefs(); } if (b.dataset.t === 'notify' && prefs.notify) askNotify(); if (b.dataset.t === 'vanish') $('#vanishBox').style.display = prefs.vanish ? '' : 'none'; if (b.dataset.t === 'vanish' && !prefs.vanish) { S.gone.clear(); paintStatus(); } if (b.dataset.t === 'askCard') paintAsk(Date.now()); if (b.dataset.t === 'focusLayout') { document.body.classList.toggle('focusl', !!prefs.focusLayout); layout(); }
   if (b.dataset.t === 'music') { $('#musicBox').style.display = prefs.music ? '' : 'none'; if (prefs.music) { AUD.init(); AUD.apply(); } }
   if (b.dataset.t === 'multiShare') while (S.shares.size > shareCap()) unshare(primaryShare()); };   // back to one screen: the newest stays
 $('#station').innerHTML = STATIONS.map((s) => `<option value="${s.id}">📻 ${s.name}</option>`).join('');
@@ -143,11 +143,50 @@ $('#mClip').onclick = () => { $('#menu').classList.remove('on'); exportVideo(0, 
 $('#mBrowser').onclick = () => { $('#menu').classList.remove('on'); window.parent.postMessage({ agentStandup: 'openBrowser' }, '*'); };
 $('#seek').oninput = (e) => seekTo(+e.target.value);
 $('#eDemo').onclick = async () => { await setMode('demo'); if (S.demo && !S.playing) togglePlay(); };   // "Watch the demo" plays it
-$('#gB').onclick = () => {
-  claimAudio(); AUD.init(); AUD.apply(); S.locked = false; $('#gate').classList.remove('on'); syncUI();
+// The live call plays as soon as the page opens, silent: a browser lets a page make sound only after a click or a key. The first one, anywhere, turns the sound on (the chip at the top says so).
+// The mute button and its M key are left to themselves: they turn the sound on too (toggleMute), instead of the click turning it on and the button turning it straight off again.
+function joinSound() {
+  if (!S.hush) return; S.hush = false; $('#gate').classList.remove('on'); claimAudio(); AUD.init(); AUD.apply(); applyMute(); syncUI();
   if (synth && !EMBED) { try { synth.speak(new SpeechSynthesisUtterance('')); } catch {} }   // unlock browser speech
-  S.join = true; if (S.live && S.events.length) run(liveStart());   // what arrived while the door was closed is past too
-};
+}
+$('#gB').onclick = joinSound;
+addEventListener('pointerdown', (e) => { if (S.hush && !(e.target.closest && e.target.closest('#bMute'))) joinSound(); }, true);
+addEventListener('keydown', (e) => { if (S.hush && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() !== 'm' && e.key !== 'Escape' && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) { joinSound(); if (e.key === ' ') { e.preventDefault(); e.stopImmediatePropagation(); } } }, true);   // the first Space turns the sound on, as Join did, without pausing the call too
+// The strip under the header: what needs you, in the call's session first (its agents), then in the other sessions (the board rows). Live only, in every view.
+// Certain when Claude Code says a menu is open there (sure); a guess otherwise, from how long a call has waited ("may need you"). A click, or A, goes to the next one.
+const sessKey = (c) => c.proj + '/' + c.id;
+const inWatch = (r) => { const k = Q.get('proj') || prefs.proj || ''; return !k ? !r.tmp : r.proj === k || r.proj.startsWith(k + '-'); };   // the folder the live view follows; looking everywhere skips the temporary folder (tmp)
+const sessName = (r) => (/^[0-9a-f]{8}-[0-9a-f-]{27}$/.test(r.title) ? L('Session sans titre', 'Untitled session') : r.title);
+function attnItems(now) {
+  if (!S.live || S.demo || !S.cur) return []; const ck = sessKey(S.cur), out = [];
+  for (const id of S.attn || []) { const st = agentState(id, now); if (st.k === 'blocked') out.push({ id, who: nameOf(id), what: st.ask || S.lastTool[id] || (S.run[id] && S.run[id].name) || '', sure: !!st.sure, since: st.since || 0 }); }
+  for (const r of S.rows) if (r.state === 'blocked' && !r.done && sessKey(r) !== ck && inWatch(r)) out.push({ r, who: '“' + sessName(r) + '”', what: r.ask || r.tool || '', sure: !!r.sure, since: r.since || now - (r.ageMs || 0) });
+  return out;
+}
+function paintAttn(now = Date.now()) {
+  const el = $('#attn'), a = attnItems(now), f = a[0];
+  const html = f ? `<span class="aw">✋ <b>${esc(f.who)}</b> ${esc(f.sure ? L('vous attend', 'needs you') : L('vous attend peut-être', 'may need you'))}${f.what ? ' · ' + esc(f.what.replace(/\s+/g, ' ').slice(0, 120)) : ''}${f.since ? ' · ' + agoStr(Math.max(0, now - f.since)) : ''}</span>${a.length > 1 ? `<span class="am">+${a.length - 1}</span>` : ''}<span class="ak">A</span>` : '';
+  if (html !== paintAttn.html) { paintAttn.html = html; el.innerHTML = html; el.hidden = !f; el.title = a.map((x) => x.who + (x.what ? ' · ' + x.what : '')).join('\n'); }
+}
+function goAttn() {   // the next thing that needs you: an agent of this session, or another session (which the call goes to)
+  const a = attnItems(Date.now()); if (!a.length) { toast(L('Personne n’a besoin de vous pour le moment', 'Nobody needs you right now')); return; }
+  goAttn.i = ((goAttn.i || 0) + (goAttn.at && Date.now() - goAttn.at < 30000 ? 1 : 0)) % a.length; goAttn.at = Date.now(); const x = a[goAttn.i];
+  if (x.r) { goAttn.i = 0; if (S.pin) { openWindow(x.r.proj, x.r.id); return; }   // a pinned window stays on its session: the other one gets a window of its own
+    setView('call'); S.pick = { proj: x.r.proj, id: x.r.id, since: 0 }; S.stick = { proj: x.r.proj, id: x.r.id }; S.cur = null; followCurrent(); return; }   // unpinned: the call moves there
+  if (document.body.classList.contains('tree') || document.body.classList.contains('board')) setView('call');
+  S.focusLock = Date.now() + 25000; setFocus(x.id); const t = $('#t-' + x.id); if (t) { t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); popTile(x.id); }
+}
+$('#attn').onclick = goAttn;
+// why the call is in this session (currentSession in server.js): the call moves by itself, and this says why it is here
+function whyTag() {
+  const w = { pick: ['↪ ', L('vous y êtes allé', 'you went there')], typed: ['⌨ ', L('là où vous avez écrit en dernier', 'where you last typed')], busy: ['⚙ ', L('là où l’on travaille', 'where the work is')], stay: ['· ', L('personne au travail : l’appel reste ici', 'nobody at work: the call stays')], latest: ['· ', L('la dernière session écrite', 'the latest session written')] }[S.why];
+  if (!w) return ''; const tip = L('L’appel suit la session où vous avez écrit en dernier. A : ce qui a besoin de vous.', 'The call follows the session you last typed in. A: what needs you.');
+  return `<span title="${esc(tip)}">${w[0]}${esc(L('Suivie : ', 'Following: ') + w[1])}</span>`;
+}
+function paintWhy() {   // in the header, next to the session's name: an unpinned live window follows sessions, a pinned one does not
+  const el = $('#why'), html = (S.live && !S.demo && !S.pin && S.cur) ? whyTag() : '';
+  if (el.innerHTML !== html) el.innerHTML = html; el.classList.toggle('on', !!html);
+}
 // J / K (or a click on the “need you” chip) jump to the agents that need you or are stalled, one after the other
 function jumpAttn(dir = 1) {
   const a = (S.attn || []).filter((id) => $('#t-' + id));
@@ -173,7 +212,6 @@ function paintPill() {
   if (S.offline) { cls = 'off'; txt = '⚠ ' + L('HORS LIGNE', 'OFFLINE'); }
   else if (!S.live) txt = 'REPLAY';
   else if (!S.cur) txt = L('En attente d’une session', 'Waiting for a session');
-  else if (S.locked) txt = L('PRÊT', 'READY');
   else if (!S.playing) txt = L('PAUSE', 'PAUSED');
   else {
     sess = true; const st = {}, by = { working: [], waiting: [], blocked: [], stalled: [], done: [], idle: [] };
@@ -203,10 +241,10 @@ function pillGo() {   // to the agent the status is about; several need you: one
 $('#pill').onclick = $('#sline').onclick = pillGo; $('#pill').onkeydown = $('#sline').onkeydown = (e) => { if (S.pillTo && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pillGo(); } };
 // ---------- keyboard: the door has the focus (Enter / Space joins, or starts the demo when there is no session); the ⚙ switches say their state; Escape closes and gives the focus back ----------
 function focusDoor() {   // never taken from a field or a menu the person is in
-  const b = $('#empty').classList.contains('on') ? $('#eDemo') : $('#gate').classList.contains('on') ? $('#gB') : null, a = document.activeElement;
-  if (b && a !== b && (!a || a === document.body || a === $('#gB') || a === $('#eDemo'))) b.focus({ preventScroll: true });
+  const b = $('#empty').classList.contains('on') ? $('#eDemo') : null, a = document.activeElement;
+  if (b && a !== b && (!a || a === document.body || a === $('#eDemo'))) b.focus({ preventScroll: true });
 }
-for (const q of ['#gate', '#empty']) new MutationObserver(focusDoor).observe($(q), { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(focusDoor).observe($('#empty'), { attributes: true, attributeFilter: ['class'] });
 function syncSwitches() { document.querySelectorAll('#menu .mi[data-t]').forEach((b) => { b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!prefs[b.dataset.t])); }); }
 new MutationObserver(() => {   // the menu opens under the header and the status line, not over them
   const m = $('#menu'), on = m.classList.contains('on'), h = Math.round($('main').getBoundingClientRect().top); $('#bMenu').setAttribute('aria-expanded', String(on)); if (!on) return;
@@ -246,7 +284,7 @@ setInterval(() => {
   if (pos[k] !== S.idx) { delete pos[k]; pos[k] = S.idx; const ks = Object.keys(pos); while (ks.length > 40) delete pos[ks.shift()]; savePrefs(); }
 }, 3000);
 function openKeys() {
-  const rows = [['Space', L('Pause / lecture', 'Pause / play')], ['← / →', L('Replay : événement précédent / suivant', 'Replay: previous / next event')], ['N / Shift+N', L('Replay : moment clé suivant / précédent', 'Replay: next / previous highlight')], ['M', L('Son coupé / activé', 'Mute / unmute')], ['G', L('Vue galerie : toutes les caméras à la même taille', 'Gallery view: every camera the same size')], ['T', L('Vue arbre ↔ appel', 'Tree view ↔ call')], ['R', L('Récapitulatif', 'Recap')], ['L', L('Transcription', 'Transcript')], ['J / K', L('Agent suivant / précédent qui a besoin de vous', 'Next / previous agent that needs you')], ['Cmd / Ctrl + K', L('Aller à une session', 'Go to a session')], ['?', L('Cette aide', 'This help')], ['Esc', L('Fermer', 'Close')]];
+  const rows = [['Space', L('Pause / lecture', 'Pause / play')], ['← / →', L('Replay : événement précédent / suivant', 'Replay: previous / next event')], ['N / Shift+N', L('Replay : moment clé suivant / précédent', 'Replay: next / previous highlight')], ['M', L('Son coupé / activé', 'Mute / unmute')], ['G', L('Vue galerie : toutes les caméras à la même taille', 'Gallery view: every camera the same size')], ['A', L('Aller à ce qui a besoin de vous', 'Go to what needs you')], ['T', L('Vue arbre ↔ appel', 'Tree view ↔ call')], ['R', L('Récapitulatif', 'Recap')], ['L', L('Transcription', 'Transcript')], ['J / K', L('Agent suivant / précédent qui a besoin de vous', 'Next / previous agent that needs you')], ['Cmd / Ctrl + K', L('Aller à une session', 'Go to a session')], ['?', L('Cette aide', 'This help')], ['Esc', L('Fermer', 'Close')]];
   $('#recap .box').innerHTML = `<h1>${L('Raccourcis clavier', 'Keyboard shortcuts')}</h1><table>${rows.map(([k, d]) => `<tr><td class="f"><b>${esc(k)}</b></td><td>${esc(d)}</td></tr>`).join('')}</table><h3>${L('Les états', 'What the states mean')}</h3><table>${[['⚙', L('au travail', 'working')], ['🔗', L('attend un autre agent', 'waiting on another agent')], ['✋', L('attend peut-être votre feu vert', 'may be waiting for your approval')], ['⚠', L('bloqué : un sous-agent est silencieux depuis longtemps', 'stalled: a sub-agent has been silent for a long time')], ['✓', L('terminé', 'done')]].map(([k, d]) => `<tr><td class="f">${k}</td><td>${esc(d)}</td></tr>`).join('')}</table><p class="dim" style="margin:14px 0 0;font-size:12px">${L('Les vues Appel, Arbre et Sessions se changent aussi en haut de la fenêtre.', 'You can also switch between Call, Tree and Sessions at the top of the window.')}</p><div style="margin-top:14px"><button class="btn" id="recapx">${L('Fermer', 'Close')}</button></div>`;
   $('#recapx').onclick = () => $('#recap').classList.remove('on'); $('#recap').classList.add('on');
 }
@@ -255,13 +293,13 @@ addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openSwitcher(); return; }
   if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;   // browser shortcuts (Cmd+R, Ctrl+N…) stay the browser's
   if (e.key === '?') { openKeys(); return; }
-  if (e.key === ' ') { if (e.target.closest && e.target.closest('button, .tile, .rr, .bcard, a, [role=button]')) return; e.preventDefault(); togglePlay(); } else if (e.key.toLowerCase() === 'm') toggleMute(); else if (e.key.toLowerCase() === 'g') $('#bGallery').click(); else if (e.key.toLowerCase() === 't') { const toTree = !document.body.classList.contains('tree'); setView(toTree ? 'tree' : 'call'); if (toTree) toast(L('Vue arbre : T pour revenir, ? pour l’aide', 'Tree view: T to go back, ? for help')); } else if (e.key.toLowerCase() === 'r') openRecap(); else if (e.key.toLowerCase() === 'l') $('#bLog').click(); else if (e.key === 'ArrowRight' && !S.live) { e.preventDefault(); stepEvent(1); } else if (e.key === 'ArrowLeft' && !S.live) { e.preventDefault(); stepEvent(-1); } else if (e.key.toLowerCase() === 'n') stepHighlight(e.shiftKey ? -1 : 1); else if (e.key.toLowerCase() === 'j') jumpAttn(1); else if (e.key.toLowerCase() === 'k') jumpAttn(-1); else if (e.key === 'Escape') { $('#recap').classList.remove('on'); $('#menu').classList.remove('on'); }
+  if (e.key === ' ') { if (e.target.closest && e.target.closest('button, .tile, .rr, .bcard, a, [role=button]')) return; e.preventDefault(); togglePlay(); } else if (e.key.toLowerCase() === 'm') toggleMute(); else if (e.key.toLowerCase() === 'g') $('#bGallery').click(); else if (e.key.toLowerCase() === 'a') goAttn(); else if (e.key.toLowerCase() === 't') { const toTree = !document.body.classList.contains('tree'); setView(toTree ? 'tree' : 'call'); if (toTree) toast(L('Vue arbre : T pour revenir, ? pour l’aide', 'Tree view: T to go back, ? for help')); } else if (e.key.toLowerCase() === 'r') openRecap(); else if (e.key.toLowerCase() === 'l') $('#bLog').click(); else if (e.key === 'ArrowRight' && !S.live) { e.preventDefault(); stepEvent(1); } else if (e.key === 'ArrowLeft' && !S.live) { e.preventDefault(); stepEvent(-1); } else if (e.key.toLowerCase() === 'n') stepHighlight(e.shiftKey ? -1 : 1); else if (e.key.toLowerCase() === 'j') jumpAttn(1); else if (e.key.toLowerCase() === 'k') jumpAttn(-1); else if (e.key === 'Escape') { $('#recap').classList.remove('on'); $('#menu').classList.remove('on'); }
 });
 if (EMBED) $('#mBrowser').style.display = '';
 
 (async function init() {
   if (!LANGS.some((l) => l[0] === prefs.lang)) prefs.lang = 'en'; await loadLocale(prefs.lang); await loadChars();
-  document.body.classList.toggle('rost', prefs.roster !== false); document.body.classList.toggle('react', !!prefs.reactions); applyLog(); applyGallery(); setView(prefs.view); menuInit(); addEventListener('click', () => { try { if (prefs.notify && !EMBED && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} }, { once: true }); applyLang(); applyMute(); TTS.init().then(updateHint);
+  document.body.classList.toggle('rost', prefs.roster !== false); document.body.classList.toggle('react', !!prefs.reactions); document.body.classList.toggle('focusl', !!prefs.focusLayout); applyLog(); applyGallery(); setView(prefs.view); menuInit(); addEventListener('click', () => { try { if (prefs.notify && !EMBED && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} }, { once: true }); applyLang(); applyMute(); TTS.init().then(updateHint);
   loadHealth().then(() => {   // French by default only if translation can actually work; otherwise stay in English without a warning
     const h = S.health || {};
     if (!prefs.langChosen && FR() && h.claude === null && !h.apiKey) { prefs.lang = 'en'; applyLang(); }
@@ -275,6 +313,6 @@ if (EMBED) $('#mBrowser').style.display = '';
     return;
   }
   S.live = Q.get('live') !== '0'; document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.m === (S.live ? 'live' : 'replay')));
-  if (S.live) { S.locked = true; $('#gate').classList.add('on'); S.cur = null; syncUI(); fillProjects(); await followCurrent(); } else { S.live = true; await setMode('replay'); if (Q.get('at') != null && S.events.length) seekTo(Math.max(0, Math.min(S.events.length - 1, +Q.get('at') || 0))); }
+  if (S.live) { S.hush = true; S.join = true; $('#gate').classList.add('on'); applyMute(); S.cur = null; syncUI(); fillProjects(); await followCurrent(); } else { S.live = true; await setMode('replay'); if (Q.get('at') != null && S.events.length) seekTo(Math.max(0, Math.min(S.events.length - 1, +Q.get('at') || 0))); }
   syncUI();
 })();

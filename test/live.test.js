@@ -34,7 +34,7 @@ async function open(s, join = true) {
   await page.goto(`http://localhost:${port}/?proj=${s.proj}`); await page.waitForFunction('typeof S !== "undefined" && S.cur', { timeout: 15000 });
   await page.evaluate(() => { window.__said = []; const o = window.startTalk; window.startTalk = function (id, line, label) { window.__said.push({ id, line: String(line), label: label || '', at: performance.now() }); return o.apply(this, arguments); }; });
   await page.evaluate(() => { window.__voice = []; const o = window.speakLine; window.speakLine = function (text, p, primary, token, fr, always) { window.__voice.push({ id: p && p.id, text: String(text), silent: !!(S.hurry && !always) }); return o.apply(this, arguments); }; });   // silent: shown without a voice because the call is behind
-  if (join) await page.click('#gB');
+  if (join && await page.evaluate(() => S.hush)) await page.click('#gB');   // the call already runs; this only turns its sound on
   const call = {
     page, errors,
     said: () => page.evaluate(() => window.__said),
@@ -150,7 +150,7 @@ test('live call', { skip: missing || false, timeout: 600000 }, async (t) => {
   await t.test('following the latest session: a call keeps its session while the other one writes, also across a reload of its feed', async () => {
     const a = session(), b = session(); a.user('A order', Date.now() - 600000); a.say('A ready.', { at: Date.now() - 590000, end: true });
     const page = await browser.newPage(), errors = []; page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(`http://localhost:${port}/?live=1&proj=`); await page.waitForFunction('typeof S !== "undefined" && S.cur', { timeout: 15000 }); await page.click('#gB');
+    await page.goto(`http://localhost:${port}/?live=1&proj=`); await page.waitForFunction('typeof S !== "undefined" && S.cur', { timeout: 15000 }); if (await page.evaluate(() => S.hush)) await page.click('#gB');
     a.say('A is working.'); await page.waitForFunction((p) => S.cur && S.cur.proj === p, { timeout: 15000 }, a.proj);
     b.user('B order'); b.say('B line one.'); await wait(1500); b.say('B line two.'); await wait(1500);
     assert.equal(await page.evaluate(() => S.cur.proj), a.proj, 'stays on its session while the other writes');

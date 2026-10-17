@@ -80,7 +80,6 @@ function clipSpeech(t, cap) {   // the bubble keeps the full text; the voice rea
 }
 function pause() { S.playing = false; S.hurry = false; S.boost = 1; S.token++; synth && synth.cancel(); AUD.stopAll(); clearSpeaking(); clearThoughts(); $('#card').classList.remove('on'); syncUI(); }
 function togglePlay() {
-  if (S.locked) return;
   if (S.playing) { S.userPaused = true; pause(); } else { claimAudio(); S.userPaused = false; run(S.idx >= S.events.length - 1 && !S.live ? (recomputeStatus(0), 0) : S.live ? S.pos : S.idx); }   // live: from the first line not said yet (the one that was cut, if any)
 }
 function seekTo(i) {

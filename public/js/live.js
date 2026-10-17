@@ -29,9 +29,9 @@ async function followCurrent() {
   if (S.cur && S.cur.id === cur.id && S.cur.proj === cur.proj) return false;
   S.keep = S.stick && S.stick.id === cur.id && S.stick.proj === cur.proj ? S.since : 0;   // the same session again (the server lost our place): what this page already said stays said, even if the server forgot it
   if (!(await loadSession(cur.proj, cur.id))) return false; S.stick = { proj: cur.proj, id: cur.id };   // kept when a reload clears S.cur, so it does not hand the call to another session
-  const start = liveStart(); if (!S.locked && !S.userPaused) run(start); return true;
+  const start = liveStart(); if (!S.userPaused) run(start); return true;
 }
-// Live: a call starts when you join it. Only what happened since then, and was not said yet, is said (the last 16 events at most, when a session is picked up on the way);
+// Live: the call runs from the moment the page opens (silent until your first click). Only what happened since then, and was not said yet, is said (the last 16 events at most, when a session is picked up on the way);
 // the end of a session that was already over is on screen (states, transcript) but is not read again. Joining while the agents are at work, the last few seconds are said too, to know what they are on
 const JOIN_BACK_MS = 10000;
 function midWork() {   // someone is in the middle of something: the session does not end on a message of the lead (its turn is over then, or about to be)
@@ -39,13 +39,13 @@ function midWork() {   // someone is in the middle of something: the session doe
 }
 function liveStart() {   // S.saidSrv: how far this session was already said (by any page, before a reload); S.join: you are joining now, so what came before is past
   const n = S.events.length, now = Date.now() - (midWork() ? JOIN_BACK_MS : 0);
-  if (!S.locked) { S.since = S.join ? Math.max(S.saidSrv || 0, now) : Math.max(S.saidSrv || now, S.keep || 0); S.join = false; } S.keep = 0;
-  const since = S.locked ? Date.now() : S.since; let i = n; while (i > Math.max(0, n - 16) && S.events[i - 1].ts > since) i--;   // by the session's own stamps, as run() marks them: _t depends on the order this page received events in, so it would not survive a reload
+  S.since = S.join ? Math.max(S.saidSrv || 0, now) : Math.max(S.saidSrv || now, S.keep || 0); S.join = false; S.keep = 0;
+  const since = S.since; let i = n; while (i > Math.max(0, n - 16) && S.events[i - 1].ts > since) i--;   // by the session's own stamps, as run() marks them: _t depends on the order this page received events in, so it would not survive a reload
   recomputeStatus(i); S.idx = S.pos = i; S.from = since; trNew(Math.max(0, n - 16)); paintStatus(); return i;
 }
 function amend(e, was) {   // the server corrected an event the call already has: another tool call in the same message, a last line that turns out to be a report, the mark that closes the lead's turn
   const i = S.events.indexOf(e), row = $(`#log .row[data-i="${i}"]`); if (row) row.outerHTML = logRow(i);
-  if (e.end) S.sawEnd = true; if (S.locked || S.recomputing || !S.live) return; const past = i < S.pos;   // at the door everything is worked out again on Join
+  if (e.end) S.sawEnd = true; if (S.recomputing || !S.live) return; const past = i < S.pos;
   if (e.kind === 'tools') { const done = e._n != null ? e._n : past ? was.n : null; if (done != null && e.tools.length > done) { const more = { ...e, tools: e.tools.slice(done) }; e._n = e.tools.length; applyStatus(more); tickTools(more); } }
   if (e.kind === 'report' && was.kind === 'say' && (e._as === 'say' || past)) {   // it was read as an ordinary line: the report still counts (the agent is done, a ding, perhaps a word of thanks), without reading it again
     applyStatus(e); AUD.ding(); fly(e.agent, e.to, '✅'); popTile(e.agent); if (e._as === 'say') { e._as = 'report'; S.late.push(e); }
@@ -82,8 +82,8 @@ setInterval(async () => {
 }, 400);
 
 
-window.addEventListener('focus', () => { if (!S.locked) claimAudio(); });
-window.addEventListener('message', (e) => { if (EMBED && e.source === window.parent && e.data && e.data.agentStandup === 'claim' && !S.locked) claimAudio(); });   // VS Code: this tab became the active one
+window.addEventListener('focus', () => { if (!S.hush) claimAudio(); });   // a window that cannot make sound yet does not take the sound off the one that can
+window.addEventListener('message', (e) => { if (EMBED && e.source === window.parent && e.data && e.data.agentStandup === 'claim' && !S.hush) claimAudio(); });   // VS Code: this tab became the active one
 // ---------- meeting chrome: participants and a clock ----------
 function renderMeet() {
   const m = $('#meet'); if (!m) return; const n = Object.keys(S.agents).filter((id) => id !== 'user' && !S.gone.has(id) && ((S.status[id] && S.status[id] !== 'done') || id === 'main')).length;
@@ -107,7 +107,7 @@ S.rows = []; S.rowsAt = 0;
 const rowOf = (c) => (c && S.rows.find((r) => r.proj === c.proj && r.id === c.id)) || null;
 async function sessPoll() {
   if (!S.live || S.demo || (document.hidden && AUD.off()) || sessPoll.busy) return; sessPoll.busy = true;
-  try { const t0 = Date.now(), rows = await (await fetch('/api/board')).json(); if (Array.isArray(rows) && S.live && !S.demo) { S.rows = rows; S.rowsAt = t0; } } catch {} finally { sessPoll.busy = false; }
+  try { const t0 = Date.now(), rows = await (await fetch('/api/board')).json(); if (Array.isArray(rows) && S.live && !S.demo) { S.rows = rows; S.rowsAt = t0; paintAttn(); } } catch {} finally { sessPoll.busy = false; }
 }
 setInterval(sessPoll, 4000);
 const BSTATE = { blocked: ['✋', 'needs you?', 'attend vous ?'], working: ['⚙', 'working', 'au travail'], waiting: ['🔗', 'waiting on sub-agents', 'attend ses sous-agents'], turn: ['✓', 'your turn', 'à vous'], idle: ['💤', 'idle', 'inactif'] };
@@ -182,7 +182,7 @@ async function setMode(m) {
   if (m === 'demo') {   // a built-in fictional session: nothing to install, nothing private on screen
     pause(); S.live = false; S.demo = true; S.userPaused = false; S.cur = null; $('#empty').classList.remove('on');
     document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.m === 'demo')); $('#sessions').style.display = 'none';
-    if (await loadSession('_demo', 'demo')) { S.title = L('Démo — une équipe corrige un login lent', 'Demo — a team fixes a slow login'); $('#subtitle').textContent = S.title; S.locked = false; $('#gate').classList.remove('on'); syncUI(); }
+    if (await loadSession('_demo', 'demo')) { S.title = L('Démo — une équipe corrige un login lent', 'Demo — a team fixes a slow login'); $('#subtitle').textContent = S.title; S.hush = false; $('#gate').classList.remove('on'); syncUI(); }
     return;
   }
   S.demo = false;
@@ -197,6 +197,6 @@ async function setMode(m) {
   $('#empty').classList.remove('on'); const pick = rows.find((r) => r.id === Q.get('pin')) || rows.find((r) => r.agents) || rows[0]; if (!pick) { $('#empty').classList.add('on'); return; }
   $('#sessions').value = `${pick.proj}|${pick.id}`; await openSelected();
 }
-async function openSelected() { const [p, i] = $('#sessions').value.split('|'); if (await loadSession(p, i)) { S.locked = false; $('#gate').classList.remove('on'); const at = (prefs.pos || {})[p + '/' + i]; if (!S.live && at > 3 && at < S.events.length - 3) { seekTo(at); toast(L('Reprise là où vous vous étiez arrêté', 'Resumed where you left off')); } } }
+async function openSelected() { const [p, i] = $('#sessions').value.split('|'); if (await loadSession(p, i)) { const at = (prefs.pos || {})[p + '/' + i]; if (!S.live && at > 3 && at < S.events.length - 3) { seekTo(at); toast(L('Reprise là où vous vous étiez arrêté', 'Resumed where you left off')); } } }
 $('#sessions').onchange = openSelected;
 
