@@ -113,19 +113,35 @@ setInterval(sessPoll, 4000);
 const BSTATE = { blocked: ['✋', 'needs you?', 'attend vous ?'], working: ['⚙', 'working', 'au travail'], waiting: ['🔗', 'waiting on sub-agents', 'attend ses sous-agents'], turn: ['✓', 'your turn', 'à vous'], idle: ['💤', 'idle', 'inactif'] };
 const BORDER = ['blocked', 'working', 'waiting', 'turn', 'idle'];
 const agoStr = (ms) => (ms < 90e3 ? Math.max(1, Math.round(ms / 1000)) + 's' : ms < 5400e3 ? Math.round(ms / 60e3) + ' min' : Math.round(ms / 3600e3) + ' h');
-let boardBusy = false;
+const BGROUP = ['blocked', 'turn', 'working', 'waiting', 'idle'];   // the board is in sections, what waits for you first
+let boardBusy = false, boardAll = null, boardDoneOpen = false, boardIdleOpen = false;
+const isDone = (r) => !!r.done;   // put away by you, until the session moves again: the server says so, to every window
+function bcard(r, now, done) {
+  const [ic, en0, fr0] = BSTATE[r.state], [en, fr] = r.state === 'blocked' && r.sure ? ['needs you', 'vous attend'] : [en0, fr0], waited = r.since ? now - r.since : r.state === 'blocked' ? r.ageMs : now - r.mtime, mine = r.state === 'blocked' || r.state === 'turn';   // how long it has waited on you
+  const head = r.state === 'blocked' ? [r.ask ? '' : esc(r.tool), r.ran ? '' : agoStr(waited)].filter(Boolean).join(' ') : r.state === 'working' && r.tool ? esc(r.tool) : r.state === 'idle' || (r.state === 'turn' && !r.ran) ? agoStr(waited) : '', extra = head ? ' · ' + head : '';
+  const took = mine && r.ran ? `⏱ ${L('a travaillé', 'worked')} ${fmtShort(r.ran)} · ${L('vous attend depuis', 'waiting on you for')} ${fmtShort(Math.max(0, now - (r.since || now)))}` : r.state === 'working' && r.asked ? `⏱ ${L('au travail depuis', 'working for')} ${agoStr(Math.max(0, now - r.asked))}` : '';   // the time it worked, apart from the time it has waited on you
+  const pr = r.pr ? `<button class="bpr" data-url="${esc(r.pr.url)}" title="${esc(L('Ouvrir la pull request', 'Open the pull request'))}">PR #${+r.pr.n} ↗</button>` : '';
+  const put = done ? `<button class="bdo" data-undo="1" title="${esc(L('Rouvrir', 'Reopen'))}" aria-label="${esc(L('Rouvrir', 'Reopen'))}">↩</button>` : r.state === 'turn' || r.state === 'idle' ? `<button class="bdo" title="${esc(L('Marquer comme traitée', 'Mark as done'))}" aria-label="${esc(L('Marquer comme traitée', 'Mark as done'))}">✓</button>` : '';
+  const nw = `<button class="bnew" data-p="${esc(r.proj)}" data-i="${esc(r.id)}" title="${esc(L('Ouvrir dans une nouvelle fenêtre', 'Open in a new window'))}">⧉</button>`;
+  return `<div class="bcard ${r.state}" tabindex="0" role="button" data-p="${esc(r.proj)}" data-i="${esc(r.id)}"><div class="bh"><span class="stc ${r.state}">${ic} ${L(fr, en)}${extra}</span>${nw}${pr}${put}</div><div class="bt">${esc(/^[0-9a-f]{8}-[0-9a-f-]{27}$/.test(r.title) ? L('Session sans titre', 'Untitled session') : r.title)}</div>${r.ask ? `<div class="bq">${esc(r.ask)}</div>` : ''}<div class="bp">${esc(niceProj(r.proj))}</div>${took ? `<div class="bm">${took}</div>` : ''}${r.subTotal ? `<div class="bm">👥 ${r.subActive}/${r.subTotal} ${L('sous-agents actifs', 'sub-agents active')}</div>` : ''}</div>`;
+}
+function paintBoard() {
+  if (!boardAll || !document.body.classList.contains('board')) return; const now = Date.now(), recent = (a, b) => b.mtime - a.mtime;
+  const live = boardAll.filter((r) => !isDone(r)), done = boardAll.filter(isDone).sort(recent), head = (k, label, n) => `${BSTATE[k] ? BSTATE[k][0] : '✓'} <span class="bl">${label}</span><i>${n}</i>`;
+  const secs = BGROUP.map((k) => [k, live.filter((r) => r.state === k).sort(recent)]).filter(([, rs]) => rs.length).map(([k, rs]) => k === 'idle'   /* idle: folded into one line, opened on demand (and kept open while the board is painted again) */
+    ? `<details class="bsec bidle"${boardIdleOpen ? ' open' : ''}><summary class="bhd ${k}">${head(k, L(BSTATE[k][2], BSTATE[k][1]), rs.length)}</summary><div class="bgrid">${rs.map((r) => bcard(r, now, false)).join('')}</div></details>`
+    : `<section class="bsec"><h3 class="bhd ${k}">${head(k, L(BSTATE[k][2], BSTATE[k][1]), rs.length)}</h3><div class="bgrid">${rs.map((r) => bcard(r, now, false)).join('')}</div></section>`).join('');
+  const put = done.length ? `<details class="bsec bdone"${boardDoneOpen ? ' open' : ''}><summary class="bhd">${head('', L('Traitées', 'Done'), done.length)}</summary><div class="bgrid">${done.map((r) => bcard(r, now, true)).join('')}</div></details>` : '';
+  $('#boardv').innerHTML = secs + put || `<div class="bsum"><span>${L('Aucune session récente', 'No recent session')}</span></div>`;
+}
 async function renderBoardView() {
   if (!document.body.classList.contains('board') || boardBusy) return; boardBusy = true;
   try {
-    const rows = (await (await fetch('/api/board')).json()).sort((a, b) => BORDER.indexOf(a.state) - BORDER.indexOf(b.state) || b.mtime - a.mtime), now = Date.now();
-    if (!document.body.classList.contains('board')) return;
-    const cnt = {}; rows.forEach((r) => (cnt[r.state] = (cnt[r.state] || 0) + 1));
-    const sum = BORDER.filter((k) => cnt[k]).map((k) => `<span class="stc ${k}">${BSTATE[k][0]} ${cnt[k]} ${L(BSTATE[k][2], BSTATE[k][1])}</span>`).join('');
-    $('#boardv').innerHTML = `<div class="bsum">${sum || `<span>${L('Aucune session récente', 'No recent session')}</span>`}</div><div class="bgrid">${rows.map((r) => {
-      const [ic, en, fr] = BSTATE[r.state], extra = (r.state === 'blocked' || r.state === 'turn') && r.ran ? ` · ⏱ ${L('a travaillé', 'worked')} ${fmtShort(r.ran)} · ${L('vous attend depuis', 'waiting on you for')} ${fmtShort(Math.max(0, now - (r.since || now)))}` : r.state === 'blocked' && r.ask ? ` · ${esc(r.ask)}` : r.state === 'blocked' ? ` · ${esc(r.tool)} ${agoStr(r.ageMs)}` : r.state === 'working' && r.tool ? ` · ${esc(r.tool)}` : r.state === 'idle' || r.state === 'turn' ? ` · ${agoStr(now - r.mtime)}` : '';   // the time it worked, apart from the time it has waited on you; and what it waits on, when the server knows
-      return `<div class="bcard ${r.state}" tabindex="0" role="button" data-p="${esc(r.proj)}" data-i="${esc(r.id)}"><button class="bnew" data-p="${esc(r.proj)}" data-i="${esc(r.id)}" title="${esc(L('Ouvrir dans une nouvelle fenêtre', 'Open in a new window'))}">⧉</button><div><span class="stc ${r.state}">${ic} ${L(fr, en)}${extra}</span></div><div class="bt">${esc(/^[0-9a-f]{8}-[0-9a-f-]{27}$/.test(r.title) ? L('Session sans titre', 'Untitled session') : r.title)}</div><div class="bp">${esc(niceProj(r.proj))}</div>${r.subTotal ? `<div class="bm">👥 ${r.subActive}/${r.subTotal} ${L('sous-agents actifs', 'sub-agents active')}</div>` : ''}</div>`; }).join('')}</div>`;
+    boardAll = await (await fetch('/api/board')).json();
+    paintBoard();
   } catch {} finally { boardBusy = false; }
 }
+$('#boardv').addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('bdone')) boardDoneOpen = e.target.open; if (e.target.classList && e.target.classList.contains('bidle')) boardIdleOpen = e.target.open; }, true);
 $('#boardv').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('bcard')) { e.preventDefault(); e.target.click(); } };
 function openWindow(proj, id) {
   if (EMBED) window.parent.postMessage({ agentStandup: 'openSession', proj, id }, '*');
@@ -135,7 +151,14 @@ async function openSession(proj, id) {
   if (S.live && !S.demo && (!S.cur || S.cur.id !== id || S.cur.proj !== proj)) { openWindow(proj, id); return; }   // another session: a window of its own (this one keeps what it shows, pinned or following)
   setView('call'); if (!S.live || S.demo) { S.stick = { proj, id }; if (!S.pin) S.pick = { proj, id, since: 0 }; S.cur = null; await setMode('live'); }   // from a replay or the demo: this window goes live on it, and holds the call there until you type elsewhere
 }
-$('#boardv').onclick = (e) => { const n = e.target.closest('.bnew'); if (n) { e.stopPropagation(); openWindow(n.dataset.p, n.dataset.i); return; } const c = e.target.closest('.bcard'); if (c) openSession(c.dataset.p, c.dataset.i); };
+$('#boardv').onclick = (e) => {
+  const n = e.target.closest('.bnew'); if (n) { e.stopPropagation(); openWindow(n.dataset.p, n.dataset.i); return; }
+  const pr = e.target.closest('.bpr'), put = e.target.closest('.bdo'), c = e.target.closest('.bcard'); if (pr) return openExternal(pr.dataset.url); if (!c) return;
+  if (put) { const proj = c.dataset.p, id = c.dataset.i, on = !put.dataset.undo;   // shown at once here, and told to the server, which the other windows ask
+    for (const list of [boardAll || [], S.rows]) { const r = list.find((x) => x.proj === proj && x.id === id); if (r) { if (on) r.done = 1; else delete r.done; } }
+    paintBoard(); fetch('/api/done', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ proj, id, on }) }).catch(() => {}); return; }
+  openSession(c.dataset.p, c.dataset.i);
+};
 // Cmd/Ctrl+K: jump to any session from any view
 async function openSwitcher() {
   let sw = $('#switcher'); if (sw) { closeSwitcher(); return; }

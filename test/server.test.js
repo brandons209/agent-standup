@@ -459,3 +459,28 @@ test('a menu open in the session makes its row say so: the command, the question
     assert.ok(!r.dead.sure && r.dead.state !== 'blocked', 'a session whose process ended is not waited on');
   } finally { for (const n of fs.readdirSync(cc)) fs.unlinkSync(path.join(cc, n)); kids.forEach((k) => k.kill()); stop(); back(); }
 });
+// ---- putting a session away: the ✓ on its card, kept in a file beside the settings until the session moves again
+test('a session can be put away as done, and a new record takes it back; only a pull request link is offered as a link', async () => {
+  const root = path.join(tmp, 'projects'), made = ['-dn'];
+  fs.mkdirSync(root + '/-dn', { recursive: true });
+  fs.writeFileSync(path.join(root, '-dn', 'turn.jsonl'), [typed(0, 'finish it'), said(1, 'Finished.', { stop: 'end_turn' })].map(line).join(''));
+  fs.writeFileSync(path.join(root, '-dn', 'work.jsonl'), [typed(0, 'run'), used(1, 'toolu_b', 'Bash', { command: 'sleep 60' })].map(line).join(''));
+  fs.writeFileSync(path.join(root, '-dn', 'pr.jsonl'), [typed(0, 'ship it'), said(1, 'Opened.', { stop: 'end_turn' }), line({ type: 'pr-link', prUrl: 'https://github.com/octo/repo/pull/42' }).slice(0, -1)].join('\n') + '\n');
+  fs.writeFileSync(path.join(root, '-dn', 'weird.jsonl'), [typed(0, 'look'), said(1, 'Ok.', { stop: 'end_turn' }), { type: 'pr-link', prUrl: 'https://gitlab.com/octo/repo/-/merge_requests/7' }, { type: 'pr-link', prUrl: 'not a url' }].map(line).join(''));
+  const back = alone(made), { port, stop } = await serve(), board = async () => { await wait(1300); const rows = JSON.parse((await get(port, '/api/board')).body); return Object.fromEntries(rows.map((r) => [r.id, r])); },
+    put = (body) => get(port, '/api/done', { 'content-type': 'application/json' }, 'POST', JSON.stringify(body));
+  try {
+    let r = await board();
+    assert.equal(r.turn.state, 'turn');
+    assert.deepEqual(r.pr.pr, { n: 42, url: 'https://github.com/octo/repo/pull/42' }, 'the pull request Claude Code noted is on the row');
+    assert.equal(r.weird.pr, undefined, 'a link to another host, or no link at all, is never given to the page');
+    assert.equal(JSON.parse((await put({ proj: '-dn', id: 'turn', on: true })).body).ok, true);
+    r = await board(); assert.equal(r.turn.done, 1, 'put away: every window is told');
+    assert.equal(JSON.parse((await put({ proj: '-dn', id: 'work', on: true })).body).ok, false, 'a session at work is not put away');
+    r = await board(); assert.equal(r.work.done, undefined);
+    fs.appendFileSync(path.join(root, '-dn', 'turn.jsonl'), said(2, 'And one more thing.', { stop: 'end_turn' }) + '\n');   // it moved again
+    r = await board(); assert.equal(r.turn.done, undefined, 'a new record takes it back');
+    assert.equal(JSON.parse((await put({ proj: '-dn', id: 'turn', on: false })).body).ok, true, 'reopening one that is not put away is fine');
+    assert.equal((await get(port, '/api/done', { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' }, 'POST', '{}')).status, 403);
+  } finally { fs.rmSync(path.join(tmp, 'done.json'), { force: true }); stop(); back(); }
+});

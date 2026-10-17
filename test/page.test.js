@@ -233,3 +233,29 @@ test('the board row of the followed session tells the lead it needs you, and its
   assert.match(h, /Which &lt;b&gt;one&lt;\/b&gt;\?/); assert.match(h, /&lt;script&gt;x&lt;\/script&gt;/); assert.ok(!/<script/.test(h), 'nothing of the menu is taken as markup');
   assert.match(run(`askHtml({ kind: 'plan', text: 'do <i>this</i>' }, S.agents.main)`), /do &lt;i&gt;this&lt;\/i&gt;/);
 });
+test('the board paints sections in order, folds idle, and keeps done sessions apart', async () => {
+  const p = page(), T = Date.now();
+  const rows = [
+    { proj: '-a', id: 'b', state: 'blocked', title: 'Blocked one', mtime: T, tool: 'Bash', ask: 'npm <script>x</script>', sure: 1, ran: 60000, since: T - 30000, pr: { n: 7, url: 'https://github.com/o/r/pull/7' } },
+    { proj: '-a', id: 't', state: 'turn', title: 'Turn one <script>alert(1)</script>', mtime: T - 1000, ran: 5000, since: T - 2000, subTotal: 3, subActive: 1 },
+    { proj: '-a', id: 'w', state: 'working', title: 'Working one', mtime: T - 2000, tool: 'Edit', asked: T - 9000 },
+    { proj: '-a', id: 'i', state: 'idle', title: 'Idle one', mtime: T - 3000 },
+    { proj: '-a', id: 'd', state: 'turn', title: 'Put away', mtime: T - 4000, done: 1 },
+  ];
+  p.ctx.fetch = (u) => (String(u) === '/api/board' ? Promise.resolve({ json: () => Promise.resolve(rows) }) : new Promise(() => {}));   // only the board answers; every other request stays pending, as in the harness
+  p.run(`document.body.classList.add('board');`);
+  await p.run(`renderBoardView()`);
+  const h = p.get('boardv').innerHTML;
+  assert.ok(h.indexOf('Blocked one') < h.indexOf('Turn one') && h.indexOf('Turn one') < h.indexOf('Working one'), 'what waits for you comes first');
+  assert.match(h, /<section class="bsec"><h3 class="bhd blocked">/);
+  assert.match(h, /<details class="bsec bidle"><summary class="bhd idle">/, 'idle is folded');
+  assert.match(h, /<details class="bsec bdone"><summary class="bhd">/, 'done sessions sit in their own fold');
+  assert.ok(h.indexOf('Working one') < h.indexOf('class="bsec bidle"'), 'idle comes after the working section');
+  assert.ok(h.indexOf('Put away') > h.indexOf('bdone'), 'the put-away row is under Done');
+  assert.match(h, /Turn one &lt;script&gt;alert\(1\)&lt;\/script&gt;/); assert.ok(!/Turn one <script/.test(h), 'a title is never markup');
+  assert.equal((h.match(/class="bnew"/g) || []).length, 5, 'every card keeps its new-window button');
+  assert.match(h, /class="bpr" data-url="https:\/\/github\.com\/o\/r\/pull\/7"/); assert.match(h, /PR #7/);
+  assert.match(h, /class="bdo" data-undo="1"/, 'a put-away card offers to reopen'); assert.ok(!/data-undo/.test(h.slice(0, h.indexOf('bdone'))), 'a live card offers ✓, not ↩');
+  assert.match(h, /✋ needs you<\/span>/, 'a sure menu reads "needs you", not "needs you?"');
+  assert.match(h, /👥 1\/3/);
+});

@@ -177,6 +177,7 @@ const readHead = (file, bytes) => { const fd = fs.openSync(file, 'r'); try { con
 const APPROVAL = /^(Edit|Write|MultiEdit|NotebookEdit)/, ASKS = /^(AskUserQuestion|ExitPlanMode)/, SUBTOOL = /^(Task|Agent)$/;
 const boardCache = new Map();   // file → { sig, parsed, title }
 let boardMemo = { at: 0, rows: [] };
+const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;   // nothing else is given to the page as a link to open
 const notifText = (r) => r.type === 'queue-operation' ? (typeof r.content === 'string' ? r.content : '')   // the three shapes a task notification takes: a queue operation, a queued_command attachment, a user message
   : r.type === 'attachment' && r.attachment && r.attachment.type === 'queued_command' ? (Array.isArray(r.attachment.prompt) ? r.attachment.prompt.map((b) => (b && b.text) || '').join('\n') : String(r.attachment.prompt || ''))
     : r.type === 'user' ? blocks(r).filter((b) => b.type === 'text').map((b) => b.text || '').join('\n') : '';
@@ -221,11 +222,12 @@ function typedBefore(file) {   // the first look at a session whose last order i
 function parseTail(file, st) {
   const sig = st.mtimeMs + ':' + st.size, hit = boardCache.get(file); if (hit && hit.sig === sig) return hit;
   const { text, cut } = readTail(file, 192 * 1024), lines = text.split('\n'); if (cut) lines.shift();
-  const pend = new Map(), bgOpen = new Set(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined, asked = (hit && hit.asked) || 0, plan = (hit && hit.plan) || null;
+  const pend = new Map(), bgOpen = new Set(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined, pr = (hit && hit.pr) || null, asked = (hit && hit.asked) || 0, plan = (hit && hit.plan) || null;
   for (const l of lines) try {   // one odd record costs that record, not the whole card
     if (!l) continue; let r; try { r = JSON.parse(l); } catch { continue; }
     const a = typedAt(r); if (a > asked) asked = a;
     if (r.type === 'custom-title' && typeof r.customTitle === 'string') custom = r.customTitle; else if (r.type === 'ai-title' && typeof r.aiTitle === 'string') ai = r.aiTitle;   // a session is renamed, or named, long after its row was first shown: the latest one read wins
+    if (r.type === 'pr-link' && PR_URL.test(r.prUrl)) pr = { n: +r.prUrl.slice(r.prUrl.lastIndexOf('/') + 1), url: r.prUrl };   // the pull request Claude Code noted for the session: the latest one, shown on its card
     const t = Date.parse(r.timestamp) || 0, bl = blocks(r);
     if (r.type === 'assistant' || r.type === 'user') { lastType = r.type; lastTool = bl.some((b) => b.type === 'tool_use'); lastStop = (r.type === 'assistant' && r.message && r.message.stop_reason) || null; if (lastStop) stops = true; if (t) lastTs = t;
       esc = r.type === 'user' && bl.some((b) => b.type === 'text' && /^\s*\[Request interrupted/i.test(b.text || '')); if (esc) pend.clear(); }   // Esc: the turn stops there, and no call is waited for any more
@@ -243,7 +245,7 @@ function parseTail(file, st) {
   }
   if (!custom && !ai && first == null) first = firstPrompt(file) || (st.size > 64 * 1024 ? '' : null);   // '' = looked for and not there; a file that has just been created is looked at again
   if (!hit && !asked && cut) asked = typedBefore(file);   // the last order is further back than what the tail read: look once, further back
-  const out = { sig, title: custom || ai || first || null, custom, ai, first, lastType, lastTool, lastStop, stops, esc, lastTs, pending: [...pend.values()], bgOut: bgOpen.size };   // a title the person typed wins over the generated one, and both over the first prompt; bgOut: sub-agents still running in the background
+  const out = { sig, title: custom || ai || first || null, custom, ai, first, pr, lastType, lastTool, lastStop, stops, esc, lastTs, pending: [...pend.values()], bgOut: bgOpen.size };   // a title the person typed wins over the generated one, and both over the first prompt; bgOut: sub-agents still running in the background
   out.asked = asked; out.plan = plan; boardCache.set(file, out); if (boardCache.size > 3 * ROWS_MAX) boardCache.delete(boardCache.keys().next().value); return out;   // more than the list can hold: a full list never pushes its own rows out, which read every row again at each scan
 }
 function firstPrompt(file) {   // the first thing the person typed, read record by record: a pattern over the raw text ran from a user record into the assistant's first answer and took that as the title
@@ -258,7 +260,7 @@ function firstPrompt(file) {   // the first thing the person typed, read record 
 }
 function boardRows() {
   if (Date.now() - boardMemo.at < 1200) return boardMemo.rows;   // several windows polling at once share one scan
-  const out = boardRows0(); boardMemo = { at: Date.now(), rows: out }; return out;
+  const out = withDone(boardRows0()); boardMemo = { at: Date.now(), rows: out }; return out;
 }
 // Sessions started in the system's temporary folder: a program running Claude Code there for a moment (a test, a script, a tool that makes a folder per run), not a session someone works in.
 // When the call looks everywhere it leaves them out, unless there is nothing else. They stay in the Sessions view, and a window open on such a folder follows it.
@@ -309,13 +311,30 @@ function boardRows0() {
       if (state === 'turn') since = p.lastTs || st.mtimeMs;
     }
     const ran = since && p.asked && p.asked < since ? since - p.asked : 0, ask = state === 'blocked' && lp ? lp.q || lp.c : '';   // since: when it started to wait on you; ran: how long it worked, from your last order to then
-    return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal, asked: p.asked || 0, ...(since ? { since } : {}), ...(ran ? { ran } : {}), ...(ask ? { ask } : {}), ...(state === 'blocked' && w && w.status === 'waiting' ? { sure: 1 } : {}), ...(open ? { menu: open } : state === 'blocked' && lp && lp.m && !SUBTOOL.test(lp.name) ? { menu: { id: lp.id, tool: lp.name, ...lp.m, ...(w && w.status === 'waiting' ? { sure: 1 } : {}) } } : {}), ...(p.esc ? { cut: 1 } : {}), tmp: tmpKey(proj) };
+    return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal, asked: p.asked || 0, ...(since ? { since } : {}), ...(ran ? { ran } : {}), ...(p.pr ? { pr: p.pr } : {}), ...(ask ? { ask } : {}), ...(state === 'blocked' && w && w.status === 'waiting' ? { sure: 1 } : {}), ...(open ? { menu: open } : state === 'blocked' && lp && lp.m && !SUBTOOL.test(lp.name) ? { menu: { id: lp.id, tool: lp.name, ...lp.m, ...(w && w.status === 'waiting' ? { sure: 1 } : {}) } } : {}), ...(p.esc ? { cut: 1 } : {}), tmp: tmpKey(proj) };
   });
 }
 // Settings live in a file, not only in the page's localStorage: the port changes between VS Code windows and reloads, and localStorage is per origin (port included).
 const PREFS = process.env.AGENT_STANDUP_PREFS || (process.platform === 'win32' ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'agent-standup', 'prefs.json') : path.join(os.homedir(), '.config', 'agent-standup', 'prefs.json'));
 function readPrefs() { try { const v = JSON.parse(fs.readFileSync(PREFS, 'utf8')); return v && typeof v === 'object' && !Array.isArray(v) ? v : null; } catch { return null; } }
 function writePrefs(v) { fs.mkdirSync(path.dirname(PREFS), { recursive: true }); const tmp = PREFS + '.' + process.pid + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(v, null, 1)); fs.renameSync(tmp, PREFS); }
+// The sessions you put away as done (✓ on a card of the Sessions view): "project/id" → when the session had last moved at that time. Kept in a file of its own beside the settings and read again when it changes,
+// so that every window agrees at once, whichever server it talks to. A session that moves again is no longer put away.
+const DONE = path.join(path.dirname(PREFS), 'done.json'); let doneMemo = { sig: null, map: new Map() };
+function doneMarks() {
+  let sig = ''; try { const st = fs.statSync(DONE); sig = st.mtimeMs + ':' + st.size; } catch {} if (sig === doneMemo.sig) return doneMemo.map;
+  const map = new Map(); try { for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(DONE, 'utf8')))) if (typeof v === 'number') map.set(k, v); } catch {}
+  doneMemo = { sig, map }; return map;
+}
+const canDone = (r) => r.state === 'turn' || r.state === 'idle';   // a session at work, or one that waits for you, is not put away
+function withDone(rows) { const m = doneMarks(); for (const r of rows) { if (canDone(r) && m.get(r.proj + '/' + r.id) >= r.mtime) r.done = 1; else if (r.done) delete r.done; } return rows; }
+function setDone(proj, id, on) {
+  const rows = boardRows0(), row = rows.find((r) => r.proj === proj && r.id === id); if (!row || (on && !canDone(row))) return false;
+  const m = new Map(doneMarks()), k = proj + '/' + id; if (on) m.set(k, row.mtime); else m.delete(k);
+  for (const [key, at] of m) { const r = rows.find((x) => x.proj + '/' + x.id === key); if (!r || r.mtime > at) m.delete(key); }   // the marks of sessions that moved again, or left the board, are forgotten
+  fs.mkdirSync(path.dirname(DONE), { recursive: true }); const tmp = DONE + '.' + process.pid + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(m), null, 1)); fs.renameSync(tmp, DONE);
+  doneMemo = { sig: null, map: m }; boardMemo.at = 0; return true;
+}
 // Most recently active session (optionally limited to one project dir) — drives the live feed.
 const STICK_MS = 90000;   // a session written to in the last 90 s keeps the call, so another session writing elsewhere does not steal it mid-line
 const MENU_LIVE_MS = 30 * 60e3;   // a menu left open longer still needs you (board, visitor), but no longer takes the call from where you work
@@ -767,7 +786,7 @@ function start(port = PORT) {
   const sendFile = (fp) => { const s = fs.createReadStream(fp); s.on('error', () => res.destroy()); s.pipe(res); };   // a file that vanished between the check and the read ends this answer, not the server
   // Endpoints with side effects (they spawn programs or claim the sound), and the one that serves pictures from a session, refuse requests that a browser marks as coming from another site, e.g. an <img> on a web page.
   const sfs = req.headers['sec-fetch-site'];
-  if (sfs && sfs !== 'same-origin' && sfs !== 'none' && (req.method !== 'GET' || ['/api/translate', '/api/quips', '/api/warm', '/api/audio', '/api/tts', '/api/prefs', '/api/prefs.js', '/api/voices', '/api/kokoro', '/api/kokoro/install', '/api/media'].includes(url.pathname))) { res.writeHead(403); return res.end('forbidden'); }
+  if (sfs && sfs !== 'same-origin' && sfs !== 'none' && (req.method !== 'GET' || ['/api/translate', '/api/quips', '/api/warm', '/api/audio', '/api/tts', '/api/prefs', '/api/prefs.js', '/api/voices', '/api/kokoro', '/api/kokoro/install', '/api/media', '/api/done'].includes(url.pathname))) { res.writeHead(403); return res.end('forbidden'); }
   const readBody = (cb) => {   // request bodies are small JSON: stop reading beyond 256 KB and give up after 10 s
     const chunks = []; let size = 0, over = false; req.setTimeout(10000, () => req.destroy());
     if (+req.headers['content-length'] > 262144) { res.writeHead(413); res.end('too large'); return req.destroy(); }
@@ -813,6 +832,7 @@ function start(port = PORT) {
     if (url.pathname === '/api/prefs.js') { res.writeHead(200, { 'content-type': 'application/javascript', 'cache-control': 'no-store' }); return res.end('window.SAVED_PREFS = ' + JSON.stringify(readPrefs()).replace(/</g, '\\u003c') + ';'); }
     if (url.pathname === '/api/prefs' && req.method === 'PUT') return readBody((body) => { try { const v = JSON.parse(body); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('prefs must be an object'); writePrefs(v); json({ ok: true }); } catch (e) { json({ error: String(e.message || e) }, 400); } });
     if (url.pathname === '/api/prefs') return json(readPrefs() || {});
+    if (url.pathname === '/api/done' && req.method === 'POST') return readBody((body) => { try { const v = JSON.parse(body); json({ ok: setDone(String(v.proj || ''), String(v.id || ''), v.on !== false) }); } catch (e) { json({ error: String(e.message || e) }, 400); } });
     if (url.pathname === '/api/current') {   // pick: the session the page went to by hand, and the latest order there was known then
       const pproj = url.searchParams.get('pproj') || '', pid = url.searchParams.get('pid') || '', psince = url.searchParams.get('psince');
       return json(currentSession(url.searchParams.get('proj') || '', url.searchParams.get('id') || '', { proj: url.searchParams.get('sproj') || '', id: url.searchParams.get('sid') || '' }, pproj && pid ? { proj: pproj, id: pid, since: psince ? +psince : NaN } : null));   // no "since" on the first question after a pick: the answer gives it (asked), and the page sends it back from then on
