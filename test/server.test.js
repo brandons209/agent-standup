@@ -1,7 +1,7 @@
 // test/server.test.js: the settings file, session stickiness, the cross-site guard and the pictures of a session, against a real server on a free port
 const test = require('node:test'), assert = require('node:assert'), fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'as-test-'));
-process.env.AGENT_STANDUP_PREFS = path.join(tmp, 'prefs.json'); process.env.AGENT_STANDUP_KOKORO_DIR = path.join(tmp, 'kokoro'); process.env.AGENT_STANDUP_PROJECTS = path.join(tmp, 'projects');
+process.env.AGENT_STANDUP_PREFS = path.join(tmp, 'prefs.json'); process.env.AGENT_STANDUP_KOKORO_DIR = path.join(tmp, 'kokoro'); process.env.AGENT_STANDUP_PROJECTS = path.join(tmp, 'projects'); process.env.AGENT_STANDUP_CC_SESSIONS = path.join(tmp, 'cc');
 const get = (port, p, headers = {}, method = 'GET', body) => new Promise((res, rej) => { const r = http.request({ port, path: p, method, headers }, (x) => { let b = '', n = 0; x.on('data', (d) => { b += d; n += d.length; }); x.on('end', () => res({ status: x.statusCode, body: b, type: x.headers['content-type'], bytes: n, headers: x.headers })); }); r.on('error', rej); if (body) r.write(body); r.end(); });
 test('settings are kept in a file; cross-site writes are refused', async () => {
   const srv = require('../server.js').start(0); await new Promise((r) => srv.once('listening', r)); const port = srv.address().port;
@@ -432,4 +432,30 @@ test('the list keeps places per folder, and the temporary folders have places of
     for (const d of fs.readdirSync(root)) if (d !== '-tmp-x') fs.rmSync(path.join(root, d), { recursive: true, force: true });   // nothing but the temporary folder left
     assert.equal((await cur('proj=')).id, 't', 'a temporary session rather than an empty call');
   } finally { stop(); back(); }
+});
+// ---- what a session waits for: Claude Code's own sessions folder says a menu is open (a Bash approval looks like a running command in the transcript)
+test('a menu open in the session makes its row say so: the command, the question, the plan', async () => {
+  const root = path.join(tmp, 'projects'), cc = path.join(tmp, 'cc'), made = ['-lv'];
+  fs.mkdirSync(root + '/-lv', { recursive: true }); fs.mkdirSync(cc, { recursive: true });
+  const asst = (n, id, content) => ({ type: 'assistant', timestamp: at(n), message: { id, content } });
+  const kids = [];   // one live process per session: Claude Code's file is named after its pid, and a file whose process ended is ignored
+  const sess = (id, o) => { const pid = o.pid || (kids.push(require('child_process').spawn('sleep', ['600'])), kids[kids.length - 1].pid); fs.writeFileSync(path.join(cc, pid + '.json'), JSON.stringify({ pid, sessionId: id, status: o.status, waitingFor: o.waitingFor, statusUpdatedAt: Date.now() - 60000 })); };
+  const rec = (rs) => rs.map((r) => JSON.stringify(r)).join('\n') + '\n';
+  fs.writeFileSync(path.join(root, '-lv', 'cmd.jsonl'), rec([typed(0, 'run the tests'), asst(1, 'm1', [{ type: 'tool_use', id: 'toolu_b', name: 'Bash', input: { command: 'npm test', description: 'the suite' } }])]));   // no result: it waits for the go-ahead
+  fs.writeFileSync(path.join(root, '-lv', 'ask.jsonl'), rec([typed(0, 'which one'), asst(1, 'm1', [{ type: 'tool_use', id: 'toolu_q', name: 'AskUserQuestion', input: { questions: [{ question: 'Which port?', header: 'Port', options: [{ label: '8080', description: 'dev' }, { label: '443', description: 'tls' }] }] } }])]));
+  fs.writeFileSync(path.join(root, '-lv', 'dlg.jsonl'), rec([typed(0, 'hi'), asst(1, 'm1', [{ type: 'tool_use', id: 'toolu_d', name: 'Bash', input: { command: 'ls' } }])]));
+  const planPath = path.join(root, '-lv', '.claude', 'plans', 'x.md'); fs.mkdirSync(path.dirname(planPath), { recursive: true }); fs.writeFileSync(planPath, '# Check the index first');
+  fs.writeFileSync(path.join(root, '-lv', 'plan.jsonl'), rec([typed(0, 'fix it'), asst(1, 'm1', [{ type: 'tool_use', id: 'toolu_w', name: 'Write', input: { file_path: planPath } }]), result(2, 'toolu_w', 'ok')]));
+  fs.writeFileSync(path.join(root, '-lv', 'dead.jsonl'), rec([typed(0, 'run'), asst(1, 'm1', [{ type: 'tool_use', id: 'toolu_x', name: 'Bash', input: { command: 'sleep 5' } }])]));
+  sess('cmd', { status: 'waiting' }); sess('ask', { status: 'waiting' }); sess('dlg', { status: 'waiting', waitingFor: 'dialog open' }); sess('plan', { status: 'waiting' }); sess('dead', { status: 'waiting', pid: 2147483646 });
+  const back = alone(made), { port, stop } = await serve(), board = async () => { await wait(1300); const rows = JSON.parse((await get(port, '/api/board')).body); return Object.fromEntries(rows.map((r) => [r.id, r])); };
+  try {
+    const r = await board();
+    assert.equal(r.cmd.state, 'blocked'); assert.equal(r.cmd.sure, 1); assert.equal(r.cmd.menu.kind, 'command'); assert.equal(r.cmd.menu.cmd, 'npm test'); assert.equal(r.cmd.ask, 'Bash(npm test)');
+    assert.ok(r.cmd.since && r.cmd.ran >= 0, 'since and how long it worked');
+    assert.deepEqual(r.ask.menu.questions[0].options.map((o) => o.label), ['8080', '443']); assert.equal(r.ask.ask, 'Which port?');
+    assert.notEqual(r.dlg.state, 'blocked', 'a dialog you opened yourself (/model) is not a question for you');
+    assert.equal(r.plan.state, 'blocked'); assert.equal(r.plan.menu.kind, 'plan'); assert.match(r.plan.menu.text, /Check the index/); assert.ok(r.plan.menu.sure, 'a menu the transcript does not record: the plan written this turn');
+    assert.ok(!r.dead.sure && r.dead.state !== 'blocked', 'a session whose process ended is not waited on');
+  } finally { for (const n of fs.readdirSync(cc)) fs.unlinkSync(path.join(cc, n)); kids.forEach((k) => k.kill()); stop(); back(); }
 });

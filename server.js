@@ -180,6 +180,29 @@ let boardMemo = { at: 0, rows: [] };
 const notifText = (r) => r.type === 'queue-operation' ? (typeof r.content === 'string' ? r.content : '')   // the three shapes a task notification takes: a queue operation, a queued_command attachment, a user message
   : r.type === 'attachment' && r.attachment && r.attachment.type === 'queued_command' ? (Array.isArray(r.attachment.prompt) ? r.attachment.prompt.map((b) => (b && b.text) || '').join('\n') : String(r.attachment.prompt || ''))
     : r.type === 'user' ? blocks(r).filter((b) => b.type === 'text').map((b) => b.text || '').join('\n') : '';
+const askOf = (b) => { const q = b.name === 'AskUserQuestion' && b.input && Array.isArray(b.input.questions) && b.input.questions[0] && b.input.questions[0].question; return typeof q === 'string' ? clip(q.trim(), 200) : ''; };   // the question a session stopped on, for its card
+const callOf = (b) => { const i = b.input || {}, v = b.name === 'Bash' ? i.command : /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(b.name) ? path.basename(String(i.file_path || i.notebook_path || '')) : b.name === 'WebFetch' ? i.url : ''; return typeof v === 'string' && v.trim() ? b.name + '(' + clip(v.replace(/\s+/g, ' ').trim(), 160) + ')' : ''; };   // what a call waiting for your go-ahead would do, written the way Claude Code shows it: Bash(npm test)
+const PLAN_FILE = /[\\/]\.claude[\\/]plans[\\/][^\\/]+\.md$/, PLAN_DIR = process.env.CLAUDE_CONFIG_DIR ? path.join(process.env.CLAUDE_CONFIG_DIR, 'plans') + path.sep : '';
+const planFile = (f) => PLAN_FILE.test(f) || (!!PLAN_DIR && f.startsWith(PLAN_DIR) && f.endsWith('.md'));   // also where a CLAUDE_CONFIG_DIR set elsewhere keeps them
+const planText = (f) => { try { const st = fs.statSync(f); if (!st.isFile() || st.size > 262144) return ''; return clip(fs.readFileSync(f, 'utf8').trim(), 1200); } catch { return ''; } };
+const menuOf = (b) => {   // what a menu waiting for you shows, from the call it waits on, word for word: the questions and their options in their order (the terminal numbers them the same way), the command, the file, the plan
+  const i = b.input || {}, t = (x, n) => (typeof x === 'string' ? clip(x.trim(), n) : '');
+  if (b.name === 'AskUserQuestion') return { kind: 'question', questions: (Array.isArray(i.questions) ? i.questions : []).slice(0, 4).map((q) => ({ q: t(q && q.question, 300), head: t(q && q.header, 30), multi: !!(q && q.multiSelect), options: (q && Array.isArray(q.options) ? q.options : []).slice(0, 8).map((o) => ({ label: t(o && o.label, 80), about: t(o && o.description, 140) })).filter((o) => o.label) })).filter((q) => q.q) };
+  if (b.name === 'ExitPlanMode') return { kind: 'plan', text: t(i.plan, 1200) };
+  if (b.name === 'Bash') return { kind: 'command', cmd: t(i.command, 600), about: t(i.description, 160) };
+  if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(b.name)) return { kind: 'edit', file: t(i.file_path || i.notebook_path, 300) };
+  if (b.name === 'WebFetch') return { kind: 'fetch', url: t(i.url, 300) };
+  return { kind: 'tool', tool: t(b.name, 80) };
+};
+// Claude Code also keeps <config>/sessions/<pid>.json for each open session: its status (busy, idle, or waiting while a menu waits for your answer: a permission, a question) and since when.
+// It is the only sign of a Bash approval: in the transcript, a command waiting for your go-ahead looks just like one that runs. A file whose process has ended is left out.
+const CC_SESSIONS = process.env.AGENT_STANDUP_CC_SESSIONS || path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'sessions');
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+function liveStatus() {   // session id → { status, since }
+  const out = new Map(); let names = []; try { names = fs.readdirSync(CC_SESSIONS); } catch { return out; }
+  for (const n of names) { if (!/^\d+\.json$/.test(n)) continue; try { const s = JSON.parse(fs.readFileSync(path.join(CC_SESSIONS, n), 'utf8')); if (s && typeof s.sessionId === 'string' && /^(busy|idle|waiting)$/.test(s.status) && Number.isInteger(s.pid) && s.pid > 0 && alive(s.pid)) out.set(s.sessionId, { status: s.status === 'waiting' && s.waitingFor === 'dialog open' ? 'idle' : s.status, since: Number(s.statusUpdatedAt) || 0 }); } catch {} }   /* a dialog you opened yourself (/model, /config, /mcp…) also says waiting: it is not a question for you */
+  return out;
+}
 // When the person last did something in a session: an order, a slash command, a "!" command, an order typed while the lead was working. It is what moves the live call (see currentSession).
 // Not what the harness writes as a user record: the result of a tool, a reminder, the news that a background task ended, the summary of a compaction, an Esc.
 const NOT_TYPED = /<(system-reminder|browser_instruction|ide_selection|ide_opened_file|task-notification|local-command-stdout|local-command-caveat)>[\s\S]*?<\/\1>\s*/g;
@@ -198,21 +221,22 @@ function typedBefore(file) {   // the first look at a session whose last order i
 function parseTail(file, st) {
   const sig = st.mtimeMs + ':' + st.size, hit = boardCache.get(file); if (hit && hit.sig === sig) return hit;
   const { text, cut } = readTail(file, 192 * 1024), lines = text.split('\n'); if (cut) lines.shift();
-  const pend = new Map(), bgOpen = new Set(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined, asked = (hit && hit.asked) || 0;
-  for (const l of lines) {
+  const pend = new Map(), bgOpen = new Set(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined, asked = (hit && hit.asked) || 0, plan = (hit && hit.plan) || null;
+  for (const l of lines) try {   // one odd record costs that record, not the whole card
     if (!l) continue; let r; try { r = JSON.parse(l); } catch { continue; }
     const a = typedAt(r); if (a > asked) asked = a;
     if (r.type === 'custom-title' && typeof r.customTitle === 'string') custom = r.customTitle; else if (r.type === 'ai-title' && typeof r.aiTitle === 'string') ai = r.aiTitle;   // a session is renamed, or named, long after its row was first shown: the latest one read wins
     const t = Date.parse(r.timestamp) || 0, bl = blocks(r);
     if (r.type === 'assistant' || r.type === 'user') { lastType = r.type; lastTool = bl.some((b) => b.type === 'tool_use'); lastStop = (r.type === 'assistant' && r.message && r.message.stop_reason) || null; if (lastStop) stops = true; if (t) lastTs = t;
       esc = r.type === 'user' && bl.some((b) => b.type === 'text' && /^\s*\[Request interrupted/i.test(b.text || '')); if (esc) pend.clear(); }   // Esc: the turn stops there, and no call is waited for any more
+    for (const b of bl) if (b.type === 'tool_use' && /^(Write|Edit|MultiEdit)$/.test(b.name) && b.input && planFile(String(b.input.file_path || ''))) plan = { file: String(b.input.file_path), ts: t };   // the plan, written in its own file before it is shown for approval
     for (const b of bl) {
-      if (b.type === 'tool_use') { pend.set(b.id, { name: b.name, ts: t }); if (SUBTOOL.test(b.name) && b.input && b.input.run_in_background) bgOpen.add(b.id); }
+      if (b.type === 'tool_use') { pend.set(b.id, { id: String(b.id || ''), name: b.name, ts: t, q: askOf(b), c: callOf(b), m: menuOf(b) }); if (SUBTOOL.test(b.name) && b.input && b.input.run_in_background) bgOpen.add(b.id); }
       else if (b.type === 'tool_result') { const pn = pend.get(b.tool_use_id); if (pn && SUBTOOL.test(pn.name) && ((r.toolUseResult && r.toolUseResult.isAsync) || /^\s*Async agent launched/i.test(resultText(b.content)))) bgOpen.add(b.tool_use_id); pend.delete(b.tool_use_id); }   // an agent launched without the flag: its answer says so; it keeps running after Esc
     }
     const nt = notifText(r);   // a background agent's completion arrives minutes later, as a task notification, naming the call it answers
     if (nt.includes('<task-notification>')) { const id = (nt.match(/<tool-use-id>([^<]+)<\/tool-use-id>/) || [])[1], status = (nt.match(/<status>([^<]+)<\/status>/) || [])[1]; if (id && status && status !== 'running') bgOpen.delete(id); }
-  }
+  } catch {}
   if (!hit && !custom) {   // first look at this file: a little further back than the lines read above, and without needing whole lines
     const big = readTail(file, 256 * 1024).text, un = (m) => { try { return m ? JSON.parse('"' + m[1] + '"') : null; } catch { return null; } };
     custom = un([...big.matchAll(/"type":"custom-title","customTitle":"((?:[^"\\]|\\.)*)"/g)].pop()); if (!ai) ai = un([...big.matchAll(/"type":"ai-title","aiTitle":"((?:[^"\\]|\\.)*)"/g)].pop());
@@ -220,7 +244,7 @@ function parseTail(file, st) {
   if (!custom && !ai && first == null) first = firstPrompt(file) || (st.size > 64 * 1024 ? '' : null);   // '' = looked for and not there; a file that has just been created is looked at again
   if (!hit && !asked && cut) asked = typedBefore(file);   // the last order is further back than what the tail read: look once, further back
   const out = { sig, title: custom || ai || first || null, custom, ai, first, lastType, lastTool, lastStop, stops, esc, lastTs, pending: [...pend.values()], bgOut: bgOpen.size };   // a title the person typed wins over the generated one, and both over the first prompt; bgOut: sub-agents still running in the background
-  out.asked = asked; boardCache.set(file, out); if (boardCache.size > 3 * ROWS_MAX) boardCache.delete(boardCache.keys().next().value); return out;   // more than the list can hold: a full list never pushes its own rows out, which read every row again at each scan
+  out.asked = asked; out.plan = plan; boardCache.set(file, out); if (boardCache.size > 3 * ROWS_MAX) boardCache.delete(boardCache.keys().next().value); return out;   // more than the list can hold: a full list never pushes its own rows out, which read every row again at each scan
 }
 function firstPrompt(file) {   // the first thing the person typed, read record by record: a pattern over the raw text ran from a user record into the assistant's first answer and took that as the title
   const ONE = (t) => t.replace(/\s+/g, ' ').trim().slice(0, 90);
@@ -261,7 +285,7 @@ function projCwd(proj) {
 }
 const inFolder = (proj, key) => { if (proj === key) return true; if (!proj.startsWith(key + '-')) return false; const cwd = projCwd(proj); if (!cwd) return true; for (let d = cwd; d;) { if (dirKey(d) === key) return true; const up = path.dirname(d); if (up === d) return false; d = up; } return false; };
 function boardRows0() {
-  const now = Date.now(), rows = [];
+  const now = Date.now(), rows = [], live = liveStatus();
   if (!fs.existsSync(ROOT)) return rows;
   for (const proj of fs.readdirSync(ROOT)) {
     const dir = path.join(ROOT, proj); let files; try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
@@ -270,18 +294,22 @@ function boardRows0() {
   rows.sort((a, b) => b.st.mtimeMs - a.st.mtimeMs);
   return capRows(rows, 40, ({ proj }) => proj).map(({ proj, id, st }) => {   // newest first; a folder keeps its own places however busy the others are
     const file = path.join(ROOT, proj, id + '.jsonl'); let p; try { p = parseTail(file, st); } catch { p = { pending: [] }; }
-    const age = now - st.mtimeMs, lp = (p.pending || [])[(p.pending || []).length - 1]; let state = 'idle', tool = '', ageMs = age;
+    const age = now - st.mtimeMs, pend = p.pending || [], w = live.get(id), lp = (w && w.status === 'waiting' && pend.find((c) => !SUBTOOL.test(c.name))) || pend[pend.length - 1]; let state = 'idle', tool = '', ageMs = age, since = 0, open = null;   // lp: with a menu open and several calls waiting, Claude Code asks about the first of them
     let subActive = 0, subTotal = 0, subLast = 0;
     for (const x of subFiles(proj, id)) { subTotal++; const mt = mtimeOf(x.file); if (now - mt < 90e3) subActive++; if (mt > subLast) subLast = mt; }
-    if (age < 30 * 60e3) {
+    if (w && w.status === 'waiting' && lp) { state = 'blocked'; tool = lp.name; since = w.since || lp.ts || st.mtimeMs; ageMs = now - since; }   // a menu is open in the session and a call waits on it: it needs you now, however long ago it was written
+    else if (w && w.status === 'waiting') { state = 'blocked'; since = w.since || st.mtimeMs; ageMs = now - since; const pt = p.plan && p.plan.ts > (p.asked || 0) ? planText(p.plan.file) : ''; open = { id: 'w' + since, tool: pt ? 'ExitPlanMode' : '', ...(pt ? { kind: 'plan', text: pt } : { kind: 'menu' }), sure: 1 }; }   // a menu is open and the transcript has no call waiting on it: the plan to approve (Claude Code writes that call only once it is answered, the plan itself is in its file, written this turn), or a menu it does not record
+    else if (age < 30 * 60e3) {
       if (lp) { ageMs = now - (lp.ts || st.mtimeMs); tool = lp.name;
-        state = SUBTOOL.test(lp.name) ? 'waiting' : (ASKS.test(lp.name) && ageMs > 4000) || (APPROVAL.test(lp.name) && ageMs > 15000) ? 'blocked' : 'working'; }
+        state = SUBTOOL.test(lp.name) ? 'waiting' : (ASKS.test(lp.name) && ageMs > 4000) || (APPROVAL.test(lp.name) && ageMs > 15000) ? 'blocked' : 'working'; if (state === 'blocked') since = lp.ts || st.mtimeMs; }
       else if (p.esc) state = 'turn';   // you stopped it (Esc): it is your turn there, not "working" for the next ten minutes
       else if (p.lastType === 'assistant' && !p.lastTool && p.lastStop !== 'tool_use' && !(p.lastStop == null && p.stops && age < 45000))   // a line whose message goes on with a tool call is not the end of the turn; with no stop reason on it (older Claude Code), its call gets 45 s to appear
         state = (p.bgOut > 0 || (subLast > (p.lastTs || 0) && now - subLast < 90e3)) ? 'waiting' : 'turn';   // the lead's turn is closed but its background agents are still at work: it is on the call, not yours
       else state = age < 10 * 60e3 ? 'working' : 'idle';
+      if (state === 'turn') since = p.lastTs || st.mtimeMs;
     }
-    return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal, asked: p.asked || 0, tmp: tmpKey(proj) };
+    const ran = since && p.asked && p.asked < since ? since - p.asked : 0, ask = state === 'blocked' && lp ? lp.q || lp.c : '';   // since: when it started to wait on you; ran: how long it worked, from your last order to then
+    return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal, asked: p.asked || 0, ...(since ? { since } : {}), ...(ran ? { ran } : {}), ...(ask ? { ask } : {}), ...(state === 'blocked' && w && w.status === 'waiting' ? { sure: 1 } : {}), ...(open ? { menu: open } : state === 'blocked' && lp && lp.m && !SUBTOOL.test(lp.name) ? { menu: { id: lp.id, tool: lp.name, ...lp.m, ...(w && w.status === 'waiting' ? { sure: 1 } : {}) } } : {}), ...(p.esc ? { cut: 1 } : {}), tmp: tmpKey(proj) };
   });
 }
 // Settings live in a file, not only in the page's localStorage: the port changes between VS Code windows and reloads, and localStorage is per origin (port included).
@@ -309,7 +337,7 @@ function currentSession(projFilter, idFilter, stick, pick, anyTmp) {   // pick: 
   const rows = all.filter(inScope), mine = there(pick) ? all.find((r) => same(r, pick)) : null;
   const asked = Math.max(0, (mine && mine.asked) || 0, ...rows.map((r) => r.asked || 0));   // the latest order, in the folder the call follows or in the session you went to
   if (there(pick) && !(asked > pick.since)) return { proj: pick.proj, id: pick.id, mtime: now, asked, pick: 1, why: 'pick' };   // no "since" on the first question after a pick: the answer gives it (asked), and the page sends it back from then on
-  const live = rows.filter((r) => /^(working|waiting)$/.test(r.state) || (r.state === 'blocked' && !(now - r.mtime > MENU_LIVE_MS)) || r.subActive > 0 || now - r.mtime < STICK_MS), last = Math.max(0, ...live.map((r) => r.asked || 0)), top = live.filter((r) => (r.asked || 0) === last);
+  const live = rows.filter((r) => /^(working|waiting)$/.test(r.state) || (r.state === 'blocked' && !(now - (r.since || now) > MENU_LIVE_MS)) || r.subActive > 0 || now - r.mtime < STICK_MS), last = Math.max(0, ...live.map((r) => r.asked || 0)), top = live.filter((r) => (r.asked || 0) === last);
   const to = top.find((r) => same(r, stick)) || top.sort((a, b) => b.mtime - a.mtime)[0];   // two sessions whose last order is not known (or of the same instant): the call stays where it is
   if (to) return { proj: to.proj, id: to.id, mtime: to.mtime, asked, why: last ? 'typed' : 'busy' };   // why: kept by the page, to say why the call moved
   if (there(stick) && inScope(stick)) return { proj: stick.proj, id: stick.id, mtime: sessionMtime(stick.proj, stick.id), asked, why: 'stay' };   // nobody is at work: the call stays where it is

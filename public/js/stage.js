@@ -88,7 +88,7 @@ function paintStatus() {
     const t = $('#t-' + p.id); if (!t) continue; const s = S.status[p.id];
     t.style.display = p.id === 'main' || p.id === 'user' || (s && (!S.gone.has(p.id) || S.leaving.has(p.id))) ? '' : 'none';
   }
-  paintStates(); galRefit();
+  paintStates(); paintAsk(Date.now()); galRefit();
   const prev = $('.row.now'); if (prev) prev.classList.remove('now');
   const now = $(`.row[data-i="${S.idx}"]`); if (now) { now.classList.add('now'); if (!S.live && document.body.classList.contains('log')) now.scrollIntoView({ block: 'nearest' }); }   // live, the transcript follows its newest line instead (renderLog)
   later('detail', renderDetail); later('tree', renderTree); later('meet', renderMeet, 400); drawGantt();
@@ -173,10 +173,11 @@ const NEEDS_OK = /^(Edit|Write|MultiEdit|NotebookEdit|AskUserQuestion|ExitPlanMo
 const atTail = () => S.idx >= S.events.length - 3;   // only trust wall-clock ages when playback has caught up with the live end
 function agentState(id, now) {
   let s = S.status[id]; const r = S.run[id], w = S.waitOn[id], la = S.lastAct[id];
+  if (id === 'main' && S.live && atTail()) { const row = rowOf(S.cur); if (row && row.state === 'blocked' && row.since && !(la > S.rowsAt)) return { k: 'blocked', txt: '✋ ' + (row.sure ? L('vous attend ', 'needs you ') : L('attend vous ? ', 'needs you? ')) + fmtShort(Math.max(0, now - row.since)) + (row.ask ? ' · ' + row.ask : ''), ask: row.ask || '', sure: !!row.sure, since: row.since }; }   // what the server knows: a menu open in the session (a Bash approval looks like a running command here), and the question or command it waits on; unless the session moved since that answer. Before "your turn": a menu left open for longer than the lead's quiet time still needs you
   const parked = id === 'main' && (!r || PARKED.test(r.name) || /^(Task|Agent)$/.test(r.name)) && (S.turnOver || (S.lastTool.main && PARKED.test(S.lastTool.main.split(' ')[0])));   // its turn closed while its background agents work: on the call, at no work of its own (a lead busy with its own command is not parked)
   if (id === 'main' && !s) {   // the lead is at work until the message that closes its turn, even while it thinks; a transcript without that mark falls back on "quiet for 25 s", and a turn cut short on 3 minutes of silence
     const open = S.live && la && (S.sawEnd ? !S.turnOver && now - la < 180000 : now - la < 25000);
-    if (r || (w && w.size) || open || (!S.live && S.thinkAt.main && !S.turnOver) || (parked && w && [...w].some((c) => S.status[c] !== 'done'))) s = 'working'; else if (S.live && la) return { k: 'done', txt: '✓ ' + L('à vous', 'your turn') };
+    if (r || (w && w.size) || open || (!S.live && S.thinkAt.main && !S.turnOver) || (parked && w && [...w].some((c) => S.status[c] !== 'done'))) s = 'working'; else if (S.live && la) return { k: 'done', txt: '✓ ' + L('à vous', 'your turn') + ' · ' + fmtShort(Math.max(0, now - la)) };
   }
   if (s === 'done') return { k: 'done', txt: '✓ ' + L('terminé', 'done') };
   if (!s) return { k: 'idle', txt: '' };
@@ -193,6 +194,31 @@ function agentState(id, now) {
   return { k: 'working', txt: '⚙ ' + (S.act[id] || L('au travail', 'working')) };
 }
 const STATE_CLASSES = ['working', 'waiting', 'blocked', 'stalled', 'done'];
+// The menu the followed session waits on, in the lead's words, word for word: the questions and their options numbered as in the menu, the command, the file, the plan.
+// It stays until the menu is answered (where Claude Code runs: nothing is answered from here); ✕ puts it away until the next one. Off unless ⚙ → Display turns it on: the tile and the board already say a menu waits.
+const ASKC = { off: '' };
+function askHtml(m, p) {
+  const who = esc(p.name), pre = (x) => (x ? '<pre>' + esc(x) + '</pre>' : ''); let head, body = '';
+  if (m.kind === 'question') { head = '💬 ' + who + ' ' + (m.questions.length > 1 ? L('vous pose plusieurs questions', 'has several questions for you') : L('vous pose une question', 'has a question for you'));
+    body = m.questions.map((q, k, all) => '<div class="aqs' + (q.multi ? ' multi' : '') + '"><div class="aqh">' + (all.length > 1 ? '<span class="anum">' + (k + 1) + '/' + all.length + '</span>' : '') + (q.head ? '<b class="atag">' + esc(q.head) + '</b>' : '') + '<span>' + (q.multi ? L('un ou plusieurs choix', 'one or more') : L('un seul choix', 'pick one')) + '</span></div><p class="aq">' + esc(q.q) + '</p>'
+      + (q.options.length ? '<ol class="aops">' + q.options.map((o, j) => '<li><i>' + (j + 1) + '</i><div><b>' + esc(o.label) + '</b>' + (o.about ? '<span>' + esc(o.about) + '</span>' : '') + '</div></li>').join('') + '</ol>' : '') + '</div>').join(''); }   // each question apart: its number, the short label Claude Code gives it, then each option on its own row with what it means under it
+  else if (m.kind === 'plan') { head = '📋 ' + who + ' ' + L('vous propose ce plan', 'proposes this plan'); body = pre(m.text); }
+  else if (m.kind === 'command') { head = '🔐 ' + who + ' ' + (m.sure ? L('demande à lancer cette commande', 'asks to run this command') : L('attend peut-être votre feu vert pour cette commande', 'may be waiting for your go-ahead on this command')); body = (m.about ? '<div class="aab">' + esc(m.about) + '</div>' : '') + pre(m.cmd); }
+  else if (m.kind === 'edit') { head = '🔐 ' + who + ' ' + (m.sure ? L('demande à modifier ce fichier', 'asks to edit this file') : L('attend peut-être votre feu vert pour modifier ce fichier', 'may be waiting for your go-ahead to edit this file')); body = pre(m.file); }
+  else if (m.kind === 'menu') { head = '✋ ' + who + ' ' + L('attend votre réponse', 'is waiting for your answer'); body = '<div class="aab">' + L('Un menu est ouvert dans Claude Code.', 'A menu is open in Claude Code.') + '</div>'; }
+  else if (m.kind === 'fetch') { head = '🔐 ' + who + ' ' + L('demande à ouvrir cette page', 'asks to open this page'); body = pre(m.url); }
+  else { head = '🔐 ' + who + ' ' + L('demande la permission d\'utiliser', 'asks permission to use') + ' ' + esc(m.tool || ''); }
+  const foot = L('À répondre dans Claude Code', 'Answer it in Claude Code') + (m.kind === 'question' ? ' · ' + L('les numéros sont ceux du menu', 'the numbers match the menu') : '');
+  return '<div class="awho">' + avatarSVG(p, undefined, 'ak' + p.gid + '_') + '</div><div class="asay"><div class="ahd"><span>' + head + '</span><span class="ak-t"></span><button class="ax" aria-label="' + esc(L('Masquer jusqu\'à la prochaine question', 'Hide until the next question')) + '">✕</button></div>' + (body ? '<div class="abody">' + body + '</div>' : '') + '<div class="afoot">' + foot + '</div></div>';
+}
+function paintAsk(now) {
+  const el = $('#askc'); if (!el) return; let row = null; try { row = rowOf(S.cur); } catch {}
+  const m = row && row.menu, p = S.agents.main, show = !!(prefs.askCard && m && p && S.live && !S.demo && ASKC.off !== m.id && agentState('main', now).k === 'blocked');
+  if (!show) { if (el.dataset.k) { el.className = ''; el.innerHTML = ''; el.dataset.k = ''; } return; }
+  if (el.dataset.k !== m.id) { el.dataset.k = m.id; el.className = 'on'; el.setAttribute('aria-label', L('Ce que la session attend de vous', 'What the session is waiting for from you')); el.innerHTML = askHtml(m, p); }   // built once per menu, so it is announced once
+  const t = el.querySelector('.ak-t'); if (t) t.textContent = fmtShort(Math.max(0, now - (row.since || now)));
+}
+$('#askc').onclick = (e) => { if (e.target.closest('.ax')) { ASKC.off = $('#askc').dataset.k; paintAsk(Date.now()); } };
 function celebrate(id) {   // done: a cheer, a little dance, and the character's celebrating picture, for a moment
   const t = $('#t-' + id); if (!t) return; const pr = t.querySelector('.prop'); pr.textContent = '🎉'; pr.className = 'prop cheer'; t.classList.add('celebrate'); setFrame(t, id); syncCam(id); clearTimeout(t._celT);
   t._celT = setTimeout(() => { t.classList.remove('celebrate'); if (pr.classList.contains('cheer')) { pr.textContent = ''; pr.className = 'prop'; } if (!S.speakers.has(id)) setFrame(t, id); syncCam(id); }, 2500);

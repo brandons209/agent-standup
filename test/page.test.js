@@ -218,3 +218,18 @@ test('a lead whose turn closed while its background agents work stays on the cal
       S.amendCheck = [had, !S.run.main]; }`);
   assert.deepEqual(JSON.parse(run('JSON.stringify(S.amendCheck)')), [true, true], 'a call found to be background stops blocking the lead');
 });
+test('the board row of the followed session tells the lead it needs you, and its menu is shown word for word', { timeout: 5000 }, () => {
+  const { run } = page(); run(`avatarSVG = () => '';
+    S.agents = { main: { id: 'main', name: 'C', gid: 0 } }; S.live = true; S.cur = { proj: '-p', id: 's' };
+    S.events = [{ k: 'a', ts: 1 }, { k: 'b', ts: 2 }]; S.idx = 1; S.lastAct = { main: 0 };`);
+  const T = Date.now();
+  run(`S.rows = [{ proj: '-p', id: 's', state: 'blocked', since: ${T} - 120000, sure: 1, ask: 'Bash(npm test)', menu: { id: 'm1', tool: 'Bash', kind: 'command', cmd: 'npm test', sure: 1 } }]; S.rowsAt = ${T};`);
+  const st = JSON.parse(run(`JSON.stringify(agentState('main', ${T}))`));
+  assert.equal(st.k, 'blocked'); assert.match(st.txt, /needs you/); assert.match(st.txt, /npm test/); assert.equal(st.sure, true);
+  run(`S.rows = []`);
+  assert.notEqual(run(`agentState('main', ${T}).k`), 'blocked', 'no row: the tile falls back on what the feed says');
+  const q = { kind: 'question', questions: [{ q: 'Which <b>one</b>?', head: 'H', multi: false, options: [{ label: 'A', about: 'a' }, { label: '<script>x</script>', about: '' }] }] };
+  const h = run(`askHtml(${JSON.stringify(q)}, S.agents.main)`);
+  assert.match(h, /Which &lt;b&gt;one&lt;\/b&gt;\?/); assert.match(h, /&lt;script&gt;x&lt;\/script&gt;/); assert.ok(!/<script/.test(h), 'nothing of the menu is taken as markup');
+  assert.match(run(`askHtml({ kind: 'plan', text: 'do <i>this</i>' }, S.agents.main)`), /do &lt;i&gt;this&lt;\/i&gt;/);
+});

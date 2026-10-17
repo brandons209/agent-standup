@@ -102,6 +102,14 @@ $('#reactBar').onclick = (e) => {
 };
 
 // ---------- board: every recent session at a glance ----------
+// The rows of the board are also what the call's own tile reads to know its session waits on you (a Bash approval looks like a running command in the transcript): see agentState.
+S.rows = []; S.rowsAt = 0;
+const rowOf = (c) => (c && S.rows.find((r) => r.proj === c.proj && r.id === c.id)) || null;
+async function sessPoll() {
+  if (!S.live || S.demo || (document.hidden && AUD.off()) || sessPoll.busy) return; sessPoll.busy = true;
+  try { const t0 = Date.now(), rows = await (await fetch('/api/board')).json(); if (Array.isArray(rows) && S.live && !S.demo) { S.rows = rows; S.rowsAt = t0; } } catch {} finally { sessPoll.busy = false; }
+}
+setInterval(sessPoll, 4000);
 const BSTATE = { blocked: ['✋', 'needs you?', 'attend vous ?'], working: ['⚙', 'working', 'au travail'], waiting: ['🔗', 'waiting on sub-agents', 'attend ses sous-agents'], turn: ['✓', 'your turn', 'à vous'], idle: ['💤', 'idle', 'inactif'] };
 const BORDER = ['blocked', 'working', 'waiting', 'turn', 'idle'];
 const agoStr = (ms) => (ms < 90e3 ? Math.max(1, Math.round(ms / 1000)) + 's' : ms < 5400e3 ? Math.round(ms / 60e3) + ' min' : Math.round(ms / 3600e3) + ' h');
@@ -114,7 +122,7 @@ async function renderBoardView() {
     const cnt = {}; rows.forEach((r) => (cnt[r.state] = (cnt[r.state] || 0) + 1));
     const sum = BORDER.filter((k) => cnt[k]).map((k) => `<span class="stc ${k}">${BSTATE[k][0]} ${cnt[k]} ${L(BSTATE[k][2], BSTATE[k][1])}</span>`).join('');
     $('#boardv').innerHTML = `<div class="bsum">${sum || `<span>${L('Aucune session récente', 'No recent session')}</span>`}</div><div class="bgrid">${rows.map((r) => {
-      const [ic, en, fr] = BSTATE[r.state], extra = r.state === 'blocked' ? ` · ${esc(r.tool)} ${agoStr(r.ageMs)}` : r.state === 'working' && r.tool ? ` · ${esc(r.tool)}` : r.state === 'idle' || r.state === 'turn' ? ` · ${agoStr(now - r.mtime)}` : '';
+      const [ic, en, fr] = BSTATE[r.state], extra = (r.state === 'blocked' || r.state === 'turn') && r.ran ? ` · ⏱ ${L('a travaillé', 'worked')} ${fmtShort(r.ran)} · ${L('vous attend depuis', 'waiting on you for')} ${fmtShort(Math.max(0, now - (r.since || now)))}` : r.state === 'blocked' && r.ask ? ` · ${esc(r.ask)}` : r.state === 'blocked' ? ` · ${esc(r.tool)} ${agoStr(r.ageMs)}` : r.state === 'working' && r.tool ? ` · ${esc(r.tool)}` : r.state === 'idle' || r.state === 'turn' ? ` · ${agoStr(now - r.mtime)}` : '';   // the time it worked, apart from the time it has waited on you; and what it waits on, when the server knows
       return `<div class="bcard ${r.state}" tabindex="0" role="button" data-p="${esc(r.proj)}" data-i="${esc(r.id)}"><button class="bnew" data-p="${esc(r.proj)}" data-i="${esc(r.id)}" title="${esc(L('Ouvrir dans une nouvelle fenêtre', 'Open in a new window'))}">⧉</button><div><span class="stc ${r.state}">${ic} ${L(fr, en)}${extra}</span></div><div class="bt">${esc(/^[0-9a-f]{8}-[0-9a-f-]{27}$/.test(r.title) ? L('Session sans titre', 'Untitled session') : r.title)}</div><div class="bp">${esc(niceProj(r.proj))}</div>${r.subTotal ? `<div class="bm">👥 ${r.subActive}/${r.subTotal} ${L('sous-agents actifs', 'sub-agents active')}</div>` : ''}</div>`; }).join('')}</div>`;
   } catch {} finally { boardBusy = false; }
 }
