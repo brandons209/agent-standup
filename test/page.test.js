@@ -194,3 +194,27 @@ test('the live poll passes over a batch that keeps failing, counting from zero',
   const { run } = page(); assert.equal(run(`S.pollFails = undefined; (S.pollFails = (S.pollFails || 0) + 1)`), 1);
   assert.match(fs.readFileSync(path.join(PUB, 'js/live.js'), 'utf8'), /S\.seq = data\.seq \|\| 0; S\.pollFails = 0;/, 'loadSession starts the count over');
 });
+test('a lead whose turn closed while its background agents work stays on the call, and wakes when one answers', { timeout: 5000 }, () => {
+  const { run } = page(); run(`AUD.tone = () => {}; avatarSVG = () => ''; termModel = () => ({ view: 'term', title: 't', lines: [], stat: '' }); setTicker = () => {}; share = () => {}; activityLabel = () => 'checking';
+    S.agents = { main: { id: 'main', name: 'C', gid: 0 }, a1: { id: 'a1', name: 'A', gid: 1 } }; S.live = true; S.playing = true; S.boost = 1; prefs.multiShare = false;`);
+  const T = Date.now();
+  run(`S.events = [{ k: 'o1', ts: ${T}, agent: 'main', to: 'a1', kind: 'order', toolId: 'toolu_a', bg: true, text: 'Check the cart.', title: 'check' },
+    { k: 't1', ts: ${T + 1}, agent: 'main', kind: 'tools', tools: [{ id: 'toolu_w', ts: ${T + 1}, name: 'ScheduleWakeup', arg: '', d: { kind: 'cmd', text: 'w' } }] },
+    { k: 's1', ts: ${T + 2}, agent: 'main', kind: 'say', text: 'On the call.', end: 1 }];
+    stampT(0); S.byK = new Map(S.events.map((e) => [e.k, e])); S.pos = 0; S.idx = 2; recomputeStatus(3); tickTools(S.events[1]);`);
+  assert.equal(run(`agentState('main', Date.now()).k`), 'waiting', 'parked on its background agent, not your turn');
+  assert.equal(run(`agentState('main', Date.now() + 240000).k`), 'waiting', 'minutes of silence do not make it stalled');
+  run(`applyStatus({ k: 'f1', ts: Date.now(), agent: 'a1', to: 'main', kind: 'finish' })`);
+  assert.notEqual(run(`agentState('main', Date.now()).k`), 'done', 'the answer reopens the lead: it is not your turn yet');
+  run(`S.events.push({ k: 'f1', ts: ${T} + 3, agent: 'a1', to: 'main', kind: 'finish' }); stampT(3); S.live = false; recomputeStatus(4)`);   // a replay never wakes the lead: what the transcript says stands as it stands
+  assert.notEqual(run(`agentState('main', Date.now()).k`), 'waiting', 'replayed: the turn is over there');
+  run(`S.live = true; recomputeStatus(3); S.run.main = { id: 'b1', ts: Date.now(), name: 'Bash', start: 0 }`);
+  assert.equal(run(`agentState('main', Date.now()).k`), 'working', 'a lead busy with its own command is not parked');
+  run(`logRow = () => ''; S.locked = false; S.recomputing = false; S.pos = 0;
+    { const e = { k: 'o9', ts: Date.now(), agent: 'main', to: 'a1', kind: 'order', toolId: 'toolu_z', bg: false, text: 'Check it.', title: 'check' };
+      S.events = [e]; S.byK = new Map([['o9', e]]); stampT(0); recomputeStatus(1);
+      const had = !!(S.run.main && S.run.main.id === 'toolu_z');
+      Object.assign(e, { bg: true }); amend(e, { kind: 'order', n: 0, bg: false });
+      S.amendCheck = [had, !S.run.main]; }`);
+  assert.deepEqual(JSON.parse(run('JSON.stringify(S.amendCheck)')), [true, true], 'a call found to be background stops blocking the lead');
+});

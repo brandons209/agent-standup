@@ -328,3 +328,41 @@ test('a silent sub-agent is finished only once its turn has closed; one continue
     for (const k of ['busy', 'think']) assert.equal(ev2.filter((e) => e.agent === k && e.kind === 'finish').length, 1, k + ': 30 min stuck counts as finished');
   } finally { srv.close(); require('../server.js').shutdown(); }
 });
+test('an Agent call launched without the flag is a background call: its answer says so', async () => {
+  const dir = path.join(tmp, 'projects', '-bg'), subs = path.join(dir, 's', 'subagents'); fs.mkdirSync(subs, { recursive: true });
+  fs.writeFileSync(path.join(dir, 's.jsonl'), [typed(0, 'go'), used(1, 'toolu_a', 'Agent', { prompt: 'Check the cart.', description: 'check cart' }),
+    result(2, 'toolu_a', 'Async agent launched successfully. agentId: a1', { toolUseResult: { isAsync: true, status: 'async_launched', agentId: 'a1' } }), said(3, 'On the call.', { stop: 'end_turn' })].map(line).join(''));
+  fs.writeFileSync(path.join(subs, 'agent-a1.jsonl'), [typed(4, 'Check the cart.'), said(5, 'Cart is fine.')].map(line).join(''));
+  fs.writeFileSync(path.join(subs, 'agent-a1.meta.json'), JSON.stringify({ agentType: 'general-purpose', description: 'check cart', toolUseId: 'toolu_a' }));
+  const { port, stop } = await serve();
+  try {
+    const tl = await load(port, 'proj=-bg&id=s');
+    assert.deepEqual(tl.events.filter((e) => e.kind === 'order').map((e) => [e.agent, e.to, e.bg, e.toolId]), [['main', 'a1', true, 'toolu_a']]);
+    assert.ok(!tl.events.some((e) => e.kind === 'finish'), 'no completion record yet: the agent is still on the call');
+  } finally { stop(); }
+});
+test('a sub-agent that hands its report back with a tool call still reports in words', async () => {
+  const dir = path.join(tmp, 'projects', '-hb'), subs = path.join(dir, 's', 'subagents'); fs.mkdirSync(subs, { recursive: true });
+  fs.writeFileSync(path.join(dir, 's.jsonl'), [typed(0, 'go'), used(1, 'toolu_a', 'Agent', { prompt: 'Check the cart.' }), result(6, 'toolu_a', 'Cart is fine.')].map(line).join(''));
+  fs.writeFileSync(path.join(subs, 'agent-a1.jsonl'), [typed(2, 'Check the cart.'), used(4, 'toolu_h', 'SubagentHandback', { message: 'Cart is fine: two bugs, both fixed.' })].map(line).join(''));
+  fs.writeFileSync(path.join(subs, 'agent-a1.meta.json'), JSON.stringify({ agentType: 'general-purpose', description: 'check cart', toolUseId: 'toolu_a' }));
+  const { port, stop } = await serve();
+  try {
+    const tl = await load(port, 'proj=-hb&id=s'), ev = tl.events.filter((e) => e.agent === 'a1');
+    assert.deepEqual(ev.filter((e) => e.kind === 'report').map((e) => [e.agent, e.to, e.text]), [['a1', 'main', 'Cart is fine: two bugs, both fixed.']]);
+    assert.ok(!ev.some((e) => e.kind === 'tools' || e.kind === 'results'), 'the handback is not shown as a tool call');
+  } finally { stop(); }
+});
+test('the board: a lead whose turn closed while its background agents work is on the call, not yours', async () => {
+  const dir = path.join(tmp, 'projects', '-bb'), f = path.join(dir, 's.jsonl'), subs = path.join(dir, 's', 'subagents'); fs.mkdirSync(subs, { recursive: true });
+  fs.writeFileSync(f, [typed(0, 'go'), used(1, 'toolu_a', 'Agent', { prompt: 'Check the cart.' }),
+    result(2, 'toolu_a', 'Async agent launched successfully.', { toolUseResult: { isAsync: true, status: 'async_launched' } }), used(3, 'toolu_w', 'ScheduleWakeup', {}), result(4, 'toolu_w', 'ok'), said(5, 'On the call.', { stop: 'end_turn' })].map(line).join(''));
+  fs.writeFileSync(path.join(subs, 'agent-a1.jsonl'), [typed(2, 'Check the cart.'), said(3, 'Cart is fine.')].map(line).join(''));
+  const old = (Date.now() - 600000) / 1000; fs.utimesSync(path.join(subs, 'agent-a1.jsonl'), old, old);   // its last word is old: only the unanswered launch keeps the row on the call
+  const { port, stop } = await serve(), row = async () => { await wait(1300); return JSON.parse((await get(port, '/api/board')).body).find((r) => r.proj === '-bb'); };
+  try {
+    assert.equal((await row()).state, 'waiting');
+    fs.appendFileSync(f, line({ type: 'queue-operation', operation: 'enqueue', timestamp: at(6), content: '<task-notification>\n<task-id>t1</task-id>\n<tool-use-id>toolu_a</tool-use-id>\n<status>completed</status>\n</task-notification>' }));
+    assert.equal((await row()).state, 'turn');   // the agent answered: its report is the lead's next turn
+  } finally { stop(); }
+});

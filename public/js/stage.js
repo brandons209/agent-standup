@@ -95,12 +95,14 @@ function paintStatus() {
   const sk = $('#seek'); sk.max = Math.max(0, S.events.length - 1); sk.value = S.idx; $('#pos').textContent = `${Math.min(S.idx + 1, S.events.length)} / ${S.events.length}`;   // the range follows the session: outside a live call nothing ever set it, and the slider did nothing
 }
 const applyStatus = (ev) => {
+  const wake = (ev.kind === 'finish' || ev.kind === 'report') && ev.to === 'main' && S.turnOver && S.live && !S.recomputing && S.waitOn.main && S.waitOn.main.has(ev.agent);   // a background agent answers after the lead closed its turn: the lead picks it up, so its turn is not over any more
   if ((ev.kind === 'tools' || ev.kind === 'say') && S.status[ev.agent] === 'done') {   // a finished agent at work again (continued, or wrongly thought done): back on the call
     const id = ev.agent; S.status[id] = 'working'; delete S.doneAt[id]; delete S.quipped[id]; S.gone.delete(id); S.leaving.delete(id); const t = $('#t-' + id); if (t) t.classList.remove('vanishing');
   }
   if (ev.kind === 'order') { (S.waitOn[ev.agent] = S.waitOn[ev.agent] || new Set()).add(ev.to); S.orderTs[ev.to] = ev.ts || 0; S.status[ev.to] = 'working'; delete S.doneAt[ev.to]; S.gone.delete(ev.to); S.leaving.delete(ev.to); if (!ev.bg && ev.toolId) S.run[ev.agent] = { id: ev.toolId, ts: ev.ts, start: performance.now(), name: 'Agent' }; const t = $('#t-' + ev.to); if (t) t.classList.remove('vanishing'); }
   if (ev.kind === 'finish') { if (S.waitOn[ev.to]) S.waitOn[ev.to].delete(ev.agent); if (S.status[ev.agent] !== 'done') { S.status[ev.agent] = 'done'; S.doneAt[ev.agent] = S.clock; } delete S.run[ev.agent]; const lr = S.run[ev.to]; if (lr && /^(Task|Agent)$/.test(lr.name) && !(S.waitOn[ev.to] && S.waitOn[ev.to].size)) delete S.run[ev.to]; }
   if (ev.kind === 'report') { if (S.waitOn[ev.to]) S.waitOn[ev.to].delete(ev.agent); S.status[ev.agent] = 'done'; S.doneAt[ev.agent] = S.clock; delete S.run[ev.agent]; }
+  if (wake) { S.turnOver = false; S.lastAct.main = ev.ts; }
   if (ev.kind === 'user' || (ev.agent === 'main' && (ev.kind === 'say' || ev.kind === 'tools' || (ev.kind === 'order' && !ev.wf)))) S.turnOver = !!ev.end;   // Claude Code marks the message that closes the lead's turn; anything after it opens the next one (not the agents a workflow launches by itself)
 };
 function recomputeStatus(upTo) {
@@ -167,22 +169,23 @@ function renderTokens() {
 }
 // One boring signal per tile: working · waiting on another agent · may need you · stalled · done. Stalled hand-offs are what really cost time.
 // file edits are instant, so one that stays pending is almost surely an approval prompt; a Bash command may legitimately run long (⏳ badge instead)
-const NEEDS_OK = /^(Edit|Write|MultiEdit|NotebookEdit|AskUserQuestion|ExitPlanMode)/, ASKS = /^(AskUserQuestion|ExitPlanMode)/;
+const NEEDS_OK = /^(Edit|Write|MultiEdit|NotebookEdit|AskUserQuestion|ExitPlanMode)/, ASKS = /^(AskUserQuestion|ExitPlanMode)/, PARKED = /^(ScheduleWakeup|TaskOutput)$/;   // a lead that stopped acting because it is waiting on background agents, not on you
 const atTail = () => S.idx >= S.events.length - 3;   // only trust wall-clock ages when playback has caught up with the live end
 function agentState(id, now) {
   let s = S.status[id]; const r = S.run[id], w = S.waitOn[id], la = S.lastAct[id];
+  const parked = id === 'main' && (!r || PARKED.test(r.name) || /^(Task|Agent)$/.test(r.name)) && (S.turnOver || (S.lastTool.main && PARKED.test(S.lastTool.main.split(' ')[0])));   // its turn closed while its background agents work: on the call, at no work of its own (a lead busy with its own command is not parked)
   if (id === 'main' && !s) {   // the lead is at work until the message that closes its turn, even while it thinks; a transcript without that mark falls back on "quiet for 25 s", and a turn cut short on 3 minutes of silence
     const open = S.live && la && (S.sawEnd ? !S.turnOver && now - la < 180000 : now - la < 25000);
-    if (r || (w && w.size) || open || (!S.live && S.thinkAt.main && !S.turnOver)) s = 'working'; else if (S.live && la) return { k: 'done', txt: '✓ ' + L('à vous', 'your turn') };
+    if (r || (w && w.size) || open || (!S.live && S.thinkAt.main && !S.turnOver) || (parked && w && [...w].some((c) => S.status[c] !== 'done'))) s = 'working'; else if (S.live && la) return { k: 'done', txt: '✓ ' + L('à vous', 'your turn') };
   }
   if (s === 'done') return { k: 'done', txt: '✓ ' + L('terminé', 'done') };
   if (!s) return { k: 'idle', txt: '' };
   if (S.live && atTail() && r && r.ts && r.name && NEEDS_OK.test(r.name)) { const age = now - r.ts; if (age > (ASKS.test(r.name) ? 4000 : 15000)) return { k: 'blocked', txt: '✋ ' + L('attend vous ? ', 'needs you? ') + fmtShort(age) }; }
-  const subCall = r && /^(Task|Agent)$/.test(r.name), ownWork = (r && !subCall) || (!r && S.live && la > Math.max(0, ...[...(w || [])].map((c) => S.orderTs[c] || 0)));   // busy with its own command, or acting since it sent them off: background agents do not block it
+  const subCall = r && /^(Task|Agent)$/.test(r.name), ownWork = !parked && ((r && !subCall) || (!r && S.live && la > Math.max(0, ...[...(w || [])].map((c) => S.orderTs[c] || 0))));   // busy with its own command, or acting since it sent them off: background agents do not block it
   if (w && w.size && !ownWork) {   // really waiting only while the lead has a sub-agent call pending, or while those agents are still active (background agents never block the lead)
-    const pendingSub = r && /^(Task|Agent)$/.test(r.name), open = [...w].filter((c) => S.status[c] !== 'done' && (pendingSub || !S.live || now - Math.max(S.lastAct[c] || 0, S.orderTs[c] || 0) < 120000));
+    const pendingSub = r && /^(Task|Agent)$/.test(r.name), open = parked ? [...w].filter((c) => S.status[c] !== 'done') : [...w].filter((c) => S.status[c] !== 'done' && (pendingSub || !S.live || now - Math.max(S.lastAct[c] || 0, S.orderTs[c] || 0) < 120000));
     if (open.length) {
-      const names = open.map(nameOf); let stale = S.live && pendingSub; for (const c of open) if (!(now - Math.max(S.lastAct[c] || 0, S.orderTs[c] || 0) > 120000)) stale = false;
+      const names = open.map(nameOf); let stale = !parked && S.live && pendingSub; for (const c of open) if (!(now - Math.max(S.lastAct[c] || 0, S.orderTs[c] || 0) > 120000)) stale = false;
       return { k: stale ? 'stalled' : 'waiting', txt: (stale ? '⚠ ' + L('bloqué · ', 'stalled · ') : '🔗 ') + L('attend ', 'waiting on ') + names.slice(0, 2).join(', ') + (names.length > 2 ? ' +' + (names.length - 2) : '') };
     }
   }

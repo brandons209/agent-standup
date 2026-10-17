@@ -177,24 +177,32 @@ const readHead = (file, bytes) => { const fd = fs.openSync(file, 'r'); try { con
 const APPROVAL = /^(Edit|Write|MultiEdit|NotebookEdit)/, ASKS = /^(AskUserQuestion|ExitPlanMode)/, SUBTOOL = /^(Task|Agent)$/;
 const boardCache = new Map();   // file → { sig, parsed, title }
 let boardMemo = { at: 0, rows: [] };
+const notifText = (r) => r.type === 'queue-operation' ? (typeof r.content === 'string' ? r.content : '')   // the three shapes a task notification takes: a queue operation, a queued_command attachment, a user message
+  : r.type === 'attachment' && r.attachment && r.attachment.type === 'queued_command' ? (Array.isArray(r.attachment.prompt) ? r.attachment.prompt.map((b) => (b && b.text) || '').join('\n') : String(r.attachment.prompt || ''))
+    : r.type === 'user' ? blocks(r).filter((b) => b.type === 'text').map((b) => b.text || '').join('\n') : '';
 function parseTail(file, st) {
   const sig = st.mtimeMs + ':' + st.size, hit = boardCache.get(file); if (hit && hit.sig === sig) return hit;
   const { text, cut } = readTail(file, 192 * 1024), lines = text.split('\n'); if (cut) lines.shift();
-  const pend = new Map(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined;
+  const pend = new Map(), bgOpen = new Set(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined;
   for (const l of lines) {
     if (!l) continue; let r; try { r = JSON.parse(l); } catch { continue; }
     if (r.type === 'custom-title' && typeof r.customTitle === 'string') custom = r.customTitle; else if (r.type === 'ai-title' && typeof r.aiTitle === 'string') ai = r.aiTitle;   // a session is renamed, or named, long after its row was first shown: the latest one read wins
     const t = Date.parse(r.timestamp) || 0, bl = blocks(r);
     if (r.type === 'assistant' || r.type === 'user') { lastType = r.type; lastTool = bl.some((b) => b.type === 'tool_use'); lastStop = (r.type === 'assistant' && r.message && r.message.stop_reason) || null; if (lastStop) stops = true; if (t) lastTs = t;
       esc = r.type === 'user' && bl.some((b) => b.type === 'text' && /^\s*\[Request interrupted/i.test(b.text || '')); if (esc) pend.clear(); }   // Esc: the turn stops there, and no call is waited for any more
-    for (const b of bl) { if (b.type === 'tool_use') pend.set(b.id, { name: b.name, ts: t }); else if (b.type === 'tool_result') pend.delete(b.tool_use_id); }
+    for (const b of bl) {
+      if (b.type === 'tool_use') { pend.set(b.id, { name: b.name, ts: t }); if (SUBTOOL.test(b.name) && b.input && b.input.run_in_background) bgOpen.add(b.id); }
+      else if (b.type === 'tool_result') { const pn = pend.get(b.tool_use_id); if (pn && SUBTOOL.test(pn.name) && ((r.toolUseResult && r.toolUseResult.isAsync) || /^\s*Async agent launched/i.test(resultText(b.content)))) bgOpen.add(b.tool_use_id); pend.delete(b.tool_use_id); }   // an agent launched without the flag: its answer says so; it keeps running after Esc
+    }
+    const nt = notifText(r);   // a background agent's completion arrives minutes later, as a task notification, naming the call it answers
+    if (nt.includes('<task-notification>')) { const id = (nt.match(/<tool-use-id>([^<]+)<\/tool-use-id>/) || [])[1], status = (nt.match(/<status>([^<]+)<\/status>/) || [])[1]; if (id && status && status !== 'running') bgOpen.delete(id); }
   }
   if (!hit && !custom) {   // first look at this file: a little further back than the lines read above, and without needing whole lines
     const big = readTail(file, 256 * 1024).text, un = (m) => { try { return m ? JSON.parse('"' + m[1] + '"') : null; } catch { return null; } };
     custom = un([...big.matchAll(/"type":"custom-title","customTitle":"((?:[^"\\]|\\.)*)"/g)].pop()); if (!ai) ai = un([...big.matchAll(/"type":"ai-title","aiTitle":"((?:[^"\\]|\\.)*)"/g)].pop());
   }
   if (!custom && !ai && first == null) first = firstPrompt(file) || (st.size > 64 * 1024 ? '' : null);   // '' = looked for and not there; a file that has just been created is looked at again
-  const out = { sig, title: custom || ai || first || null, custom, ai, first, lastType, lastTool, lastStop, stops, esc, lastTs, pending: [...pend.values()] };   // a title the person typed wins over the generated one, and both over the first prompt
+  const out = { sig, title: custom || ai || first || null, custom, ai, first, lastType, lastTool, lastStop, stops, esc, lastTs, pending: [...pend.values()], bgOut: bgOpen.size };   // a title the person typed wins over the generated one, and both over the first prompt; bgOut: sub-agents still running in the background
   boardCache.set(file, out); if (boardCache.size > 200) boardCache.delete(boardCache.keys().next().value); return out;
 }
 function firstPrompt(file) {   // the first thing the person typed, read record by record: a pattern over the raw text ran from a user record into the assistant's first answer and took that as the title
@@ -222,15 +230,16 @@ function boardRows0() {
   return rows.slice(0, 40).map(({ proj, id, st }) => {
     const file = path.join(ROOT, proj, id + '.jsonl'); let p; try { p = parseTail(file, st); } catch { p = { pending: [] }; }
     const age = now - st.mtimeMs, lp = (p.pending || [])[(p.pending || []).length - 1]; let state = 'idle', tool = '', ageMs = age;
+    let subActive = 0, subTotal = 0, subLast = 0;
+    for (const x of subFiles(proj, id)) { subTotal++; const mt = mtimeOf(x.file); if (now - mt < 90e3) subActive++; if (mt > subLast) subLast = mt; }
     if (age < 30 * 60e3) {
       if (lp) { ageMs = now - (lp.ts || st.mtimeMs); tool = lp.name;
         state = SUBTOOL.test(lp.name) ? 'waiting' : (ASKS.test(lp.name) && ageMs > 4000) || (APPROVAL.test(lp.name) && ageMs > 15000) ? 'blocked' : 'working'; }
       else if (p.esc) state = 'turn';   // you stopped it (Esc): it is your turn there, not "working" for the next ten minutes
-      else if (p.lastType === 'assistant' && !p.lastTool && p.lastStop !== 'tool_use' && !(p.lastStop == null && p.stops && age < 45000)) state = 'turn';   // a line whose message goes on with a tool call is not the end of the turn; with no stop reason on it (older Claude Code), its call gets 45 s to appear
+      else if (p.lastType === 'assistant' && !p.lastTool && p.lastStop !== 'tool_use' && !(p.lastStop == null && p.stops && age < 45000))   // a line whose message goes on with a tool call is not the end of the turn; with no stop reason on it (older Claude Code), its call gets 45 s to appear
+        state = (p.bgOut > 0 || (subLast > (p.lastTs || 0) && now - subLast < 90e3)) ? 'waiting' : 'turn';   // the lead's turn is closed but its background agents are still at work: it is on the call, not yours
       else state = age < 10 * 60e3 ? 'working' : 'idle';
     }
-    let subActive = 0, subTotal = 0;
-    for (const x of subFiles(proj, id)) { subTotal++; if (now - mtimeOf(x.file) < 90e3) subActive++; }
     return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal };
   });
 }
@@ -314,6 +323,7 @@ function parseRecord(st, r) {
     const items = [], wf = r.toolUseResult && typeof r.toolUseResult === 'object' && typeof r.toolUseResult.runId === 'string' ? r.toolUseResult.runId : '';   // tool results: the real output that appeared on the agent's screen
     if (st.out) for (const b of blocks(r)) if (b.type === 'tool_result') st.out.delete(b.tool_use_id);
     for (const b of blocks(r)) if (b.type === 'tool_result' && wf) push({ ts, agent, kind: 'wfrun', toolId: b.tool_use_id, run: wf });   // the answer to a Workflow call names the run it started: its agents are in subagents/workflows/<run>/
+    for (const b of blocks(r)) if (b.type === 'tool_result' && (st.toolName[b.tool_use_id] === 'Agent' || st.toolName[b.tool_use_id] === 'Task') && ((r.toolUseResult && r.toolUseResult.isAsync) || /^\s*Async agent launched/i.test(resultText(b.content)))) (st.bg = st.bg || {})[b.tool_use_id] = true;   // most sub-agents are launched without run_in_background in the call: the answer is what says so
     for (const b of blocks(r)) if (b.type === 'tool_result' && (st.toolName[b.tool_use_id] === 'Agent' || st.toolName[b.tool_use_id] === 'Task') && !(st.bg && st.bg[b.tool_use_id]) && !/^\s*Async agent launched/i.test(resultText(b.content))) push({ ts, agent, kind: 'agentdone', toolId: b.tool_use_id });   // a synchronous call: the lead got the sub-agent's answer back, so it has finished (async launches answer immediately and are not a completion)
     for (const b of blocks(r)) if (b.type === 'tool_result' && st.toolName[b.tool_use_id] && !NO_RESULT.has(st.toolName[b.tool_use_id])) {
       const n = st.toolName[b.tool_use_id], img = resultImages(b.content).length;
@@ -336,6 +346,9 @@ function parseRecord(st, r) {
     for (const b of blocks(r)) {
       if (b.type === 'thinking' && typeof b.thinking === 'string' && b.thinking.trim()) st.th = clip(b.thinking.replace(/[^\S\n]+/g, ' ').replace(/ ?\n[\n ]*/g, '\n').trim(), 900);   // line breaks are kept: each line of its notes is a thought of its own
       else if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) { said = push({ ts, agent, kind: 'say', text: b.text.trim(), ...th() }); st.act = st.raw.length - 1; st.sayOf = m.id; st.sayAt = st.act; }
+      else if (b.type === 'tool_use' && b.name === 'SubagentHandback' && agent !== 'main' && b.input && typeof b.input.message === 'string' && b.input.message.trim()) {   // a sub-agent's report back to the lead, since Claude Code 2.1.293: a line of its own, not a tool call
+        const t = b.input.message.trim(), prev = said || (m.id && st.sayOf === m.id ? st.raw[st.sayAt] : null); if (!(prev && prev.text === t)) { said = push({ ts, agent, kind: 'say', text: t, ...th() }); st.act = st.raw.length - 1; st.sayOf = m.id; st.sayAt = st.act; }   // words this message already said (one record per block) are not said twice
+      }
       else if (b.type === 'tool_use') {
         st.toolName[b.id] = b.name; (st.out = st.out || new Set()).add(b.id); if (b.input && b.input.run_in_background) (st.bg = st.bg || {})[b.id] = true;   // out: the calls that have no answer yet
         if (b.name === 'Agent' || b.name === 'Task') push({ ts, agent, kind: 'agentcall', toolId: b.id, bg: !!(b.input && b.input.run_in_background), text: (b.input && b.input.prompt) || '', title: (b.input && b.input.description) || '', ...(b.input && typeof b.input.name === 'string' && b.input.name.trim() ? { nm: b.input.name.trim() } : {}) });
@@ -402,7 +415,7 @@ function buildTimeline(proj, id, files = []) {
     if (run && st.prompt) { parent[st.agent] = run.by || 'main'; events.push({ ts: st.prompt.ts, agent: parent[st.agent], to: st.agent, kind: 'order', ...(run.toolId ? { toolId: run.toolId } : {}), bg: true, wf: agents[st.agent].wf, text: st.prompt.text, title: agents[st.agent].role, k: 'o/' + st.agent }); }   // the order a workflow gave is the first message of the agent's own file: shown as an order from whoever launched the workflow (the lead when nothing says who), given in the background, when the agent started
     st.raw.forEach((e, i) => {
       if (e.kind === 'agentdone') { const to = childByTool[e.toolId], wr = runByTool[e.toolId]; if (to) { if (doneTs[to] === e.ts) finish(to, e.ts, e.agent); } else if (wr) for (const a of Object.values(wr.agents)) if (!wr.done.has(a)) finish(a, Math.max(e.ts, lastTs[a] || 0), e.agent); }   // the agents the journal knows about are finished below, at their own time
-      else if (e.kind === 'agentcall') { const to = childByTool[e.toolId]; if (to) { parent[to] = e.agent; events.push({ ts: e.ts, agent: e.agent, to, kind: 'order', toolId: e.toolId, bg: e.bg, text: e.text, title: e.title, k: e.k }); } }
+      else if (e.kind === 'agentcall') { const to = childByTool[e.toolId]; if (to) { parent[to] = e.agent; events.push({ ts: e.ts, agent: e.agent, to, kind: 'order', toolId: e.toolId, bg: e.bg || !!(st.bg && st.bg[e.toolId]), text: e.text, title: e.title, k: e.k }); } }
       else if (e.kind === 'wfrun' || e.kind === 'wfdone') return;
       else if (i === lastSay) events.push({ ...e, kind: 'report', to: null });   // `to` filled below, once every order is known
       else events.push(e);

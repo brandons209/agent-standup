@@ -47,6 +47,7 @@ function amend(e, was) {   // the server corrected an event the call already has
   if (e.kind === 'report' && was.kind === 'say' && (e._as === 'say' || past)) {   // it was read as an ordinary line: the report still counts (the agent is done, a ding, perhaps a word of thanks), without reading it again
     applyStatus(e); AUD.ding(); fly(e.agent, e.to, '✅'); popTile(e.agent); if (e._as === 'say') { e._as = 'report'; S.late.push(e); }
   }
+  if (e.kind === 'order' && e.bg && !was.bg && S.run[e.agent] && S.run[e.agent].id === e.toolId) delete S.run[e.agent];   // the call was thought synchronous: the lead is not blocked on it after all
   if (e.end && !was.end && (e._n != null || e._as || past)) { let k = S.events.length - 1; while (k > i && !(S.events[k].kind === 'user' || (S.events[k].agent === 'main' && /^(say|tools|order)$/.test(S.events[k].kind) && !S.events[k].wf))) k--; if (k === i) S.turnOver = true; }   // only if nothing came after it
 }
 let polling = false;
@@ -62,7 +63,7 @@ setInterval(async () => {
     if (!d.events || !d.events.length) { S.seq = d.seq; S.pollFails = 0; return; }
     for (const a of d.agents) if (!S.agents[a.id]) { S.agents[a.id] = persona(a); addTile(S.agents[a.id]); }
     const from = S.events.length, fresh = [], changed = [];   // the session is not written in order: what is new goes at the end (the order the call got it in), what the server corrected is corrected in place
-    for (const e of d.events) { const old = S.byK.get(e.k); if (old) { changed.push([old, { kind: old.kind, n: old.tools ? old.tools.length : 0, end: old.end }]); Object.assign(old, e); } else { S.byK.set(e.k, e); fresh.push(e); } }
+    for (const e of d.events) { const old = S.byK.get(e.k); if (old) { changed.push([old, { kind: old.kind, n: old.tools ? old.tools.length : 0, end: old.end, bg: old.bg }]); Object.assign(old, e); } else { S.byK.set(e.k, e); fresh.push(e); } }
     if (fresh.some((e) => e.end)) S.sawEnd = true;
     if (fresh.length) { S.events = S.events.concat(fresh); stampT(from); $('#seek').max = S.events.length - 1; trNew(from); warmTTS(from); }
     renderLog(false);   // also when nothing is new: a batch retried after a failure finds its events already here, and the transcript catches up from where it stopped
