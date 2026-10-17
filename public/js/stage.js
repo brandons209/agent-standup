@@ -107,7 +107,7 @@ const applyStatus = (ev) => {
   if (ev.kind === 'user' || (ev.agent === 'main' && (ev.kind === 'say' || ev.kind === 'tools' || (ev.kind === 'order' && !ev.wf)))) S.turnOver = !!ev.end;   // Claude Code marks the message that closes the lead's turn; anything after it opens the next one (not the agents a workflow launches by itself)
 };
 function recomputeStatus(upTo) {
-  S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.lastTool = {}; S.mainBusyAt = 0; S.turnOver = false; S.th = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.resAt = {}; S.thinkAt = {}; S.quipped = {}; S.reportAt = {}; S.recomputing = true; document.querySelectorAll('.tile').forEach((t) => { clearTimeout(t._byeT); t.classList.remove('bye'); }); closeAllShares();
+  S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.lastTool = {}; S.mainBusyAt = 0; S.turnOver = false; S.th = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.wst = {}; S.errList = {}; S.callById = new Map(); S.resAt = {}; S.thinkAt = {}; S.quipped = {}; S.reportAt = {}; S.recomputing = true; document.querySelectorAll('.tile').forEach((t) => { clearTimeout(t._byeT); t.classList.remove('bye'); }); closeAllShares();
   S.status = {}; S.tc = {}; S.doneAt = {}; S.gone.clear(); S.leaving.clear(); document.querySelectorAll('.tile.vanishing').forEach((t) => t.classList.remove('vanishing')); const doneIdx = {}; document.querySelectorAll('.ticker').forEach((x) => { x.classList.remove('on'); x.innerHTML = ''; });
   for (let i = 0; i < upTo; i++) {
     const e = S.events[i]; applyStatus(e); tally(e); if (e.kind === 'tools') S.tc[e.agent] = (S.tc[e.agent] || 0) + e.tools.length;
@@ -126,7 +126,7 @@ function syncUI() {
 
 // ---------- tool ticker, shared screen, flying messages ----------
 // ---------- what each agent is doing: tool calls with their real outputs ----------
-S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.resAt = {}; S.thinkAt = {}; S.quipped = {}; S.reportAt = {}; S.shares = new Map(); S.vclock = 0;
+S.term = {}; S.todos = {}; S.run = {}; S.act = {}; S.usage = {}; S.errs = {}; S.lastAct = {}; S.waitOn = {}; S.orderTs = {}; S.prevState = {}; S.ctx = {}; S.model = {}; S.compacts = {}; S.ctxWarned = {}; S.rep = {}; S.loops = {}; S.wst = {}; S.errList = {}; S.callById = new Map(); S.resAt = {}; S.thinkAt = {}; S.quipped = {}; S.reportAt = {}; S.shares = new Map(); S.vclock = 0;
 const later = (k, fn, ms = 160) => { later.p = later.p || {}; if (later.p[k]) return; later.p[k] = setTimeout(() => { later.p[k] = 0; fn(); }, ms); };   // coalesce bursts of repaints
 const fmtTok = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1000).toFixed(n < 1e4 ? 1 : 0) + 'k' : (n / 1e6).toFixed(n < 1e7 ? 2 : 1) + 'M');
 const tokTotal = (u) => (u ? u.i + u.o + u.w : 0);   // headline = input + output + cache writes; cache reads are cheap and shown separately
@@ -141,8 +141,71 @@ function loopStep(R, ev) {   // R: per-agent repetition state; returns a detecti
 }
 const WIN1M = /(opus-4-[78]|opus-5|sonnet-5|fable-5)/;
 function ctxWin(model, ctx) { const base = WIN1M.test(model || '') ? 1e6 : 2e5; return ctx > base ? 1e6 : base; }   // the transcript does not say which window is in use: infer it, a bigger observed context proves the 1M window
+// Repeated work, from the session's own records and no model call: a file read again with no change in between, a file another agent has already read, the same search run twice, a failing command run again unchanged
+const fileOf = (f) => String(f || '').split(/[\\/]/).pop();
+function wasteStep(W, ev) {   // W: the session's state (S.wst, or a fresh one for the recap); true when something was noted
+  if (!W.reads) { const N = () => Object.create(null); Object.assign(W, { reads: N(), finds: N(), calls: N(), failed: N(), items: N() }); }   /* no prototype: a file or a search named __proto__ is just a name */
+  const a = ev.agent; let hit = false; const note = (it) => { const l = (W.items[a] = W.items[a] || []); l.push({ ...it, ts: ev.ts }); if (l.length > 60) l.shift(); hit = true; };
+  if (ev.kind === 'tools') for (const t of ev.tools) { const d = t.d || {};
+    if (d.kind === 'read' && d.file) { const m = (W.reads[d.file] = W.reads[d.file] || Object.create(null)), part = (d.offset || '') + ':' + (d.limit || ''), o = Object.keys(m).find((x) => x !== a);   /* a part of a long file is another read */
+      if (m[a] && m[a].has(part)) note({ k: 'again', f: d.file }); else if (o) note({ k: 'other', f: d.file, by: o }); (m[a] = m[a] || new Set()).add(part); }
+    else if ((d.kind === 'edit' || d.kind === 'write') && d.file) delete W.reads[d.file];   /* a file that changed is read again for a good reason */
+    else if ((d.kind === 'grep' || d.kind === 'glob') && d.pattern) { const key = d.kind + '\u0000' + d.pattern + '\u0000' + (d.path || '') + '\u0000' + (d.glob || ''), m = (W.finds[key] = W.finds[key] || Object.create(null)), o = Object.keys(m).find((x) => x !== a);   /* \u0000: no pattern can build another's key */
+      if (m[a]) note({ k: 'find', q: d.pattern }); else if (o) note({ k: 'findOther', q: d.pattern, by: o }); m[a] = 1; }
+    else if (d.kind === 'cmd' && d.text && !POLLY.test(d.text)) { const key = a + '\u0000' + d.text.trim(); W.calls[t.id] = key; if (W.failed[key]) note({ k: 'retry', c: d.text.trim().split('\n')[0].slice(0, 80) }); }
+  }
+  else if (ev.kind === 'results') for (const it of ev.items) { const key = W.calls[it.id]; if (!key) continue; delete W.calls[it.id]; if (it.err) W.failed[key] = 1; else delete W.failed[key]; }
+  return hit;
+}
+const wasteLine = (it) => it.k === 'again' ? L('relu : {0}', 'read again: {0}').replace('{0}', () => fileOf(it.f)) : it.k === 'other' ? L('déjà lu par {0} : {1}', 'already read by {0}: {1}').replace('{0}', () => nameOf(it.by)).replace('{1}', () => fileOf(it.f))
+  : it.k === 'find' ? L('même recherche relancée : {0}', 'same search again: {0}').replace('{0}', () => '“' + it.q + '”') : it.k === 'findOther' ? L('même recherche que {0} : {1}', 'same search as {0}: {1}').replace('{0}', () => nameOf(it.by)).replace('{1}', () => '“' + it.q + '”')
+  : L('relance une commande qui a échoué : {0}', 'reran a failing command: {0}').replace('{0}', () => it.c);
+// The badges' card: on hover (or a tap), what is behind ✗ ♻ 🔁 ⏳ 💤, read from the session alone.
+function noteCalls(ev) {
+  if (!S.callById) { S.callById = new Map(); S.errList = {}; }
+  if (ev.kind === 'tools') for (const t of ev.tools) { S.callById.set(t.id, { name: t.name, arg: t.arg, d: t.d, ts: ev.ts }); if (S.callById.size > 3000) S.callById.delete(S.callById.keys().next().value); }
+  else if (ev.kind === 'results') for (const it of ev.items) { if (it.err) { const l = (S.errList[ev.agent] = S.errList[ev.agent] || []); l.push({ ts: ev.ts, call: S.callById.get(it.id), out: it.out }); if (l.length > 40) l.shift(); } S.callById.delete(it.id); }
+}
+var BT = { el: null, h: 0 }; const toolShort = (n) => (String(n || '').startsWith('mcp__') ? String(n).split('__').pop() : String(n || ''));
+const clockOf = (ts) => { try { return ts ? new Date(ts).toLocaleTimeString(document.documentElement.lang || undefined, { hour: '2-digit', minute: '2-digit' }) : ''; } catch { return ''; } };
+const callText = (c) => String((c && ((c.d && (c.d.text || c.d.file || c.d.pattern || c.d.url || c.d.query)) || c.arg)) || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+const errBit = (o) => { const ls = String(o || '').replace(/\x1b\[[0-9;]*m/g, '').split('\n').map((x) => x.trim()).filter(Boolean), i = Math.max(0, ls.findIndex((x) => /error|fail|denied|not found|no such|exception|cannot|refused|invalid|expected|✗|●/i.test(x))); return ls.slice(i, i + 3).map((x) => x.slice(0, 160)); };
+const wasteParts = (it) => { const path = String(it.f || '').split(/[\\/]/).slice(-2).join('/');
+  return it.k === 'again' ? [L('Relu', 'Read again'), path] : it.k === 'other' ? [L('Déjà lu par {0}', 'Already read by {0}').replace('{0}', () => nameOf(it.by)), path]
+    : it.k === 'find' ? [L('Même recherche relancée', 'Same search again'), '“' + it.q + '”'] : it.k === 'findOther' ? [L('Même recherche que {0}', 'Same search as {0}').replace('{0}', () => nameOf(it.by)), '“' + it.q + '”'] : [L('Relance une commande en échec', 'Reran a failing command'), it.c || '']; };
+function tipHtml(k, id) {
+  const head = (icon, title, n) => `<div class="bh"><span class="bi">${icon}</span><span class="bt">${esc(title)}</span>${n ? `<span class="bn">${esc(String(n))}</span>` : ''}<span class="ba">${esc(nameOf(id))}</span></div>`;
+  const foot = (t) => (t ? `<div class="bf">${esc(t)}</div>` : ''), more = (n) => foot(n > 0 ? L('+ {0} plus tôt', '+ {0} earlier').replace('{0}', () => n) : '');
+  const row = (name, time, txt, extra) => `<li><div class="r1">${name}<span class="rt">${esc(time)}</span></div>${txt ? `<code>${esc(txt)}</code>` : ''}${extra || ''}</li>`;
+  if (k === 'e') { const l = (S.errList && S.errList[id]) || [], n = S.errs[id] || l.length, sh = l.slice(-4).reverse(); if (!n) return '';
+    return head('✗', L('Appels en échec', 'Failed calls'), n) + (sh.length ? `<ul>${sh.map((x) => { const bit = errBit(x.out); return row((x.call && x.call.name ? `<span class="pill">${esc(toolShort(x.call.name))}</span>` : '') + (x.call && x.call.d && x.call.d.note ? `<span class="rn">${esc(x.call.d.note)}</span>` : ''), clockOf(x.ts), callText(x.call), bit.length ? `<div class="ro">${bit.map((x) => `<div>${esc(x)}</div>`).join('')}</div>` : ''); }).join('')}</ul>` : '') + more(n - sh.length); }
+  if (k === 'w') { const l = (S.wst.items && S.wst.items[id]) || [], sh = l.slice(-5).reverse(); if (!l.length) return '';
+    return head('♻', L('Travail répété', 'Repeated work'), l.length) + `<ul>${sh.map((it) => { const [lab, sub] = wasteParts(it); return row(`<span class="rk">${esc(lab)}</span>`, clockOf(it.ts), sub); }).join('')}</ul>` + more(l.length - sh.length) + foot(L('Repéré dans la session elle-même, sans appel au modèle.', 'Spotted in the session itself, with no model call.')); }
+  if (k === 'l') { const x = S.loops[id]; if (!x) return ''; const errs = x.kind === 'errors';
+    return head('🔁', errs ? L('Échecs répétés', 'Repeated failures') : L('Même appel répété', 'Same call repeated'), '×' + x.n) + foot((errs ? L('{0} échecs d’affilée', '{0} failures in a row') : L('{0} fois d’affilée', '{0} times in a row')).replace('{0}', () => x.n) + (x.tool ? ' · ' + toolShort(x.tool) : '')); }
+  if (k === 's') { const r = S.run[id]; if (!r) return ''; const c = S.callById && S.callById.get(r.id);
+    return head('⏳', L('Commande longue', 'Long-running command'), r.ts ? fmtShort(Date.now() - r.ts) : '') + `<ul>${row(r.name ? `<span class="pill">${esc(toolShort(r.name))}</span>` : '', clockOf(r.ts), callText(c) || (c && c.d && c.d.note) || '')}</ul>`; }
+  if (k === 'q') return S.lastAct[id] ? head('💤', L('Silencieux', 'Gone quiet'), '') + foot(L('Aucune activité depuis {0}.', 'No activity for {0}.').replace('{0}', () => fmtShort(Date.now() - S.lastAct[id]))) : '';
+  return '';
+}
+function showTip(el) {
+  const t = el.closest('.tile'), b = $('#btip'); if (!t) return; const id = t.id.slice(2), k = el.dataset.tip, h = tipHtml(k, id); if (!h) return hideTip();
+  clearTimeout(BT.h); const was = b.classList.contains('on') && BT.el; BT.el = el; if (b.innerHTML !== h) b.innerHTML = h; b.className = 'k-' + k + (was ? ' on' : ''); placeTip(); if (!was) requestAnimationFrame(() => BT.el && b.classList.add('on'));
+}
+function placeTip() {
+  const b = $('#btip'), r = BT.el.getBoundingClientRect(), w = b.offsetWidth, h = b.offsetHeight;
+  let top = r.bottom + 8; if (top + h > innerHeight - 8 && r.top - h - 8 > 8) top = r.top - h - 8;
+  b.style.left = Math.round(Math.max(8, Math.min(r.right - w, innerWidth - w - 8))) + 'px'; b.style.top = Math.round(Math.max(8, top)) + 'px';
+}
+function hideTip() { clearTimeout(BT.h); BT.el = null; $('#btip').classList.remove('on'); }
+function refreshTip() { const k = BT.el.dataset.tip, t = document.getElementById(BT.el._tile || ''), el = BT.el.isConnected ? BT.el : t && t.querySelector('.tbadge [data-tip="' + k + '"]'); if (el) { el._tile = BT.el._tile; showTip(el); } else hideTip(); }   /* the badges were drawn again: follow the new one, or close */
+document.addEventListener('mouseover', (e) => { const el = e.target.closest && e.target.closest('.tbadge [data-tip]'); if (el) { el._tile = el.closest('.tile') && el.closest('.tile').id; showTip(el); } });
+document.addEventListener('mouseout', (e) => { const el = e.target.closest && e.target.closest('.tbadge [data-tip]'); if (el && !(e.relatedTarget && el.contains(e.relatedTarget))) { clearTimeout(BT.h); BT.h = setTimeout(hideTip, 120); } });
+document.addEventListener('click', (e) => { const el = e.target.closest && e.target.closest('.tbadge [data-tip]'); if (el) { e.stopPropagation(); e.preventDefault(); el._tile = el.closest('.tile') && el.closest('.tile').id; showTip(el); } else if (BT.el) hideTip(); }, true);   /* a tap shows it on a touch screen, and does not open the agent */
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && BT.el) hideTip(); }); addEventListener('resize', () => BT.el && hideTip()); addEventListener('scroll', () => BT.el && hideTip(), true);
 function tally(ev) {   // numbers that pile up over a session: token usage, errors, last sign of life
   if (ev.kind === 'compact') { S.compacts[ev.agent] = (S.compacts[ev.agent] || 0) + 1; delete S.ctxWarned[ev.agent]; }
+  noteCalls(ev); if (wasteStep(S.wst, ev)) later('badges', renderBadges, 300);
   const det = loopStep(S.rep, ev); if (det) { S.loops[ev.agent] = det; later('badges', renderBadges, 300); } else if (S.loops[ev.agent] && (ev.kind === 'results' ? (S.loops[ev.agent].kind === 'errors' && ev.items.every((it) => !it.err)) : (ev.kind === 'tools' && S.rep[ev.agent].n < 2))) { delete S.loops[ev.agent]; later('badges', renderBadges, 300); }
   if (ev.kind === 'usage') { const c = ev.u.i + ev.u.r + ev.u.w; if (c > 0 && ev.model !== '<synthetic>') { S.ctx[ev.agent] = c; S.model[ev.agent] = ev.model; } const u = (S.usage[ev.agent] = S.usage[ev.agent] || { i: 0, o: 0, r: 0, w: 0 }); u.i += ev.u.i; u.o += ev.u.o; u.r += ev.u.r; u.w += ev.u.w; later('tok', renderTokens, 300); }   // renderTokens also redraws the context chips; one key, so nothing is dropped
   else if (ev.kind === 'results') ev.items.forEach((it) => { if (it.err) { S.errs[ev.agent] = (S.errs[ev.agent] || 0) + 1; later('badges', renderBadges, 300); oops(ev.agent); noteTrouble(ev.agent, false); } else noteTrouble(ev.agent, true); });
@@ -162,11 +225,11 @@ function renderCtx() {   // "context N% full": per agent chip (from 50%), a head
   const lead = ctxInfo('main'), cp = $('#ctxp'); if (lead) { cp.style.display = ''; cp.textContent = `ctx ${lead.p}%`; cp.className = 'ctxp ' + lead.lvl; cp.title = `${L('Contexte du chef', 'Lead context')}: ${fmtTok(lead.c)} / ${fmtTok(lead.w)}${S.compacts.main ? ' · ' + S.compacts.main + '×🗜' : ''}`; } else cp.style.display = 'none';
 }
 function renderTokens() {
-  renderCtx();
+  renderCtx(); const mix = mixedModels();
   const all = { i: 0, o: 0, r: 0, w: 0 }; for (const id in S.usage) for (const k in all) all[k] += S.usage[id][k];
   const b = $('#tok'), tot = tokTotal(all); b.style.display = tot ? '' : 'none';
-  if (tot) { b.textContent = `⚡ ${fmtTok(tot)} ${L('jetons', 'tokens')}`; b.title = tokTip(all); }
-  for (const id in S.agents) { const t = $('#t-' + id); if (!t) continue; const u = S.usage[id], el = t.querySelector('.tk'); el.textContent = u && tokTotal(u) ? `⚡${fmtTok(tokTotal(u))}` : ''; if (u) t.title = tokTip(u); }
+  if (tot) { b.textContent = `⚡ ${fmtTok(tot)} ${L('jetons', 'tokens')}`; b.title = tokTip(all) + '\n' + Object.keys(S.usage).filter((id) => S.agents[id] && tokTotal(S.usage[id])).sort((x, y) => tokTotal(S.usage[y]) - tokTotal(S.usage[x])).slice(0, 14).map((id) => `\n${nameOf(id)} ⚡${fmtTok(tokTotal(S.usage[id]))}${modelShort(S.model[id]) ? ' · ' + modelShort(S.model[id]) : ''}`).join(''); }   // and who used what, the biggest first
+  for (const id in S.agents) { const t = $('#t-' + id); if (!t) continue; const u = S.usage[id], el = t.querySelector('.tk'); el.textContent = u && tokTotal(u) ? `⚡${fmtTok(tokTotal(u))}${mix && modelShort(S.model[id]) ? ' · ' + modelShort(S.model[id]).split(' ')[0] : ''}` : ''; if (u) t.title = tokTip(u) + modelTip(id); }
 }
 // One boring signal per tile: working · waiting on another agent · may need you · stalled · done. Stalled hand-offs are what really cost time.
 // file edits are instant, so one that stays pending is almost surely an approval prompt; a Bash command may legitimately run long (⏳ badge instead)
@@ -246,10 +309,13 @@ function paintStates() {
   if (b.innerHTML !== parts) b.innerHTML = parts; S.nBlocked = n.blocked + n.stalled; S.attn = attn; paintRoster(ros); paintAttn(now); paintWhy(); return n;
 }
 const RORDER = { blocked: 0, stalled: 1, working: 2, waiting: 3, idle: 4, done: 5 };
+const modelShort = (m) => { const v = String(m || ''); if (!v || v[0] === '<') return ''; const c = /(opus|sonnet|haiku|fable)[-_ ]?(\d{1,2})(?:[-.](\d{1,2})(?!\d))?(?!\d)/i.exec(v); const o = /claude-(\d)(?:-(\d))?-(opus|sonnet|haiku)/i.exec(v), cap = (w) => w[0].toUpperCase() + w.slice(1).toLowerCase(); if (o) return cap(o[3]) + ' ' + o[1] + (o[2] ? '.' + o[2] : ''); return c ? cap(c[1]) + ' ' + c[2] + (c[3] ? '.' + c[3] : '') : v.replace(/^.*\//, '').replace(/-\d{8}$/, '').slice(0, 24); };   /* older ids put the version first: claude-3-5-sonnet → Sonnet 3.5 */   // claude-haiku-4-5-20251001 → Haiku 4.5
+const mixedModels = () => new Set(Object.keys(S.usage).filter((id) => S.agents[id] && S.model[id] && tokTotal(S.usage[id])).map((id) => modelShort(S.model[id])).filter(Boolean)).size > 1;   // only then is the model worth a place next to the count
+const modelTip = (id) => (S.model[id] && modelShort(S.model[id]) ? '\n' + L('Modèle', 'Model') + ' · ' + S.model[id] : '');
 function paintRoster(ros) {   // a fixed list beside the call: who is doing what, urgent first, readable even with dozens of agents
   const box = $('#roster'); if (!box || !document.body.classList.contains('rost')) return;
   ros.sort((a, b) => (a.p.id === 'main' ? -1 : b.p.id === 'main' ? 1 : (RORDER[a.st.k] - RORDER[b.st.k]) || (S.lastAct[b.p.id] || 0) - (S.lastAct[a.p.id] || 0)));
-  const rows = ros.slice(0, 60).map(({ p, st }) => `<div class="rr k-${st.k}${isTurn(p.id, st) ? ' turn' : ''}${S.focus === p.id ? ' sel' : ''}${S.speakers.has(p.id) ? ' speaking' : ''}" data-id="${esc(p.id)}" tabindex="0" role="button" aria-label="${esc(p.name)}, ${esc(st.txt || '')}"><div class="n"><span class="dot" style="background:${p.shirt}"></span><b>${esc(p.name)}</b><span class="ro">${esc(p.role)}</span></div><div class="st">${esc(st.txt || L('en veille', 'standing by'))}${S.loops[p.id] ? ' 🔁' : ''}</div></div>`).join('');
+  const rows = ros.slice(0, 60).map(({ p, st }) => `<div class="rr k-${st.k}${isTurn(p.id, st) ? ' turn' : ''}${S.focus === p.id ? ' sel' : ''}${S.speakers.has(p.id) ? ' speaking' : ''}" data-id="${esc(p.id)}" tabindex="0" role="button" aria-label="${esc(p.name)}, ${esc(st.txt || '')}"><div class="n"><span class="dot" style="background:${p.shirt}"></span><b>${esc(p.name)}</b><span class="ro">${esc(p.role)}</span></div><div class="st">${esc(st.txt || L('en veille', 'standing by'))}${S.loops[p.id] ? ' 🔁' : ''}${S.wst.items && S.wst.items[p.id] && S.wst.items[p.id].length ? ' ♻' + S.wst.items[p.id].length : ''}</div></div>`).join('');
   const html = `<h3>${L('Agents', 'Agents')} · ${ros.length}</h3>${rows}${ros.length > 60 ? `<div class="ro" style="padding:4px 8px">+${ros.length - 60}</div>` : ''}`;
   if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
 }
@@ -260,15 +326,17 @@ function renderBadges() {   // per tile: failed tool calls, a command that has b
   const now = Date.now();
   for (const id in S.agents) {
     const t = $('#t-' + id); if (!t) continue; const b = t.querySelector('.tbadge'), parts = []; let slow = false, quiet = false;
-    if (S.errs[id]) parts.push(`<span class="e">✗ ${S.errs[id]}</span>`);
-    if (S.loops[id]) parts.push(`<span class="l" title="${esc(S.loops[id].kind === 'errors' ? L('Échecs répétés', 'Repeated failures') : L('Même appel répété', 'Same call repeated'))}">🔁 ×${S.loops[id].n}</span>`);
+    if (S.errs[id]) parts.push(`<span class="e" title="" data-tip="e">✗ ${S.errs[id]}</span>`);
+    const ws = S.wst.items && S.wst.items[id]; if (ws && ws.length) parts.push(`<span class="w" title="" data-tip="w">♻ ${ws.length}</span>`);
+    if (S.loops[id]) parts.push(`<span class="l" title="" data-tip="l">🔁 ×${S.loops[id].n}</span>`);
     if (S.live && S.status[id] === 'working') {
       const r = S.run[id];
-      if (r && r.ts && atTail() && now - r.ts > 60000) { slow = true; parts.push(`<span class="s">⏳ ${fmtShort(now - r.ts)}</span>`); }
-      else if (!r && S.lastAct[id] && now - S.lastAct[id] > 180000) { quiet = true; parts.push(`<span class="q">💤 ${fmtShort(now - S.lastAct[id])}</span>`); }
+      if (r && r.ts && atTail() && now - r.ts > 60000) { slow = true; parts.push(`<span class="s" title="" data-tip="s">⏳ ${fmtShort(now - r.ts)}</span>`); }
+      else if (!r && S.lastAct[id] && now - S.lastAct[id] > 180000) { quiet = true; parts.push(`<span class="q" title="" data-tip="q">💤 ${fmtShort(now - S.lastAct[id])}</span>`); }
     }
     t.classList.toggle('slow', slow); t.classList.toggle('quiet', quiet); const h = parts.join(''); if (b.innerHTML !== h) b.innerHTML = h;
   }
+  if (BT && BT.el) refreshTip();
 }
 const fmtShort = (ms) => { const s = Math.round(ms / 1000); return s < 90 ? `${s}s` : `${Math.round(s / 60)} min`; };
 function askNotify() { try { if (!EMBED && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {} AUD.init(); AUD.alert(); }

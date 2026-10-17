@@ -44,8 +44,9 @@ function renderHighlights() {
 }
 $('#hl').onclick = (e) => { const b = e.target.closest('.hlc'); if (b && !S.live) seekTo(+b.dataset.i); };
 function openRecap() {
-  const per = {}, files = {}; let tools = 0, cmds = 0, errs = 0; const tk = {}, A = (id) => (per[id] = per[id] || { id, tools: 0, files: new Set(), t0: null, t1: null });
+  const per = {}, files = {}, mdl = {}; let tools = 0, cmds = 0, errs = 0; const tk = {}, A = (id) => (per[id] = per[id] || { id, tools: 0, files: new Set(), t0: null, t1: null });
   S.events.forEach((e) => {
+    if (e.kind === 'usage' && e.model && e.model[0] !== '<') mdl[e.agent] = e.model;   /* not <synthetic>, as in tally */
     if (e.kind === 'usage') { const u = (tk[e.agent] = tk[e.agent] || { i: 0, o: 0, r: 0, w: 0 }); u.i += e.u.i; u.o += e.u.o; u.r += e.u.r; u.w += e.u.w; }
     if (e.kind === 'results') e.items.forEach((it) => { if (it.err) errs++; });
     if (e.kind === 'order') A(e.to).t0 = e.t; if (e.kind === 'report') A(e.agent).t1 = e.t;
@@ -54,11 +55,13 @@ function openRecap() {
   });
   const last = S.events.reduce((m, e) => Math.max(m, e.t || 0), 0), rows = Object.values(per).filter((a) => a.id !== 'user' && S.agents[a.id]).sort((a, b) => b.tools - a.tools).slice(0, 18), fl = Object.entries(files).sort((a, b) => b[1].n - a[1].n).slice(0, 25);
   const k = (v, l) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`, totTok = Object.values(tk).reduce((n, u) => n + tokTotal(u), 0);
+  const RW = {}; S.events.forEach((e) => wasteStep(RW, e)); const wl = Object.entries(RW.items || {}).filter(([id]) => S.agents[id]).flatMap(([id, l]) => l.map((it) => [id, it]));
   $('#recap .box').innerHTML = `<h1>${L('Récap de l’épisode', 'Episode recap')}</h1>
-    <div class="kpis">${k(Math.max(0, Object.keys(S.agents).length - 2), 'agents')}${k(tools, L('appels d’outils', 'tool calls'))}${k(cmds, L('commandes', 'commands'))}${k(errs, L('outils en erreur', 'tool errors'))}${totTok ? k('⚡ ' + fmtTok(totTok), L('jetons', 'tokens')) : ''}${k(Object.keys(files).length, L('fichiers modifiés', 'files changed'))}${k(fmt(last), L('durée', 'duration'))}</div>
-    <h3>${L('Agents les plus actifs', 'Busiest agents')}</h3><table><tr><th></th><th>${L('Rôle', 'Role')}</th><th>${L('Outils', 'Tools')}</th><th>${L('Fichiers', 'Files')}</th><th>${L('Jetons', 'Tokens')}</th><th>${L('Durée', 'Time')}</th></tr>
-    ${rows.map((a) => `<tr><td><b>${esc(nameOf(a.id))}</b></td><td>${esc(S.agents[a.id].role)}</td><td>${a.tools}</td><td>${a.files.size || ''}</td><td title="${tk[a.id] ? esc(tokTip(tk[a.id])) : ''}">${tk[a.id] ? '⚡ ' + fmtTok(tokTotal(tk[a.id])) : ''}</td><td>${a.t0 != null && a.t1 != null ? fmt(a.t1 - a.t0) : ''}</td></tr>`).join('')}</table>
+    <div class="kpis">${k(Math.max(0, Object.keys(S.agents).length - 2), 'agents')}${k(tools, L('appels d’outils', 'tool calls'))}${k(cmds, L('commandes', 'commands'))}${k(errs, L('outils en erreur', 'tool errors'))}${wl.length ? k('♻ ' + wl.length, L('travail répété', 'repeated work')) : ''}${totTok ? k('⚡ ' + fmtTok(totTok), L('jetons', 'tokens')) : ''}${k(Object.keys(files).length, L('fichiers modifiés', 'files changed'))}${k(fmt(last), L('durée', 'duration'))}</div>
+    <h3>${L('Agents les plus actifs', 'Busiest agents')}</h3><table><tr><th></th><th>${L('Rôle', 'Role')}</th><th>${L('Outils', 'Tools')}</th><th>${L('Fichiers', 'Files')}</th><th>${L('Jetons', 'Tokens')}</th><th>${L('Modèle', 'Model')}</th><th>${L('Durée', 'Time')}</th></tr>
+    ${rows.map((a) => `<tr><td><b>${esc(nameOf(a.id))}</b></td><td>${esc(S.agents[a.id].role)}</td><td>${a.tools}</td><td>${a.files.size || ''}</td><td title="${tk[a.id] ? esc(tokTip(tk[a.id])) : ''}">${tk[a.id] ? '⚡ ' + fmtTok(tokTotal(tk[a.id])) : ''}</td><td>${esc(modelShort(mdl[a.id]))}</td><td>${a.t0 != null && a.t1 != null ? fmt(a.t1 - a.t0) : ''}</td></tr>`).join('')}</table>
     <h3>${L('Fichiers touchés', 'Files touched')}</h3>${fl.length ? `<table>${fl.map(([f, v]) => `<tr><td class="f">${esc(f)}</td><td>×${v.n}</td><td>${esc([...v.who].join(', '))}</td></tr>`).join('')}</table>` : `<div class="dim">${L('Aucune modification.', 'No edits.')}</div>`}
+    ${wl.length ? `<h3>${L('Travail répété', 'Repeated work')}</h3><table>${wl.slice(0, 30).map(([id, it]) => `<tr><td><b>${esc(nameOf(id))}</b></td><td>${esc(wasteLine(it))}</td></tr>`).join('')}</table>` : ''}
     ${SUPPORT.url ? `<div class="coffee"><span>${esc(coffeeMsg())}</span><button class="btn" id="recapCoffee">☕ ${L('Offrir un café', 'Buy a coffee')}</button></div>` : ''}
     <p style="text-align:right;margin:18px 0 0"><button class="btn" id="recapMd">📋 ${L('Copier en Markdown', 'Copy as Markdown')}</button> <button class="cta" id="recapx">${L('Fermer', 'Close')}</button></p>`;
   const md = [`# Agent Standup — ${S.title || L('épisode', 'session')}`, `_${new Date().toLocaleString()}_ · ${Math.max(0, Object.keys(S.agents).length - 2)} agents · ${tools} ${L('appels d’outils', 'tool calls')} · ${cmds} ${L('commandes', 'commands')} · ${errs} ${L('erreurs', 'errors')}${totTok ? ' · ⚡ ' + fmtTok(totTok) + ' tokens' : ''}`, '', '## Standup'];
