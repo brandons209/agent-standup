@@ -32,3 +32,8 @@ test('the server runs in a process of its own, answers, and ends when the editor
   assert.equal(status, 200);
   const gone = new Promise((res) => s.kid.once('exit', res)); s.kid.disconnect(); await gone; assert.notEqual(s.kid.exitCode, null);
 });
+test('needs you: rows read again after the window was away tell nothing new; only the setting turned off forgets', () => {
+  shown.length = 0; const t0 = 3e12, r = row({ id: 's9' });
+  needsYou([r], t0); needsYou([r], t0 + 1000); assert.equal(shown.length, 1);
+  needsYou([], t0 + 2000); needsYou([r], t0 + 3000); assert.equal(shown.length, 2, 'off, then on: the wait is told again');
+});

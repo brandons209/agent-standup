@@ -151,7 +151,7 @@ function joinSound() {
 }
 $('#gB').onclick = joinSound;
 addEventListener('pointerdown', (e) => { if (S.hush && !(e.target.closest && e.target.closest('#bMute'))) joinSound(); }, true);
-addEventListener('keydown', (e) => { if (S.hush && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() !== 'm' && e.key !== 'Escape' && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) { joinSound(); if (e.key === ' ') { e.preventDefault(); e.stopImmediatePropagation(); } } }, true);   // the first Space turns the sound on, as Join did, without pausing the call too
+addEventListener('keydown', (e) => { if (S.hush && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() !== 'm' && e.key !== 'Escape' && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) { joinSound(); if (e.key === ' ') { e.preventDefault(); e.stopImmediatePropagation(); } } }, true);   // the first Space turns the sound on without pausing the call too
 // The strip under the header: what needs you, in the call's session first (its agents), then in the other sessions (the board rows). Live only, in every view.
 // Certain when Claude Code says a menu is open there (sure); a guess otherwise, from how long a call has waited ("may need you"). A click, or A, goes to the next one.
 const sessKey = (c) => c.proj + '/' + c.id;

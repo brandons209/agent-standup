@@ -62,7 +62,7 @@ async function run(i) {
       setTimeout(() => rest.forEach((o, k) => setTimeout(() => { fly(o.agent, o.to, '📨'); popTile(o.to); }, k * 120)), 30);
       plays = [playOne(ev).then(() => { if (token !== S.token) return; startTalk(ev.agent, line, ''); return speakLine(clipSpeech(line, S.pace), S.agents[ev.agent], true, token).then(() => { if (token === S.token) stopTalk(ev.agent); }); })];
     }
-    else plays = [group.reduce((turn, g) => turn.then(() => (token === S.token ? playOne(g) : null)), Promise.resolve())];   // live: one voice at a time so each can be heard; replay keeps the overlapping chatter
+    else plays = [group.reduce((turn, g) => turn.then(() => (token === S.token ? playOne(g) : null)), Promise.resolve())];   // one voice at a time, live and in replay: each waits for the one before, so every line is heard
     S.idx = j - 1; paintStatus(); await Promise.all(plays); if (token !== S.token) return;
     for (const g of (ev.kind === 'order' ? group.slice(0, 3) : group)) { const late = S.late.indexOf(g); if (late >= 0) S.late.splice(late, 1); await converse(g, token); if (token !== S.token) return; }   // a parallel launch: the first three answer, as long as the call keeps up; a line that became a report while it was read answers here, once
     for (const id of fin) { await doneQuip(id, token); if (token !== S.token) return; }

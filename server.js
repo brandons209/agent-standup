@@ -276,7 +276,7 @@ function capRows(list, most, folderOf) {   // list: newest first
   return real.filter((r) => keep.has(r)).concat(list.filter((r) => tmpKey(folderOf(r))).slice(0, TMP_ROWS));
 }
 // A project of Claude Code is named after its folder with every character other than a letter or digit made a dash: -w-app-old may be app/old (inside app) or app-old (beside it).
-// Which one is told by the folder its sessions were started in (the cwd of its records), read once per project. Not found (an empty project): counted as before, by its name.
+// Which one is told by the folder its sessions were started in (the cwd of its records), read once per project. Not found (an empty project): matched by its name alone.
 const projCwds = new Map(), dirKey = (d) => String(d || '').replace(/[^a-zA-Z0-9]/g, '-');
 function projCwd(proj) {
   if (projCwds.has(proj)) return projCwds.get(proj);
@@ -311,7 +311,7 @@ function boardRows0() {
       if (state === 'turn') since = p.lastTs || st.mtimeMs;
     }
     const ran = since && p.asked && p.asked < since ? since - p.asked : 0, ask = state === 'blocked' && lp ? lp.q || lp.c : '';   // since: when it started to wait on you; ran: how long it worked, from your last order to then
-    return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal, asked: p.asked || 0, ...(since ? { since } : {}), ...(ran ? { ran } : {}), ...(p.pr ? { pr: p.pr } : {}), ...(ask ? { ask } : {}), ...(state === 'blocked' && w && w.status === 'waiting' ? { sure: 1 } : {}), ...(open ? { menu: open } : state === 'blocked' && lp && lp.m && !SUBTOOL.test(lp.name) ? { menu: { id: lp.id, tool: lp.name, ...lp.m, ...(w && w.status === 'waiting' ? { sure: 1 } : {}) } } : {}), ...(p.esc ? { cut: 1 } : {}), tmp: tmpKey(proj) };
+    return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal, asked: p.asked || 0, ...(since ? { since } : {}), ...(ran ? { ran } : {}), ...(p.pr ? { pr: p.pr } : {}), ...(ask ? { ask } : {}), ...(state === 'blocked' && w && w.status === 'waiting' ? { sure: 1 } : {}), ...(open ? { menu: open } : state === 'blocked' && lp && lp.m && !SUBTOOL.test(lp.name) ? { menu: { id: lp.id, tool: lp.name, ...lp.m, ...(w && w.status === 'waiting' ? { sure: 1 } : {}) } } : {}), tmp: tmpKey(proj) };
   });
 }
 // Settings live in a file, not only in the page's localStorage: the port changes between VS Code windows and reloads, and localStorage is per origin (port included).
@@ -372,7 +372,7 @@ function currentSession(projFilter, idFilter, stick, pick, anyTmp) {   // pick: 
       const m = sessionMtime(proj, f.slice(0, -6)); if (m) consider(proj, f.slice(0, -6), m);   // 0: a link to a transcript that is gone
     }
   }
-  if (!best && projFilter) return { ...currentSession('', '', stick), wide: 1 };   // nothing in that folder (an editor open on another one than the sessions): the latest of anywhere, and the page is told, so its tabs follow the same rule
+  if (!best && projFilter) return currentSession('', '', stick);   // nothing in that folder (an editor open on another one than the sessions): the latest of anywhere
   if (!best && !projFilter && !anyTmp) return currentSession('', '', stick, pick, true);   // nothing but sessions in the temporary folder: one of them rather than an empty call
   return best ? { ...best, asked, why: 'latest' } : {};
 }

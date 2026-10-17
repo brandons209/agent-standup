@@ -108,7 +108,7 @@ On wide windows (900 px+), a fixed list sits left of the call: every agent with 
 The **Sessions** tab lists every session active in the last 12 hours, across all projects, with one state each: working, needs you?, waiting on sub-agents, your turn, or idle (and how many sub-agents are active). It refreshes every few seconds and reads only the end of each transcript, so thirty parallel sessions stay cheap. Click a card to follow that session in the call.
 
 ## At a glance
-Every tile carries one status: **working** (with what it is doing), **waiting on another agent** (who), **needs you?** (a file edit or write, or a question, has been pending for 15 s+), **stalled** (waiting on an agent that has been silent for 2 min+), or **done**. A summary sits in the header, and the tab title shows how many agents need you. The "needs you?" signal is a heuristic: Claude Code does not record permission prompts, so commands (Bash) are not flagged because they can legitimately run for minutes (they get a ⏳ badge after 1 min instead). Measured on real sessions, edits that stay pending for 15 s+ are rare, so the signal is mostly right.
+Every tile carries one status: **working** (with what it is doing), **waiting on another agent** (who), **needs you?** (a file edit or write, or a question, has been pending for 15 s+), **stalled** (waiting on an agent that has been silent for 2 min+), or **done**. A summary sits in the header, and the tab title shows how many agents need you. When Claude Code says a menu is open in the session (a permission, a Bash command waiting for your go-ahead, a question, a plan), it reads **needs you** at once. Otherwise **needs you?** is a guess from how long a call has waited: a Bash command can legitimately run for minutes, so it is not flagged that way and gets a ⏳ badge after 1 min instead.
 
 ## Voices
 Each line is read with a voice of its own language (French or English), whatever language the interface is in.
@@ -203,7 +203,7 @@ In Replay, a slider and a speed control appear at the bottom, and clicking a tra
 
 ## Office music
 
-Turn on **Office music** in ⚙ and pick a station (FIP, Groove, Jazz, Electro, Reggae, Rock, Nouveautés, Pop) and a volume. The stream is played live from Radio France's public Icecast servers directly in the page; it starts when you press **Join** (browsers require a click). When any agent speaks, the music drops to ~15 % within a fraction of a second and returns slowly after the last line. Muting (🔊 / M) stops the stream. Music is for your ears only: it is **never included in video exports**. Stations are for personal listening; nothing is stored or redistributed.
+Turn on **Office music** in ⚙ and pick a station (FIP, Groove, Jazz, Electro, Reggae, Rock, Nouveautés, Pop) and a volume. The stream is played live from Radio France's public Icecast servers directly in the page; it starts on your first click in the call (browsers require a click). When any agent speaks, the music drops to ~15 % within a fraction of a second and returns slowly after the last line. Muting (🔊 / M) stops the stream. Music is for your ears only: it is **never included in video exports**. Stations are for personal listening; nothing is stored or redistributed.
 
 ## One window talks at a time
 
@@ -293,5 +293,5 @@ Press **?** in the app for the full list. Highlights: **Space** pause, **M** mut
 - **Many sessions at once?** The **Sessions** view shows every session across your projects on one board (working, waiting, needs you, done); click one to open its call. **Live** follows one session at a time, the most recent or the project you pick.
 - Found a problem? Please open an issue.
 
-## Privacy and usage counting
+## Privacy
 Agent Standup reads local session files and sends nothing anywhere by default. The only optional network uses are: French translation / jokes (your own Claude login, off unless you turn them on) and the FIP radio stream (if you turn it on).

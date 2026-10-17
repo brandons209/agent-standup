@@ -226,7 +226,7 @@ const vowelKey = (ch) => ({ à: 'a', â: 'a', ä: 'a', é: 'e', è: 'e', ê: 'e'
 async function speakBabble(text, p, gain, token) {
   const c = AUD.ctx, sims = prefs.vstyle === 'sims', clean = speakable(text).toLowerCase(), dur = estMs(text) / 1000, noise = OFFICE.noise();
   const base = p.lead ? 150 : p.id === 'user' ? 190 : 200 + ((p.vi >>> 2) % 9) * 30, an = c.createAnalyser(); an.fftSize = 256;
-  const g = c.createGain(); g.gain.value = gain * (sims ? 0.4 : 0.45 * Math.max(0.7, Math.min(1.25, 300 / base))); an.connect(g); g.connect(AUD.voice);   // a high voice's blips came out twice as loud as the lead's: evened out
+  const g = c.createGain(); g.gain.value = gain * (sims ? 0.4 : 0.45 * Math.max(0.7, Math.min(1.25, 300 / base))); an.connect(g); g.connect(AUD.voice);   // higher voices get less gain (300/base, clamped), so every voice is as loud as the lead
   const clauses = clean.match(/[^.!?;:]+[.!?;:]*/g) || [clean], nodes = []; let t = c.currentTime + 0.03; const end = t + dur;
   let tail = 0; const track = (o) => { AUD.live.add(o); nodes.push(o); tail = t; };   // tail: when the last sound starts
   const vowelGroups = (w) => w.match(new RegExp(`[^${VOW}]*[${VOW}]+(?:[^${VOW}]+(?![${VOW}]))?`, 'g')) || [w];

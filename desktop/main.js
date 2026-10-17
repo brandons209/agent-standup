@@ -42,7 +42,7 @@ function createWindow() {
 
 function counts() {
   const now = Date.now(), act = core.boardRows().filter((r) => r.state !== 'idle' || now - r.mtime < 15 * 60e3), n = (s) => act.filter((r) => r.state === s).length;
-  return { needs: n('blocked'), working: n('working') + n('waiting'), turn: n('turn') };
+  return { needs: n('blocked'), working: n('working') + n('waiting'), turn: n('turn'), latest: act.filter((r) => r.state === 'blocked').sort((x, y) => (y.since || y.mtime || 0) - (x.since || x.mtime || 0))[0] };   // latest: the session that started to wait last, named in the notification
 }
 function refreshTray() {
   if (!tray) return; let c; try { c = counts(); } catch { return; }
@@ -51,7 +51,8 @@ function refreshTray() {
   tray.setToolTip('Agent Standup' + (text ? ' — ' + [c.needs && `${c.needs} may need you`, c.working && `${c.working} working`, !c.needs && !c.working && c.turn && 'your turn'].filter(Boolean).join(', ') : ''));
 
   if (c.needs > lastNeeds && !BrowserWindow.getFocusedWindow() && Notification.isSupported()) {
-    const n = new Notification({ title: 'Agent Standup', body: 'An agent may be waiting for you ✋' });
+    const r = c.latest, clip = (s, k) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > k ? s.slice(0, k - 1).trimEnd() + '…' : s; };
+    const n = new Notification({ title: 'Agent Standup', body: r ? `✋ ${clip(r.title || r.id, 60)} may be waiting for you` + (r.ask ? ': ' + clip(r.ask, 80) : '') : 'An agent may be waiting for you ✋' });   // its question, or the command it waits to run
     n.on('failed', (e, err) => { if (!notifyFailed) console.warn('notification not shown:', err); notifyFailed = true; });   // macOS refuses it when notifications are off for the app, or the app is not signed
     n.show();
   }

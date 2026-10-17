@@ -1,6 +1,6 @@
 // Agent Standup — VS Code extension host. Runs the local server in a process of its own and shows it in a webview.
 const vscode = require('vscode');
-const http = require('http'), fs = require('fs'), path = require('path');
+const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 
 const panels = new Map(); let status = null, started = null, side = null, extCtx = null;
 
@@ -19,7 +19,7 @@ const ping = (port) => new Promise((res) => {
 // Each window runs its own server on a free port (a fixed port can be set; if that port already serves Agent Standup it is reused).
 // Reusing someone else's server by default caused trouble: it may run without the right environment (e.g. no way to call `claude`).
 // The server runs in a process of its own (the editor's own runtime, as a plain Node): in the extension host, which every extension shares, reading a large session held them all,
-// Claude Code's included, for a second or more. If that process cannot start, or ends three times in a minute, the server runs in the extension host as it used to.
+// Claude Code's included, for a second or more. If that process cannot start, or ends three times in a minute, the server runs in the extension host instead.
 let lastPort = 0, crashes = [], inHost = false, stopping = false;
 const serverEnv = () => ({ AGENT_STANDUP_CLAUDE: cfg().get('claudePath') || '', AGENT_STANDUP_CHARACTERS: cfg().get('charactersPath') || '' });
 function hostServer(wanted, resolve) {
@@ -33,7 +33,7 @@ function ensureServer() {
   const mine = (started = new Promise((resolve) => {
     if (inHost) return hostServer(wanted, resolve);
     let kid, done = false, ours = false;
-    try { kid = require('child_process').fork(require('path').join(__dirname, 'server.js'), [], { env: { ...process.env, ...serverEnv(), PORT: String(wanted), ELECTRON_RUN_AS_NODE: '1', AGENT_STANDUP_CHILD: '1' }, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }); }
+    try { kid = require('child_process').fork(path.join(__dirname, 'server.js'), [], { env: { ...process.env, ...serverEnv(), PORT: String(wanted), ELECTRON_RUN_AS_NODE: '1', AGENT_STANDUP_CHILD: '1' }, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }); }
     catch { inHost = true; return hostServer(wanted, resolve); }
     const late = setTimeout(() => { if (!done) { done = true; inHost = true; try { kid.kill(); } catch {} hostServer(wanted, resolve); } }, 8000);   // an editor whose runtime cannot run as Node: the extension host it is
     kid.on('message', async (m) => {
@@ -105,7 +105,7 @@ function claimNeeds(k, ep, kind) {   // true: this window is the first to tell i
   try {
     const dir = extCtx && extCtx.globalStorageUri && extCtx.globalStorageUri.fsPath; if (!dir) return true; const d = path.join(dir, 'needs'), now = Date.now(); fs.mkdirSync(d, { recursive: true });
     if (now - claimNeeds.tidy > 3600e3) { claimNeeds.tidy = now; for (const f of fs.readdirSync(d)) try { if (now - fs.statSync(path.join(d, f)).mtimeMs > 864e5) fs.unlinkSync(path.join(d, f)); } catch {} }   // marks older than a day
-    fs.closeSync(fs.openSync(path.join(d, require('crypto').createHash('sha1').update(k + '\n' + ep).digest('hex').slice(0, 24) + '-' + kind), 'wx')); return true;
+    fs.closeSync(fs.openSync(path.join(d, crypto.createHash('sha1').update(k + '\n' + ep).digest('hex').slice(0, 24) + '-' + kind), 'wx')); return true;
   } catch (err) { return !(err && err.code === 'EEXIST'); }
 }
 claimNeeds.tidy = 0;
@@ -178,7 +178,8 @@ function activate(ctx) {
     try {
       const bar = cfg().get('statusBar'), tell = cfg().get('notifyNeedsYou') !== false;
       if (!bar && status.text !== '$(device-camera-video) Agent Standup') { status.text = '$(device-camera-video) Agent Standup'; status.backgroundColor = undefined; status.tooltip = tt('Open the live Agent Standup call'); }   // counts off: the plain button stays
-      if ((!bar && !tell) || !vscode.window.state.focused) return needsYou([]);
+      if (!bar && !tell) return needsYou([]);
+      if (!vscode.window.state.focused) return;   // read again on focus; what was already told stays told
       const key = projKey(), rows = require('./server.js').boardRows().filter((r) => key ? (r.proj === key || r.proj.startsWith(key + '-')) : !r.tmp), now = Date.now();
       needsYou(rows, now); if (!bar) return;
       const act = rows.filter((r) => r.state !== 'idle' || now - r.mtime < 15 * 60e3), cnt = (st) => act.filter((r) => r.state === st).length;
