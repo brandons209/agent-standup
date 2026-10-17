@@ -226,7 +226,7 @@ const vowelKey = (ch) => ({ à: 'a', â: 'a', ä: 'a', é: 'e', è: 'e', ê: 'e'
 async function speakBabble(text, p, gain, token) {
   const c = AUD.ctx, sims = prefs.vstyle === 'sims', clean = speakable(text).toLowerCase(), dur = estMs(text) / 1000, noise = OFFICE.noise();
   const base = p.lead ? 150 : p.id === 'user' ? 190 : 200 + ((p.vi >>> 2) % 9) * 30, an = c.createAnalyser(); an.fftSize = 256;
-  const g = c.createGain(); g.gain.value = gain * (sims ? 0.4 : 0.6); an.connect(g); g.connect(AUD.voice);
+  const g = c.createGain(); g.gain.value = gain * (sims ? 0.4 : 0.45 * Math.max(0.7, Math.min(1.25, 300 / base))); an.connect(g); g.connect(AUD.voice);   // a high voice's blips came out twice as loud as the lead's: evened out
   const clauses = clean.match(/[^.!?;:]+[.!?;:]*/g) || [clean], nodes = []; let t = c.currentTime + 0.03; const end = t + dur;
   let tail = 0; const track = (o) => { AUD.live.add(o); nodes.push(o); tail = t; };   // tail: when the last sound starts
   const vowelGroups = (w) => w.match(new RegExp(`[^${VOW}]*[${VOW}]+(?:[^${VOW}]+(?![${VOW}]))?`, 'g')) || [w];
@@ -242,8 +242,8 @@ async function speakBabble(text, p, gain, token) {
         for (const ch of w) {
           const code = ch.charCodeAt(0), f = base * m * 2 ** (((code % 7) * 2 - 4 + (VOW.includes(ch) ? 3 : 0)) / 12), vw = [...'aeiou'][code % 5];
           const o = c.createOscillator(), bp = c.createBiquadFilter(), env = c.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * (1 + ((code % 3) - 1) * 0.07), t + letterStep);
-          bp.type = 'bandpass'; bp.frequency.value = FORM[vw][0] * 1.3; bp.Q.value = 1.4; env.gain.setValueAtTime(0.0001, t); env.gain.exponentialRampToValueAtTime(1, t + 0.008); env.gain.exponentialRampToValueAtTime(0.0001, t + letterStep * 0.95);
-          o.connect(bp).connect(env).connect(an); o.start(t); o.stop(t + letterStep); track(o); t += letterStep;
+          bp.type = 'bandpass'; bp.frequency.value = FORM[vw][0] * 1.3; bp.Q.value = 1.4; env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(1, t + 0.008); env.gain.setTargetAtTime(0, t + 0.008, letterStep * 0.2);   // a blip, not a click: a rounder start and a short tail, same notes and rhythm
+          o.connect(bp).connect(env).connect(an); o.start(t); o.stop(t + letterStep * 1.5); track(o); t += letterStep;
         }
         t += letterStep * 0.8;
       } else {

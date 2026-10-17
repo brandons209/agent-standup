@@ -50,10 +50,11 @@ function amend(e, was) {   // the server corrected an event the call already has
   if (e.kind === 'order' && e.bg && !was.bg && S.run[e.agent] && S.run[e.agent].id === e.toolId) delete S.run[e.agent];   // the call was thought synchronous: the lead is not blocked on it after all
   if (e.end && !was.end && (e._n != null || e._as || past)) { let k = S.events.length - 1; while (k > i && !(S.events[k].kind === 'user' || (S.events[k].agent === 'main' && /^(say|tools|order)$/.test(S.events[k].kind) && !S.events[k].wf))) k--; if (k === i) S.turnOver = true; }   // only if nothing came after it
 }
-let polling = false;
+let polling = false, polledAt = 0;
 setInterval(async () => {
-  if (document.hidden && (S.hidTick = (S.hidTick || 0) + 1) % 5) return;   // a hidden window polls every 5th tick
-  if (!S.live || polling) return; polling = true;
+  if (!S.live || polling) return;
+  if (document.hidden && AUD.off() && Date.now() - polledAt < 2500) return;   // hidden and not heard (muted, or another window has the sound): every 2.5 s is enough for the alerts; a call you listen to keeps its pace
+  polling = true; polledAt = Date.now();
   try {
     const switched = await followCurrent(); if (S.offline) { S.offline = false; syncUI(); }
     if (switched || !S.cur) return;

@@ -440,7 +440,8 @@ function buildTimeline(proj, id, files = []) {
 
 // Ask the local `claude` CLI (uses the user's existing login) to map a JSON array of strings to another array. Cached.
 const { spawn } = require('child_process');
-const cache = new Map();
+const cache = new Map(), CACHE_MAX = 5000;
+const remember = (k, v) => { cache.delete(k); cache.set(k, v); if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value); };   // oldest first past CACHE_MAX: an editor open for days kept every line of every session
 // Find a usable `claude` binary: explicit setting → PATH → usual install spots → the one bundled with the VS Code Claude Code extension.
 let lastTrError = '', claudeCache = null;
 const exists = (f) => { try { return fs.statSync(f).isFile(); } catch { return false; } };
@@ -465,10 +466,12 @@ function findClaude() {
   const found = cands.find(exists) || bundledClaude() || null;
   return (claudeCache = found);
 }
+const winArg = (a) => '"' + String(a).replace(/[\r\n]+/g, ' ').replace(/"/g, "'") + '"';   // cmd.exe joins arguments with spaces and quotes none: each one is quoted so it stays whole
 function spawnClaude(args, opts) {
   const bin = findClaude(); if (!bin) { lastTrError = 'not-found'; return null; }
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) return spawn('"' + bin + '"', args, { ...opts, shell: true, windowsHide: true });   // npm's Windows shims need a shell
-  return spawn(bin, args, { ...opts, windowsHide: true });
+  const p = process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin) ? spawn('"' + bin + '"', args.map(winArg), { ...opts, shell: true, windowsHide: true }) : spawn(bin, args, { ...opts, windowsHide: true });   // npm's Windows shims need a shell
+  if (p.stdin) p.stdin.on('error', () => {});   // a claude that exits before reading its prompt: EPIPE would otherwise end the whole server
+  return p;
 }
 let running = 0; const queue = [];
 const pump = () => { while (running < 3 && queue.length) { running++; queue.shift()(); } };
@@ -486,7 +489,7 @@ function claudeMap(kind, instruction, texts) {
   const done = (ok) => ({ texts: texts.map((t) => cache.get(kind + '|' + t) || t), ok });
   if (!need.length) return Promise.resolve(done(true));
   const prompt = instruction + ' Output ONLY a JSON array of strings, same length and order, no markdown.\n' + JSON.stringify(need);
-  return apiMap(prompt, need).then((arr) => { need.forEach((t, i) => cache.set(kind + '|' + t, String(arr[i]))); return done(true); }).catch(() => schedule(() => new Promise((resolve) => {
+  return apiMap(prompt, need).then((arr) => { need.forEach((t, i) => remember(kind + '|' + t, String(arr[i]))); return done(true); }).catch(() => schedule(() => new Promise((resolve) => {
     const p = spawnClaude(['-p', '--model', 'haiku', '--no-session-persistence', '--tools', ''], { cwd: os.tmpdir() }); if (!p) return resolve(done(false));
     let out = ''; const timer = setTimeout(() => p.kill(), 60000);
     p.stdout.on('data', (d) => (out += d));
@@ -496,7 +499,7 @@ function claudeMap(kind, instruction, texts) {
       let ok = false;
       try {
         const arr = JSON.parse(out.slice(out.indexOf('['), out.lastIndexOf(']') + 1));
-        if (arr.length === need.length) { need.forEach((t, i) => cache.set(kind + '|' + t, String(arr[i]))); ok = true; }
+        if (arr.length === need.length) { need.forEach((t, i) => remember(kind + '|' + t, String(arr[i]))); ok = true; }
       } catch {}
       resolve(done(ok));
     });
@@ -544,7 +547,7 @@ const pickWorker = () => trWorkers.reduce((a, b) => (a.q.length + a.busy <= b.q.
 async function translateFast(texts) {
   const need = [...new Set(texts.filter((t) => !cache.has('fr|' + t)))];
   if (need.length && need.length <= 3 && !process.env.ANTHROPIC_API_KEY) {   // a few lines: warm workers in parallel; many lines: one batched call
-    await Promise.all(need.map(async (t) => { const r = await pickWorker().ask(t); if (r) cache.set('fr|' + t, r); }));
+    await Promise.all(need.map(async (t) => { const r = await pickWorker().ask(t); if (r) remember('fr|' + t, r); }));
     return { texts: texts.map((t) => cache.get('fr|' + t) || t), ok: texts.every((t) => cache.has('fr|' + t)) };
   }
   return claudeMap('fr', TR_INSTR, texts);
@@ -573,10 +576,11 @@ function loadVoices() {   // the same list for the page, asked without waiting: 
   if (sayVoices) return Promise.resolve(sayVoices);
   return sayVoicesJob || (sayVoicesJob = new Promise((resolve) => { try { execFile(VOICES_CMD[0], VOICES_CMD[1], { encoding: 'utf8', timeout: VOICES_CMD[2], windowsHide: true }, (err, out) => resolve(sayVoices || (sayVoices = parseVoices(err ? '' : String(out))))); } catch { resolve(sayVoices || (sayVoices = parseVoices(''))); } }));
 }
-const ttsDir = path.join(os.tmpdir(), 'agent-standup-tts-' + (process.getuid ? process.getuid() : 'user'));
+const ttsDir = process.platform === 'linux' ? path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'agent-standup', 'tts') : path.join(os.tmpdir(), 'agent-standup-tts-' + (process.getuid ? process.getuid() : 'user'));   // Linux: /tmp is shared by every user
 try { fs.mkdirSync(ttsDir, { recursive: true, mode: 0o700 }); } catch {}
 const ttsJobs = new Map();
-try { for (const f of fs.readdirSync(ttsDir)) { const p = path.join(ttsDir, f); if (Date.now() - fs.statSync(p).mtimeMs > 864e5) fs.unlinkSync(p); } } catch {}   // drop cached audio older than a day
+const ttsClean = () => { try { for (const f of fs.readdirSync(ttsDir)) { const p = path.join(ttsDir, f); if (Date.now() - fs.statSync(p).mtimeMs > 864e5) fs.unlinkSync(p); } } catch {} };   // drop cached audio older than a day
+ttsClean(); setInterval(ttsClean, 3600e3).unref();   // also while an editor stays open for days
 function synthesize(voice, wpm, text, out) {
   return new Promise((resolve, reject) => {
     let p; text = text.replace(/\[\[[^\]]*\]\]/g, ' ').replace(/\[(?=\[)/g, '[ ').replace(/\](?=\])/g, '] ');   // macOS `say` obeys commands written between [[ and ]] (a 30-second silence, another voice, another speed) and this text comes from a transcript: they are taken out, and no two brackets are left side by side
@@ -663,14 +667,16 @@ function listCharacters(pack) {
     return { stem: st, file: f, talk: by.get(l + '-talk') || null, think: by.get(l + '-think') || null, celebrate: by.get(l + '-celebrate') || null, role: /^(lead|claude)$/.test(l) ? 'lead' : /^(you|human|user)$/.test(l) ? 'you' : 'agent' }; }).sort((a, b) => a.stem.localeCompare(b.stem));
   return { dir, max: CHAR_MAX, chars };
 }
-let audioOwner = { id: null, seen: 0 };
+const AUDIO = path.join(path.dirname(PREFS), 'audio.json');   // which window plays sound: each VS Code window has its own server, and two windows both spoke
+const audioOwner = () => { try { const a = JSON.parse(fs.readFileSync(AUDIO, 'utf8')); if (a && typeof a.id === 'string') return { id: a.id, seen: +a.seen || 0 }; } catch {} return { id: null, seen: 0 }; };
+const audioSave = (a) => { try { fs.mkdirSync(path.dirname(AUDIO), { recursive: true }); const t = AUDIO + '.' + process.pid; fs.writeFileSync(t, JSON.stringify(a)); fs.renameSync(t, AUDIO); } catch {} };   // whole or not at all: another server may read it at that moment
 function start(port = PORT) {
   return http.createServer((req, res) => {
   let url; try { url = new URL(req.url, 'http://x'); } catch { res.writeHead(400); return res.end('bad request'); }   // "GET //" is not an address: answered, where it used to stop the whole server
   req.on('error', () => {}); res.on('error', () => {});   // a browser that goes away mid-request is not our problem
   // Only the local machine may talk to this server: blocks other websites (cross-site requests) and DNS-rebinding attempts.
   const local = (h) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(h || '');
-  let originOk = true; try { originOk = !req.headers.origin || local(new URL(req.headers.origin).host); } catch { originOk = false; }
+  let originOk = true; try { originOk = !req.headers.origin || (local(new URL(req.headers.origin).host) && new URL(req.headers.origin).host === req.headers.host); } catch { originOk = false; }   // the page's own address only: another local page (a dev server on another port) is another site
   if (!local(req.headers.host) || !originOk) { res.writeHead(403); return res.end('forbidden'); }
   const json = (o, code = 200) => { try { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); } catch { res.destroy(); } };   // also called from callbacks that run later, where nothing would catch an exception
   const sendFile = (fp) => { const s = fs.createReadStream(fp); s.on('error', () => res.destroy()); s.pipe(res); };   // a file that vanished between the check and the read ends this answer, not the server
@@ -694,10 +700,11 @@ function start(port = PORT) {
     }
     if (url.pathname === '/api/audio') {   // only one window at a time plays sound: the last one that claimed it (expires if that window stops answering)
       const cid = url.searchParams.get('cid') || '', ok = /^[\w-]{4,40}$/.test(cid);
-      if (ok && url.searchParams.get('claim')) audioOwner = { id: cid, seen: Date.now() };
-      else if (ok && audioOwner.id === cid) audioOwner.seen = Date.now();
-      if (audioOwner.id && Date.now() - audioOwner.seen > 6000) audioOwner = { id: null, seen: 0 };
-      return json({ owner: audioOwner.id });
+      const now = Date.now(); let a = audioOwner();
+      if (ok && url.searchParams.get('claim')) audioSave((a = { id: cid, seen: now }));
+      else if (ok && a.id === cid && now - a.seen > 2000) audioSave((a = { id: cid, seen: now }));   // the owner says it is still there, written every 2 s at most
+      if (a.id && now - a.seen > 6000) a = { id: null, seen: 0 };
+      return json({ owner: a.id });
     }
     if (url.pathname === '/api/health') return json({ claude: findClaude(), apiKey: !!process.env.ANTHROPIC_API_KEY, trError: lastTrError, ttsError: lastTtsError, ttsKey: !!process.env.OPENAI_API_KEY, platform: process.platform });
     if (url.pathname === '/api/warm') { trWorkers.forEach((w) => { if (!w.p) w.start(); }); return json({ ok: true }); }
