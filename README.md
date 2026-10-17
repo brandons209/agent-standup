@@ -24,7 +24,7 @@ _A fictional team fixing a slow login page — the built-in demo (⚙ → Source
 - **Live call** — follows your newest Claude Code session in real time. Each agent is a small character at its desk; the one who speaks gets the spotlight and keeps it until someone else talks. Agents that talk back-to-back talk over each other, like a real meeting.
 - **Real voices, lip-sync** — lines are spoken aloud; mouths follow the actual volume of the voice.
 - **Live screen sharing with the real output** — when an agent works, its screen fills the stage (presenter's camera in the corner, "sharing" badge): a **terminal** with the command history and the actual output of each command, search results and tool calls; or an **editor** with the file it reads (real content and line numbers) or the exact diff it applies. See *What you see for each agent* below.
-- **Agents come and go** — a sub-agent joins when it is given a task and leaves the call 2 minutes (playback time) after its report, with a dissolve animation. It comes back if it gets a new task.
+- **Agents come and go** — a sub-agent joins when it is given a task and leaves the call 30 seconds (playback time, ⚙ sets it) after its report, with a dissolve animation. It comes back if it gets a new task.
 - **Sub-agent tree** — the full hierarchy (you → Claude → sub-agents → their sub-agents) with status, tool counts and the current action.
 - **Click any agent** — its prompt, tool usage and reports.
 - **Replay** — pick any past session, scrub through it, see a timeline of who worked when, and get a **recap** (agents, tool calls, commands, files changed, busiest agents).
@@ -80,7 +80,7 @@ The header shows how full the lead's context is (`ctx 62%`, orange then red, wit
 | **VS Code** | Install **Agent Standup** from the Extensions view (Marketplace). |
 | **Cursor, Windsurf, VSCodium…** | Download `agent-standup-<version>.vsix` from the [latest release](https://github.com/Atoll92/agent-standup/releases/latest) and use *Extensions → … → Install from VSIX*. |
 | **Any terminal, no editor** | `npx @double_geste/agent-standup --open` (Node 18+; the package is on [npm](https://www.npmjs.com/package/@double_geste/agent-standup)). Offline alternative: `npx https://github.com/Atoll92/agent-standup/releases/latest/download/agent-standup-cli.tgz --open`. |
-| **A small desktop app (macOS)** | Download `Agent-Standup-<version>-mac-apple-silicon.zip` (or `-mac-intel.zip`) from the release, unzip, move *Agent Standup* to Applications. The app is **not signed with an Apple developer ID**, so the first time: right-click the app → *Open* → *Open* (or run `xattr -dr com.apple.quarantine "/Applications/Agent Standup.app"`). It has a window and an indicator in the menu bar, and notifies you when an agent may need you. Windows and Linux builds (`-windows-x64.zip`, `-linux-x64.zip`) are on the same release page but **experimental and not tested by hand**. |
+| **A small desktop app (macOS 13 or later)** | Download `Agent-Standup-<version>-mac-apple-silicon.zip` (or `-mac-intel.zip`) from the release, unzip, move *Agent Standup* to Applications. The app is **not signed with an Apple developer ID**, so the first time: right-click the app → *Open* → *Open* (or run `xattr -dr com.apple.quarantine "/Applications/Agent Standup.app"`). It has a window and an indicator in the menu bar, and notifies you when an agent may need you. Windows and Linux builds (`-windows-x64.zip`, `-linux-x64.zip`) are on the same release page but **experimental and not tested by hand**. |
 | **Claude Code status line** | `npm i -g @double_geste/agent-standup`, then in `~/.claude/settings.json`: `{ "statusLine": { "type": "command", "command": "agent-standup statusline" } }` → shows `⚙2 ✋1` under your prompt. |
 | **tmux** *(not tested here)* | `set -g status-right '#(agent-standup status --here)'` |
 | **Neovim** *(not tested here)* | call `vim.fn.system('agent-standup status --here')` from a timer and show the result in your statusline plugin; `agent-standup status --json` gives machine-readable output. |
@@ -147,7 +147,7 @@ In VS Code: Extensions view → search **Agent Standup** → Install. Or: https:
 1. Open the repository's **Releases** page and download `agent-standup-<version>.vsix` (don't send it by email: Gmail and others block `.vsix` files).
 2. In VS Code: Extensions view → `…` menu (top right) → **Install from VSIX…** → pick the file.
    Or from a terminal: `code --install-extension agent-standup-<version>.vsix` (macOS: run *Shell Command: Install 'code' command in PATH* first if `code` isn't found).
-3. **Developer: Reload Window**, then click the camera icon in the Activity Bar (or run **Agent Standup: Open live call**) and press **Join**.
+3. **Developer: Reload Window**, then click the camera icon in the Activity Bar (or run **Agent Standup: Open live call**); the call starts at once, and your first click in it turns the sound on.
 
 Direct download of the latest version: https://github.com/Atoll92/agent-standup/releases/latest/download/agent-standup.vsix  
 Or with the GitHub CLI: `gh release download --repo Atoll92/agent-standup --pattern "*.vsix"`, then the `code --install-extension` line above.
@@ -164,7 +164,7 @@ To hack on it instead: open the folder in VS Code and press **F5** (launches an 
 ### Option C — no extension
 After cloning the repository (Option B): `node server.js` and open http://localhost:4747 (see *Standalone* below). Without cloning: `npx @double_geste/agent-standup --open`.
 
-The first click on **Join** is required by browsers to allow sound.
+Browsers allow sound only after a click: the call plays silent until your first click or key in it (the 🔊 chip at the top says so).
 
 ### Commands
 
@@ -207,7 +207,7 @@ Turn on **Office music** in ⚙ and pick a station (FIP, Groove, Jazz, Electro, 
 
 ## One window talks at a time
 
-If several Agent Standup windows are open on the same machine (sidebar, editor panel, browser tab), only the last one where you pressed **Join / Play / 🔊** plays sound; the others stay silent and show 🔈 (click it to take the sound back). This avoids hearing the same call twice, possibly in two languages. A window that stops answering releases the sound after a few seconds.
+If several Agent Standup windows are open on the same machine (sidebar, editor panel, browser tab), only the last one where you clicked to turn the sound on, or pressed **Play / 🔊**, plays sound; the others stay silent and show 🔈 (click it to take the sound back). This avoids hearing the same call twice, possibly in two languages. A window that stops answering releases the sound after a few seconds.
 
 ## Voice engines (per OS)
 
@@ -252,7 +252,7 @@ The website counts visits anonymously (a 1-pixel file hosted on GitHub per chann
 - **Nothing happens / "Waiting for a session"** — start Claude Code in the open folder; with `onlyThisWorkspace` the call follows that folder.
 - **Panel is blank** — use **Open in browser**; if you set a fixed `agentStandup.port` it may be taken (use `0`).
 - **Two voices at once (e.g. French and English)** — update to ≥ 1.8.1: only one window plays sound now. A line that could not be translated in time is read by an English voice, not by a French voice reading English.
-- **No sound** — press **Join** (or Play) once; check 🔊 isn't muted and *Agent voices* is on in ⚙.
+- **No sound** — click once in the call (or press 🔊); check 🔊 isn't muted and *Agent voices* is on in ⚙.
 - **French is read in English / hint about translation** — Agent Standup looks for Claude Code in your `PATH`, the usual install folders (Homebrew, npm, nvm, `~/.local/bin`, Windows `%APPDATA%\npm`) and the copy bundled with the official VS Code *Claude Code* extension. If none is found the app quietly stays in English; set `agentStandup.claudePath`, or run `claude` once in a terminal to sign in. If VS Code itself was started from inside a Claude Code session, restart it normally.
 - **Characters or backgrounds look empty** — update to ≥ 1.2.1 (fixed a duplicate SVG id bug).
 - **Terminal output missing for a command** — the call is still running (spinner), or it is an internal call (sub-agent launch / message); outputs are only recorded once a call finishes.
@@ -283,7 +283,7 @@ Agent Standup is free and MIT licensed. I'm also available for work around AI ag
 ## Settings menu and shortcuts
 ⚙ has sections that fold (and remember it), a search box, and a Display section. “Notify me when the agents finish” is on by default (change it in ⚙ → Sound). The **?** help also explains what each status means.
 
-Press **?** in the app for the full list. Highlights: **Space** pause, **M** mute, **T** tree view, **J / K** next agent that needs you, **Cmd/Ctrl+K** go to a session, and in replay **← / →** step, **N** next highlight.
+Press **?** in the app for the full list. Highlights: **Space** pause, **M** mute, **T** tree view, **G** gallery, **A** what needs you (here or in another session), **J / K** next agent that needs you, **Cmd/Ctrl+K** go to a session, and in replay **← / →** step, **N** next highlight.
 
 ## Security and what it reads
 - **It reads local files and sends nothing by default.** Agent Standup reads the session files Claude Code already writes (`~/.claude/projects`, or `CLAUDE_CONFIG_DIR`) and draws them in a page. It never writes to your sessions; the only time it starts Claude Code is the optional translation helper described below.
