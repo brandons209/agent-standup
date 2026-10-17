@@ -880,7 +880,13 @@ function start(port = PORT) {
   }).listen(port, '127.0.0.1', function () { console.log(`Agent Standup → http://localhost:${this.address().port}`); });
 }
 module.exports = { start, currentSession, shutdown, findClaude, bundledClaude, boardRows, charactersDir, listCharacters };
-if (require.main === module) {
+if (require.main === module && process.env.AGENT_STANDUP_CHILD === '1' && typeof process.send === 'function') {   // started by the VS Code extension in a process of its own: reading a large session no longer holds the editor's extensions
+  process.on('uncaughtException', (e) => console.error(e)); process.on('unhandledRejection', (e) => console.error(e));   // one odd request does not end the call, as in the extension host it ran in before
+  const srv = start(+process.env.PORT || 0), tell = (m) => { try { process.send(m); } catch {} };
+  srv.on('listening', () => tell({ port: srv.address().port })).on('error', (e) => { tell({ error: e.code || String(e) }); process.exit(1); });
+  process.on('message', (m) => { if (m && m.env && typeof m.env === 'object') for (const [k, v] of Object.entries(m.env)) { if (v == null) delete process.env[k]; else process.env[k] = String(v); } });   // a setting changed in the editor (claudePath, charactersPath)
+  process.on('disconnect', () => { try { shutdown(); } catch {} process.exit(0); });   // the editor window closed, or its extension host ended: this server ends with it
+} else if (require.main === module) {
   start().on('error', (e) => {
     console.error(e.code === 'EADDRINUSE' ? `Port ${PORT} is already in use (maybe Agent Standup is already running, e.g. inside VS Code). Try: PORT=4790 node server.js` : String(e));
     process.exit(1);

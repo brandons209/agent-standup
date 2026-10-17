@@ -1,4 +1,4 @@
-// Agent Standup — VS Code extension host. Runs the local server in-process and shows it in a webview.
+// Agent Standup — VS Code extension host. Runs the local server in a process of its own and shows it in a webview.
 const vscode = require('vscode');
 const http = require('http'), fs = require('fs'), path = require('path');
 
@@ -18,14 +18,36 @@ const ping = (port) => new Promise((res) => {
 
 // Each window runs its own server on a free port (a fixed port can be set; if that port already serves Agent Standup it is reused).
 // Reusing someone else's server by default caused trouble: it may run without the right environment (e.g. no way to call `claude`).
+// The server runs in a process of its own (the editor's own runtime, as a plain Node): in the extension host, which every extension shares, reading a large session held them all,
+// Claude Code's included, for a second or more. If that process cannot start, or ends three times in a minute, the server runs in the extension host as it used to.
+let lastPort = 0, crashes = [], inHost = false, stopping = false;
+const serverEnv = () => ({ AGENT_STANDUP_CLAUDE: cfg().get('claudePath') || '', AGENT_STANDUP_CHARACTERS: cfg().get('charactersPath') || '' });
+function hostServer(wanted, resolve) {
+  const srv = require('./server.js').start(wanted);
+  srv.once('listening', () => resolve({ port: (lastPort = srv.address().port), server: srv }));
+  srv.once('error', async () => resolve((await ping(wanted)) ? { port: wanted } : { port: wanted, error: true }));
+}
 function ensureServer() {
   if (started) return started;
-  const wanted = cfg().get('port') || 0;
-  started = new Promise((resolve) => {
-    const srv = require('./server.js').start(wanted);
-    srv.once('listening', () => resolve({ port: srv.address().port, server: srv }));
-    srv.once('error', async () => resolve((await ping(wanted)) ? { port: wanted } : { port: wanted, error: true }));
-  });
+  const wanted = cfg().get('port') || lastPort || 0;   // lastPort: a server that ended comes back on the same port, so the open panels find it again
+  const mine = (started = new Promise((resolve) => {
+    if (inHost) return hostServer(wanted, resolve);
+    let kid, done = false, ours = false;
+    try { kid = require('child_process').fork(require('path').join(__dirname, 'server.js'), [], { env: { ...process.env, ...serverEnv(), PORT: String(wanted), ELECTRON_RUN_AS_NODE: '1', AGENT_STANDUP_CHILD: '1' }, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }); }
+    catch { inHost = true; return hostServer(wanted, resolve); }
+    const late = setTimeout(() => { if (!done) { done = true; inHost = true; try { kid.kill(); } catch {} hostServer(wanted, resolve); } }, 8000);   // an editor whose runtime cannot run as Node: the extension host it is
+    kid.on('message', async (m) => {
+      clearTimeout(late); if (done) return;
+      if (m && m.port) { done = ours = true; resolve({ port: (lastPort = m.port), kid }); }
+      else if (m && m.error) { done = true; if (!cfg().get('port') && wanted === lastPort && wanted) { lastPort = 0; if (started === mine) started = null; return resolve(ensureServer()); } resolve(m.error === 'EADDRINUSE' && (await ping(wanted)) ? { port: wanted } : { port: wanted, error: true }); }   // the port set in the settings is taken (by another window's server: used); the port of a server that ended, taken meanwhile: a free one
+    });
+    kid.on('error', () => { if (!done) { inHost = true; done = true; hostServer(wanted, resolve); } });
+    kid.on('exit', () => {
+      clearTimeout(late);
+      if (!done) { done = true; inHost = true; return hostServer(wanted, resolve); }   // it ended before it listened: the extension host it is
+      if (ours && started === mine && !stopping) { started = null; const now = Date.now(); crashes = crashes.filter((t) => now - t < 60000).concat(now); if (crashes.length >= 3) inHost = true; }   // the next watch starts it again
+    });
+  }));
   return started;
 }
 async function url() {
@@ -133,7 +155,7 @@ async function openBrowser() {
 
 function activate(ctx) {
   extCtx = ctx;
-  const applyPath = () => { process.env.AGENT_STANDUP_CLAUDE = cfg().get('claudePath') || ''; process.env.AGENT_STANDUP_CHARACTERS = cfg().get('charactersPath') || ''; };
+  const applyPath = () => { const v = serverEnv(); Object.assign(process.env, v); if (started) started.then((x) => { if (x.kid && x.kid.connected) x.kid.send({ env: v }); }).catch(() => {}); };   // the status bar reads here; the server process is told too
   applyPath(); ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((ev) => { if (ev.affectsConfiguration('agentStandup.claudePath') || ev.affectsConfiguration('agentStandup.charactersPath')) applyPath(); }));
   ctx.subscriptions.push(
     vscode.commands.registerCommand('agentStandup.open', openPanel),
@@ -173,9 +195,9 @@ function activate(ctx) {
   try { ctx.subscriptions.push(vscode.window.onDidChangeWindowState((s) => { if (s.focused) poll(); })); } catch {}   // refresh the moment the window regains focus
   const pollT = setInterval(poll, 4000); poll(); ctx.subscriptions.push({ dispose: () => clearInterval(pollT) });
   // If another VS Code window was serving the port and closes, take over so this window keeps working.
-  const watch = setInterval(async () => { try { if (!started) return; const s = await started; if (!s.error && !(await ping(s.port))) { started = null; ensureServer(); } } catch { started = null; } }, 5000);
+  const watch = setInterval(async () => { try { if (!started) { if (side || panels.size) ensureServer(); return; } const s = await started; if (!s.error && !(s.kid ? s.kid.exitCode === null : s.server ? s.server.listening : await ping(s.port))) { started = null; ensureServer(); } } catch { started = null; } }, 5000);   // its own server is asked whether it still runs, not pinged: a ping missed while a large session is read would start a second one
   ctx.subscriptions.push({ dispose: () => clearInterval(watch) });
   if (cfg().get('autoOpen')) openPanel();
 }
-async function deactivate() { try { if (started) { const s = await started; s.server && s.server.close(); } require('./server.js').shutdown(); } catch {} }
-module.exports = { activate, deactivate, _needsYou: needsYou };
+async function deactivate() { stopping = true; try { if (started) { const s = await started; if (s.kid) s.kid.kill(); if (s.server) s.server.close(); } require('./server.js').shutdown(); } catch {} }
+module.exports = { activate, deactivate, _needsYou: needsYou, _ensureServer: ensureServer };

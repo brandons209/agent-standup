@@ -25,3 +25,10 @@ test('needs you: a plan names itself; nothing while you are on that session\'s C
   Object.assign(tab, { label: 'Claude Code', viewType: '' }); conf.notifyNeedsYou = false; needsYou([row({ id: 's4' })], t0); assert.equal(shown.length, 1, 'setting off');
   conf.notifyNeedsYou = true; needsYou([row({ id: 's5', state: 'turn' })], t0); assert.equal(shown.length, 1, 'your turn is not a wait');
 });
+test('the server runs in a process of its own, answers, and ends when the editor goes', async () => {
+  const { _ensureServer: ensureServer } = require('../extension.js'), http = require('http');
+  const s = await ensureServer(); assert.ok(s.kid && s.port, 'a child process with its port');
+  const status = await new Promise((res) => http.get({ host: '127.0.0.1', port: s.port, path: '/api/health' }, (m) => { m.resume(); res(m.statusCode); }).on('error', () => res(0)));
+  assert.equal(status, 200);
+  const gone = new Promise((res) => s.kid.once('exit', res)); s.kid.disconnect(); await gone; assert.notEqual(s.kid.exitCode, null);
+});
