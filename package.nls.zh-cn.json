@@ -12,5 +12,6 @@
   "config.statusBar.description": "在状态栏显示当前工作区的实时计数（工作中的代理、需要你、轮到你了）；有代理可能在等你时，该项会变红。",
   "config.shareUsage.description": "帮助项目统计活跃安装量：每天向 GitHub 上一个 1 像素文件发送一次空请求（无标识符、无内容；GitHub 会像普通下载一样看到你的 IP）。默认关闭；VS Code 遥测关闭时将被忽略。",
   "config.claudePath.description": "Claude Code 可执行文件的完整路径（若无法自动找到；用于法语翻译）。",
-  "config.charactersPath.description": "存放你自己角色图片的文件夹（PNG、GIF 或 WebP，每张最大 300 KB）。留空则使用 ~/.agent-standup/characters。lead.png 是主代理，you.png 是你，其他图片是子代理，name-talk.png 是可选的张嘴帧。"
+  "config.charactersPath.description": "存放你自己角色图片的文件夹（PNG、GIF 或 WebP，每张最大 300 KB）。留空则使用 ~/.agent-standup/characters。lead.png 是主代理，you.png 是你，其他图片是子代理，name-talk.png 是可选的张嘴帧。",
+  "config.notifyNeedsYou.description": "当此工作区的某个会话开始等你（提问、审批、计划）时显示通知，写明会话名称和它的请求；如果 5 分钟后仍在等待，再提醒一次。通话可见时不显示。"
 }

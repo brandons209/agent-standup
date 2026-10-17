@@ -12,5 +12,6 @@
   "config.statusBar.description": "Vis live-tal i statuslinjen (agenter der arbejder, har brug for dig, din tur) for dette arbejdsområde; elementet bliver rødt, når en agent måske venter på dig.",
   "config.shareUsage.description": "Hjælp projektet med at tælle aktive installationer: én gang om dagen sendes én tom forespørgsel til en 1-pixel-fil på GitHub (ingen identifikator, intet indhold; GitHub ser din IP som ved enhver download). Fra som standard; ignoreres, hvis VS Code-telemetri er slået fra.",
   "config.claudePath.description": "Fuld sti til Claude Code-programmet, hvis det ikke findes automatisk (bruges til fransk oversættelse).",
-  "config.charactersPath.description": "Mappe med dine egne figurbilleder (PNG, GIF eller WebP, op til 300 KB hver). Tom bruger ~/.agent-standup/characters. lead.png er lederen, you.png er dig, alle andre billeder er underagenter, navn-talk.png er en valgfri ramme med åben mund."
+  "config.charactersPath.description": "Mappe med dine egne figurbilleder (PNG, GIF eller WebP, op til 300 KB hver). Tom bruger ~/.agent-standup/characters. lead.png er lederen, you.png er dig, alle andre billeder er underagenter, navn-talk.png er en valgfri ramme med åben mund.",
+  "config.notifyNeedsYou.description": "Vis en notifikation, når en session i dette arbejdsområde begynder at vente på dig (et spørgsmål, en godkendelse, en plan), med sessionens navn og hvad den spørger om, og én gang til, hvis den stadig venter 5 minutter senere. Vises ikke, mens opkaldet er synligt."
 }

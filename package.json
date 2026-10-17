@@ -89,6 +89,11 @@
           "default": true,
           "description": "%config.statusBar.description%"
         },
+        "agentStandup.notifyNeedsYou": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.notifyNeedsYou.description%"
+        },
         "agentStandup.shareUsage": {
           "type": "boolean",
           "default": false,

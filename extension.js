@@ -1,8 +1,8 @@
 // Agent Standup — VS Code extension host. Runs the local server in-process and shows it in a webview.
 const vscode = require('vscode');
-const http = require('http'), fs = require('fs');
+const http = require('http'), fs = require('fs'), path = require('path');
 
-const panels = new Map(); let status = null, started = null;
+const panels = new Map(); let status = null, started = null, side = null, extCtx = null;
 
 const cfg = () => vscode.workspace.getConfiguration('agentStandup');
 const tt = (s, ...a) => (vscode.l10n && vscode.l10n.t ? vscode.l10n.t(s, ...a) : s.replace(/\{(\d+)\}/g, (_, i) => a[i]));   // runtime strings: bundles in ./l10n, the English text is the key
@@ -63,13 +63,54 @@ const relay = (webview) => webview.onDidReceiveMessage((m) => {
   if (m.agentStandup === 'openSession') openPanel({ id: m.id, proj: m.proj });
   if (m.agentStandup === 'openBrowser') openBrowser();
   if (m.agentStandup === 'openCharacters') openCharacters();
-  if (m.agentStandup === 'notify' && typeof m.text === 'string') vscode.window.showInformationMessage('Agent Standup: ' + m.text.slice(0, 120));
+  if (m.agentStandup === 'notify' && typeof m.text === 'string' && !(m.text.includes('✋') && cfg().get('notifyNeedsYou') !== false && !callInView())) vscode.window.showInformationMessage('Agent Standup: ' + m.text.slice(0, 120));   // a page out of view leaves "needs you" to the notification that names the session (needsYou)
   if (m.agentStandup === 'openExternal') { try { const u = new URL(m.url); if (u.protocol === 'https:' && DONATE_HOSTS.test(u.hostname)) vscode.env.openExternal(vscode.Uri.parse(u.toString())); } catch {} }
 });
+
+// "Needs you": a notification when a session the status bar counts starts to wait on you (a question, an approval, a plan), naming it and what it asks (agentStandup.notifyNeedsYou).
+// Once when it starts to wait, once more if it still waits 5 minutes later. Not while a call is in view, nor while you are on that session's Claude Code tab. Windows on one folder share a mark: the first tells it.
+const REMIND_MS = 5 * 60e3, needsSeen = new Map();   // "proj/id" → { ep, at, reminded }
+const callInView = () => !!((side && side.visible) || [...panels.values()].some((p) => p && p.visible));
+const oneLine = (x) => String(x).replace(/\s+/g, ' ').trim(), clip = (s, n) => { s = oneLine(s); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
+function onTabOf(r) {   // the active tab is that session's Claude Code tab: its label, whole or cut with "…", against the session's title
+  try {
+    const g = vscode.window.tabGroups && vscode.window.tabGroups.activeTabGroup, t = g && g.activeTab, vt = t && t.input && t.input.viewType;
+    if (typeof vt !== 'string' || !vt.includes('claudeVSCodePanel') || typeof t.label !== 'string' || typeof r.title !== 'string' || t.label === 'Claude Code') return false;
+    const cut = /…$/.test(t.label), label = oneLine(t.label.replace(/…$/, '')); return !!label && (cut ? oneLine(r.title).startsWith(label) : oneLine(r.title) === label);
+  } catch { return false; }
+}
+function claimNeeds(k, ep, kind) {   // true: this window is the first to tell it
+  try {
+    const dir = extCtx && extCtx.globalStorageUri && extCtx.globalStorageUri.fsPath; if (!dir) return true; const d = path.join(dir, 'needs'), now = Date.now(); fs.mkdirSync(d, { recursive: true });
+    if (now - claimNeeds.tidy > 3600e3) { claimNeeds.tidy = now; for (const f of fs.readdirSync(d)) try { if (now - fs.statSync(path.join(d, f)).mtimeMs > 864e5) fs.unlinkSync(path.join(d, f)); } catch {} }   // marks older than a day
+    fs.closeSync(fs.openSync(path.join(d, require('crypto').createHash('sha1').update(k + '\n' + ep).digest('hex').slice(0, 24) + '-' + kind), 'wx')); return true;
+  } catch (err) { return !(err && err.code === 'EEXIST'); }
+}
+claimNeeds.tidy = 0;
+function needsText(r) {
+  const plan = r.tool === 'ExitPlanMode' || (r.menu && r.menu.kind === 'plan'), what = r.ask || (plan ? tt('a plan to approve') : /^(AskUserQuestion)?$/.test(r.tool || '') ? '' : r.tool), name = clip(r.title || r.id, 60);
+  return what ? tt('{0} is waiting for you: {1}', name, clip(what, 80)) : tt('{0} is waiting for you', name);
+}
+function needsYou(rows, now = Date.now()) {   // rows: those the status bar counts
+  const on = cfg().get('notifyNeedsYou') !== false, here = new Set();
+  for (const r of on ? rows : []) {
+    if (r.state !== 'blocked') continue;
+    const k = r.proj + '/' + r.id, ep = String(r.since || r.mtime || 0); here.add(k);
+    let s = needsSeen.get(k); const again = !!s;   // a session that waits on and on is one wait, even when what says since when changes
+    if (!s) needsSeen.set(k, (s = { ep, at: now, reminded: false }));
+    else if (s.reminded || now - s.at < REMIND_MS) continue;
+    if (callInView() || onTabOf(r)) continue;   // seen: the call or its tab shows it; a reminder may still come later
+    if (again) s.reminded = true; if (!claimNeeds(k, s.ep, again ? 'again' : 'first')) continue;
+    const text = needsText(r), go = tt('Go to session'), call = tt('Open call');
+    Promise.resolve(vscode.window.showInformationMessage('✋ ' + (again ? tt('Still waiting: {0}', text) : text), go, call)).then((a) => { if (a === go) return openPanel({ id: r.id, proj: r.proj }); if (a === call) return openPanel(); }, () => {});
+  }
+  for (const k of [...needsSeen.keys()]) if (!here.has(k)) needsSeen.delete(k);   // answered (or the setting off): the next wait is told again
+}
 
 // Sidebar view: the same live call, in the activity bar.
 const sidebar = {
   async resolveWebviewView(view) {
+    side = view; view.onDidDispose(() => { if (side === view) side = null; });
     view.webview.options = { enableScripts: true }; relay(view.webview);
     try {
       const ext = await vscode.env.asExternalUri(vscode.Uri.parse((await url()) + '&embed=1'));
@@ -101,6 +142,7 @@ function pingActive(ctx) {
   } catch {}
 }
 function activate(ctx) {
+  extCtx = ctx;
   pingActive(ctx);
   const applyPath = () => { process.env.AGENT_STANDUP_CLAUDE = cfg().get('claudePath') || ''; process.env.AGENT_STANDUP_CHARACTERS = cfg().get('charactersPath') || ''; };
   applyPath(); ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((ev) => { if (ev.affectsConfiguration('agentStandup.claudePath') || ev.affectsConfiguration('agentStandup.charactersPath')) applyPath(); }));
@@ -123,9 +165,11 @@ function activate(ctx) {
   let target = null;
   const poll = () => {
     try {
-      if (!cfg().get('statusBar')) { if (status.text !== '$(device-camera-video) Agent Standup') { status.text = '$(device-camera-video) Agent Standup'; status.backgroundColor = undefined; status.tooltip = tt('Open the live Agent Standup call'); } return; }   // counts off: the plain button stays
-      if (!vscode.window.state.focused) return;
+      const bar = cfg().get('statusBar'), tell = cfg().get('notifyNeedsYou') !== false;
+      if (!bar && status.text !== '$(device-camera-video) Agent Standup') { status.text = '$(device-camera-video) Agent Standup'; status.backgroundColor = undefined; status.tooltip = tt('Open the live Agent Standup call'); }   // counts off: the plain button stays
+      if ((!bar && !tell) || !vscode.window.state.focused) return needsYou([]);
       const key = projKey(), rows = require('./server.js').boardRows().filter((r) => key ? (r.proj === key || r.proj.startsWith(key + '-')) : !r.tmp), now = Date.now();
+      needsYou(rows, now); if (!bar) return;
       const act = rows.filter((r) => r.state !== 'idle' || now - r.mtime < 15 * 60e3), cnt = (st) => act.filter((r) => r.state === st).length;
       const blocked = cnt('blocked'), working = cnt('working') + cnt('waiting'), turn = cnt('turn');
       const parts = []; if (blocked) parts.push('$(warning) ' + tt('{0} needs you', blocked)); if (working) parts.push('$(sync~spin) ' + tt('{0} working', working)); if (!blocked && !working && turn) parts.push('$(check) ' + tt('your turn'));
@@ -145,4 +189,4 @@ function activate(ctx) {
   if (cfg().get('autoOpen')) openPanel();
 }
 async function deactivate() { try { if (started) { const s = await started; s.server && s.server.close(); } require('./server.js').shutdown(); } catch {} }
-module.exports = { activate, deactivate, _pingActive: pingActive };
+module.exports = { activate, deactivate, _pingActive: pingActive, _needsYou: needsYou };

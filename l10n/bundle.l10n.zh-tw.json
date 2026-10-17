@@ -5,5 +5,11 @@
   "{0} needs you": "{0} 需要你",
   "{0} working": "{0} 工作中",
   "your turn": "換你了",
-  "Click to open the call": "點擊開啟視訊通話"
+  "Click to open the call": "點擊開啟視訊通話",
+  "{0} is waiting for you: {1}": "{0} 在等你：{1}",
+  "{0} is waiting for you": "{0} 在等你",
+  "Still waiting: {0}": "仍在等待：{0}",
+  "a plan to approve": "一個待核准的計畫",
+  "Go to session": "前往工作階段",
+  "Open call": "開啟視訊通話"
 }

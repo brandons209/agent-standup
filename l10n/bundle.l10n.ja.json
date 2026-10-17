@@ -5,5 +5,11 @@
   "{0} needs you": "{0} 件が呼び出し中",
   "{0} working": "{0} 件作業中",
   "your turn": "あなたの番",
-  "Click to open the call": "クリックして通話を開く"
+  "Click to open the call": "クリックして通話を開く",
+  "{0} is waiting for you: {1}": "{0} があなたを待っています: {1}",
+  "{0} is waiting for you": "{0} があなたを待っています",
+  "Still waiting: {0}": "まだ待っています: {0}",
+  "a plan to approve": "承認待ちのプラン",
+  "Go to session": "セッションへ移動",
+  "Open call": "通話を開く"
 }
