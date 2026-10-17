@@ -20,9 +20,12 @@ async function fillProjects() {   // live view: follow the latest activity anywh
 $('#liveProj').onchange = () => { Q.delete('proj'); prefs.proj = $('#liveProj').value; savePrefs(); S.cur = null; followCurrent(); };
 async function followCurrent() {
   const proj = S.pin ? S.pin.proj : Q.has('proj') ? Q.get('proj') : prefs.proj || '';   // an empty ?proj= means all projects
-  const cur = await (await fetch('/api/current?proj=' + encodeURIComponent(proj) + (S.pin ? '&id=' + encodeURIComponent(S.pin.id) : S.stick ? '&sproj=' + encodeURIComponent(S.stick.proj) + '&sid=' + encodeURIComponent(S.stick.id) : ''))).json();
+  const pickQ = (!S.pin && S.pick) ? '&pproj=' + encodeURIComponent(S.pick.proj) + '&pid=' + encodeURIComponent(S.pick.id) + (S.pick.since ? '&psince=' + S.pick.since : '') : '';   // a session you went to by hand holds the call until you type somewhere else; with no "since" yet, orders typed before the pick do not take the call back
+  const cur = await (await fetch('/api/current?proj=' + encodeURIComponent(proj) + (S.pin ? '&id=' + encodeURIComponent(S.pin.id) : S.stick ? '&sproj=' + encodeURIComponent(S.stick.proj) + '&sid=' + encodeURIComponent(S.stick.id) : '') + pickQ)).json();
   S.ended = !!cur.missing; if (cur.missing) { if (S.cur) { pause(); S.cur = null; } $('#eT').textContent = L('Cette session est terminée.', 'This session has ended.'); $('#eP').textContent = ''; $('#empty').classList.add('on'); return false; }
   if (!cur.id) { $('#empty').classList.add('on'); return false; } $('#empty').classList.remove('on');
+  S.why = cur.why || '';   // why the call is where it is (typed, pick, stay, busy, latest), for the tab row to explain itself
+  if (S.pick && !S.pin) { if (cur.asked && (cur.pick || (S.pick.proj === cur.proj && S.pick.id === cur.id))) S.pick.since = Math.max(S.pick.since || 0, cur.asked); else if (cur.proj !== S.pick.proj || cur.id !== S.pick.id) S.pick = null; }   // an order typed elsewhere takes the call back off your pick
   if (S.cur && S.cur.id === cur.id && S.cur.proj === cur.proj) return false;
   S.keep = S.stick && S.stick.id === cur.id && S.stick.proj === cur.proj ? S.since : 0;   // the same session again (the server lost our place): what this page already said stays said, even if the server forgot it
   if (!(await loadSession(cur.proj, cur.id))) return false; S.stick = { proj: cur.proj, id: cur.id };   // kept when a reload clears S.cur, so it does not hand the call to another session
@@ -122,7 +125,7 @@ function openWindow(proj, id) {
 }
 async function openSession(proj, id) {
   if (S.live && !S.demo && (!S.cur || S.cur.id !== id || S.cur.proj !== proj)) { openWindow(proj, id); return; }   // another session: a window of its own (this one keeps what it shows, pinned or following)
-  setView('call'); if (!S.live || S.demo) { S.stick = { proj, id }; S.cur = null; await setMode('live'); }   // from a replay or the demo: this window goes live on it
+  setView('call'); if (!S.live || S.demo) { S.stick = { proj, id }; if (!S.pin) S.pick = { proj, id, since: 0 }; S.cur = null; await setMode('live'); }   // from a replay or the demo: this window goes live on it, and holds the call there until you type elsewhere
 }
 $('#boardv').onclick = (e) => { const n = e.target.closest('.bnew'); if (n) { e.stopPropagation(); openWindow(n.dataset.p, n.dataset.i); return; } const c = e.target.closest('.bcard'); if (c) openSession(c.dataset.p, c.dataset.i); };
 // Cmd/Ctrl+K: jump to any session from any view

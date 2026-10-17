@@ -227,14 +227,14 @@ test('the list of sessions: a line that goes on with a tool call is not the end 
 });
 test('a pinned session is that session or nothing, whatever was written later elsewhere', async () => {
   const a = path.join(tmp, 'projects', '-pa'), b = path.join(tmp, 'projects', '-pb'); fs.mkdirSync(a, { recursive: true }); fs.mkdirSync(b, { recursive: true });
-  fs.writeFileSync(path.join(a, 'old.jsonl'), line(typed(0, 'first'))); await wait(30); fs.writeFileSync(path.join(a, 'busy.jsonl'), line(typed(0, 'later, same project'))); await wait(30); fs.writeFileSync(path.join(b, 'new.jsonl'), line(typed(0, 'later, elsewhere')));
+  fs.writeFileSync(path.join(a, 'old.jsonl'), line(typed(0, 'first'))); await wait(30); fs.writeFileSync(path.join(a, 'busy.jsonl'), line(typed(30, 'later, same project'))); await wait(30); fs.writeFileSync(path.join(b, 'new.jsonl'), line(typed(60, 'later, elsewhere')));   // each one typed in later than the last, so the unpinned call has somewhere to go
   const { port, stop } = await serve(), cur = async (q) => JSON.parse((await get(port, '/api/current?' + q)).body);
   try {
     assert.equal((await cur('proj=-pa&id=old')).id, 'old'); assert.equal((await cur('proj=-pa&id=old')).proj, '-pa');
     assert.deepEqual(await cur('proj=-pa&id=gone'), { missing: true }); assert.deepEqual(await cur('proj=&id=old'), { missing: true }); assert.deepEqual(await cur('proj=..&id=old'), { missing: true });
     assert.equal((await cur('proj=-pa&id=old&sproj=-pa&sid=busy')).id, 'old', 'a pin wins over the session a follow window sticks to');
     assert.equal((await cur('proj=-pa&sproj=-pa&sid=busy')).id, 'busy', 'a follow window keeps its session');
-    assert.equal((await cur('proj=')).id, 'new');   // not pinned: the newest one
+    await wait(1300); assert.equal((await cur('proj=')).id, 'new');   // not pinned: the session whose last order is the latest
   } finally { stop(); }
 });
 test('no request stops the server; another site cannot read the settings', async () => {
@@ -365,4 +365,71 @@ test('the board: a lead whose turn closed while its background agents work is on
     fs.appendFileSync(f, line({ type: 'queue-operation', operation: 'enqueue', timestamp: at(6), content: '<task-notification>\n<task-id>t1</task-id>\n<tool-use-id>toolu_a</tool-use-id>\n<status>completed</status>\n</task-notification>' }));
     assert.equal((await row()).state, 'turn');   // the agent answered: its report is the lead's next turn
   } finally { stop(); }
+});
+// ---- the live call follows the last order typed, in the folder it follows, and holds on a session you went to by hand
+// These look at every session under ROOT, so the ones other tests left are parked in another folder while they run.
+const alone = (made) => { const root = path.join(tmp, 'projects'), where = fs.mkdtempSync(path.join(tmp, 'park-')); for (const d of fs.readdirSync(root)) if (!made.includes(d)) fs.renameSync(path.join(root, d), path.join(where, d)); return () => { for (const d of fs.readdirSync(where)) fs.renameSync(path.join(where, d), path.join(root, d)); }; };
+test('a project beside the one the call follows is not inside it: the cwd of its transcripts tells', async () => {
+  const root = path.join(tmp, 'projects'), made = ['-w-app', '-w-app-old', '-w-app-sub'];
+  for (const d of made) fs.mkdirSync(path.join(root, d), { recursive: true });
+  fs.writeFileSync(path.join(root, '-w-app', 'here.jsonl'), line(typed(100, 'the app itself', { cwd: '/w/app' })));
+  fs.writeFileSync(path.join(root, '-w-app-old', 'beside.jsonl'), line(typed(300, 'a folder beside the app, typed last', { cwd: '/w/app-old' })));   // its name starts with "-w-app-": by name alone it would count as inside
+  fs.writeFileSync(path.join(root, '-w-app-sub', 'inside.jsonl'), line(typed(10, 'a folder inside the app', { cwd: '/w/app/sub' })));
+  const back = alone(made), { port, stop } = await serve(), cur = async (q) => { await wait(1300); return JSON.parse((await get(port, '/api/current?' + q)).body); };
+  try {
+    assert.equal((await cur('proj=-w-app')).id, 'here', 'the newest order in the folder wins over one typed beside it');
+    fs.appendFileSync(path.join(root, '-w-app-sub', 'inside.jsonl'), line(typed(200, 'typed in the folder')));
+    assert.equal((await cur('proj=-w-app')).id, 'inside', 'a session of a folder inside counts');
+    fs.appendFileSync(path.join(root, '-w-app-old', 'beside.jsonl'), line(typed(400, 'typed beside, the latest order anywhere')));
+    assert.equal((await cur('proj=-w-app')).id, 'inside', 'the newest order in a folder beside never takes the call');
+    assert.equal((await cur('proj=-w-app-old')).id, 'beside', 'a window on that folder follows it');
+    assert.equal((await cur('proj=')).id, 'beside', 'looking everywhere, the newest order wins');
+  } finally { stop(); back(); }
+});
+test('the call goes to the session you typed in last, not to the one written to last', async () => {
+  const root = path.join(tmp, 'projects'), made = ['-lt-a', '-lt-b'];
+  fs.mkdirSync(path.join(root, '-lt-a'), { recursive: true }); fs.mkdirSync(path.join(root, '-lt-b'), { recursive: true });
+  fs.writeFileSync(path.join(root, '-lt-a', 'a.jsonl'), line(typed(500000, 'ordered here last'))); await wait(30);
+  fs.writeFileSync(path.join(root, '-lt-b', 'b.jsonl'), line(typed(400000, 'written later, ordered earlier')));   // B is the newest file, A holds the last order
+  const back = alone(made), { port, stop } = await serve(), cur = async (q) => { await wait(1300); return JSON.parse((await get(port, '/api/current?' + q)).body); };
+  try {
+    assert.equal((await cur('proj=')).id, 'a', 'the last typed order wins over the newest file');
+    assert.equal((await cur('proj=')).why, 'typed');
+    fs.appendFileSync(path.join(root, '-lt-b', 'b.jsonl'), line(typed(600000, 'now an order here')));
+    assert.equal((await cur('proj=')).id, 'b', 'typing elsewhere moves the call there');
+  } finally { stop(); back(); }
+});
+test('a session opened by hand keeps the call until an order is typed somewhere else', async () => {
+  const root = path.join(tmp, 'projects'), made = ['-pk'];
+  fs.mkdirSync(path.join(root, '-pk'), { recursive: true });
+  fs.writeFileSync(path.join(root, '-pk', 'idle.jsonl'), line(typed(100, 'an idle session, opened by hand')));
+  fs.writeFileSync(path.join(root, '-pk', 'busy.jsonl'), line(typed(700000, 'a session at work')));
+  const back = alone(made), { port, stop } = await serve(), cur = async (q) => { await wait(1300); return JSON.parse((await get(port, '/api/current?' + q)).body); };
+  try {
+    const p = await cur('proj=&pproj=-pk&pid=idle'); assert.equal(p.id, 'idle'); assert.equal(p.why, 'pick'); assert.equal(p.asked, Date.parse(at(700000)), 'the answer gives the latest order, for the page to send back');
+    assert.equal((await cur('proj=&pproj=-pk&pid=idle&psince=' + p.asked)).id, 'idle', 'no new order: the pick holds');
+    fs.appendFileSync(path.join(root, '-pk', 'idle.jsonl'), line(typed(800000, 'an order in the picked session')));
+    const q = await cur('proj=&pproj=-pk&pid=idle&psince=' + p.asked); assert.equal(q.id, 'idle'); assert.equal(q.asked, Date.parse(at(800000)), 'what you type in it keeps the call there');
+    fs.appendFileSync(path.join(root, '-pk', 'busy.jsonl'), line(typed(900000, 'an order elsewhere')));
+    assert.equal((await cur('proj=&pproj=-pk&pid=idle&psince=' + q.asked)).id, 'busy', 'an order typed elsewhere takes the call back');
+  } finally { stop(); back(); }
+});
+test('the list keeps places per folder, and the temporary folders have places of their own', async () => {
+  const root = path.join(tmp, 'projects'), made = ['-keep', '-tp-main', '-tmp-x'];
+  for (let i = 0; i < 15; i++) made.push('-busy' + i);
+  for (const d of made) fs.mkdirSync(path.join(root, d), { recursive: true });
+  fs.writeFileSync(path.join(root, '-keep', 'mine.jsonl'), line(typed(0, 'the session of my folder'))); await wait(30);
+  for (let i = 0; i < 15; i++) for (let k = 0; k < 3; k++) fs.writeFileSync(path.join(root, `-busy${i}`, `s${k}.jsonl`), line(typed(10, 'written after mine')));   // 45 sessions elsewhere
+  fs.writeFileSync(path.join(root, '-tmp-x', 't.jsonl'), line(typed(800000, 'a script ran Claude Code in a temporary folder')));
+  fs.writeFileSync(path.join(root, '-tp-main', 'm.jsonl'), line(typed(700000, 'a session someone works in')));
+  const back = alone(made), { port, stop } = await serve(), board = async () => { await wait(1300); return JSON.parse((await get(port, '/api/board')).body); }, cur = async (q) => { await wait(1300); return JSON.parse((await get(port, '/api/current?' + q)).body); };
+  try {
+    const rows = await board();
+    assert.ok(rows.some((r) => r.proj === '-keep' && r.id === 'mine'), 'my folder keeps its session however busy the others are');
+    assert.equal(rows.filter((r) => r.proj === '-tmp-x').length, 1); assert.ok(rows.every((r) => !!r.tmp === (r.proj === '-tmp-x')), 'a row says whether its folder is a temporary one');
+    assert.equal((await cur('proj=')).id, 'm', 'the newest session is a temporary one: the call goes elsewhere');
+    assert.equal((await cur('proj=-tmp-x')).id, 't', 'a window open on such a folder follows it');
+    for (const d of fs.readdirSync(root)) if (d !== '-tmp-x') fs.rmSync(path.join(root, d), { recursive: true, force: true });   // nothing but the temporary folder left
+    assert.equal((await cur('proj=')).id, 't', 'a temporary session rather than an empty call');
+  } finally { stop(); back(); }
 });

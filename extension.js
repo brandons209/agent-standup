@@ -107,7 +107,7 @@ function activate(ctx) {
   ctx.subscriptions.push(
     vscode.commands.registerCommand('agentStandup.open', openPanel),
     vscode.commands.registerCommand('agentStandup.openSession', async () => {
-      const rows = require('./server.js').boardRows().filter((r) => !projKey() || r.proj === projKey());
+      const rows = require('./server.js').boardRows().filter((r) => { const k = projKey(); return k ? (r.proj === k || r.proj.startsWith(k + '-')) : !r.tmp; });   // no workspace: sessions someone works in, not the ones a script started in a temporary folder
       const pick = await vscode.window.showQuickPick(rows.map((r) => ({ label: r.title, description: r.state, detail: r.proj, r })), { placeHolder: tt('Open a session in its own tab') });
       if (pick) openPanel({ id: pick.r.id, proj: pick.r.proj });
     }),
@@ -125,7 +125,7 @@ function activate(ctx) {
     try {
       if (!cfg().get('statusBar')) { if (status.text !== '$(device-camera-video) Agent Standup') { status.text = '$(device-camera-video) Agent Standup'; status.backgroundColor = undefined; status.tooltip = tt('Open the live Agent Standup call'); } return; }   // counts off: the plain button stays
       if (!vscode.window.state.focused) return;
-      const key = projKey(), rows = require('./server.js').boardRows().filter((r) => !key || r.proj === key), now = Date.now();
+      const key = projKey(), rows = require('./server.js').boardRows().filter((r) => key ? (r.proj === key || r.proj.startsWith(key + '-')) : !r.tmp), now = Date.now();
       const act = rows.filter((r) => r.state !== 'idle' || now - r.mtime < 15 * 60e3), cnt = (st) => act.filter((r) => r.state === st).length;
       const blocked = cnt('blocked'), working = cnt('working') + cnt('waiting'), turn = cnt('turn');
       const parts = []; if (blocked) parts.push('$(warning) ' + tt('{0} needs you', blocked)); if (working) parts.push('$(sync~spin) ' + tt('{0} working', working)); if (!blocked && !working && turn) parts.push('$(check) ' + tt('your turn'));

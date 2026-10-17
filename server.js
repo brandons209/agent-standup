@@ -180,12 +180,28 @@ let boardMemo = { at: 0, rows: [] };
 const notifText = (r) => r.type === 'queue-operation' ? (typeof r.content === 'string' ? r.content : '')   // the three shapes a task notification takes: a queue operation, a queued_command attachment, a user message
   : r.type === 'attachment' && r.attachment && r.attachment.type === 'queued_command' ? (Array.isArray(r.attachment.prompt) ? r.attachment.prompt.map((b) => (b && b.text) || '').join('\n') : String(r.attachment.prompt || ''))
     : r.type === 'user' ? blocks(r).filter((b) => b.type === 'text').map((b) => b.text || '').join('\n') : '';
+// When the person last did something in a session: an order, a slash command, a "!" command, an order typed while the lead was working. It is what moves the live call (see currentSession).
+// Not what the harness writes as a user record: the result of a tool, a reminder, the news that a background task ended, the summary of a compaction, an Esc.
+const NOT_TYPED = /<(system-reminder|browser_instruction|ide_selection|ide_opened_file|task-notification|local-command-stdout|local-command-caveat)>[\s\S]*?<\/\1>\s*/g;
+function typedAt(r) {
+  if (!r || r.isSidechain) return 0;
+  if (r.type === 'attachment') { const q = r.attachment; return q && q.type === 'queued_command' && (q.origin ? q.origin.kind === 'human' : q.commandMode === 'prompt') ? Date.parse(r.timestamp) || 0 : 0; }
+  if (r.type !== 'user' || r.isMeta || r.isCompactSummary) return 0; const bl = blocks(r); if (bl.some((b) => b && b.type === 'tool_result')) return 0;
+  const t = bl.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('\n').replace(NOT_TYPED, '').trim();
+  return (t ? !/^(\[Request interrupted|<scheduled-task[\s>])/i.test(t) : bl.some((b) => b && b.type === 'image')) ? Date.parse(r.timestamp) || 0 : 0;   // a picture sent alone is an order too
+}
+function typedBefore(file) {   // the first look at a session whose last order is further back than what the list reads (a long turn, large outputs): looked for once, in its last megabytes
+  const { text, cut } = readTail(file, 4 * 1024 * 1024), lines = text.split('\n');
+  for (let i = lines.length - 1; i >= (cut ? 1 : 0); i--) { if (!lines[i].includes('"type":"user"') && !lines[i].includes('"queued_command"')) continue; try { const a = typedAt(JSON.parse(lines[i])); if (a) return a; } catch {} }
+  return 0;
+}
 function parseTail(file, st) {
   const sig = st.mtimeMs + ':' + st.size, hit = boardCache.get(file); if (hit && hit.sig === sig) return hit;
   const { text, cut } = readTail(file, 192 * 1024), lines = text.split('\n'); if (cut) lines.shift();
-  const pend = new Map(), bgOpen = new Set(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined;
+  const pend = new Map(), bgOpen = new Set(); let lastType = null, lastTool = false, lastStop = null, stops = false, esc = false, lastTs = 0, custom = (hit && hit.custom) || null, ai = (hit && hit.ai) || null, first = hit ? hit.first : undefined, asked = (hit && hit.asked) || 0;
   for (const l of lines) {
     if (!l) continue; let r; try { r = JSON.parse(l); } catch { continue; }
+    const a = typedAt(r); if (a > asked) asked = a;
     if (r.type === 'custom-title' && typeof r.customTitle === 'string') custom = r.customTitle; else if (r.type === 'ai-title' && typeof r.aiTitle === 'string') ai = r.aiTitle;   // a session is renamed, or named, long after its row was first shown: the latest one read wins
     const t = Date.parse(r.timestamp) || 0, bl = blocks(r);
     if (r.type === 'assistant' || r.type === 'user') { lastType = r.type; lastTool = bl.some((b) => b.type === 'tool_use'); lastStop = (r.type === 'assistant' && r.message && r.message.stop_reason) || null; if (lastStop) stops = true; if (t) lastTs = t;
@@ -202,8 +218,9 @@ function parseTail(file, st) {
     custom = un([...big.matchAll(/"type":"custom-title","customTitle":"((?:[^"\\]|\\.)*)"/g)].pop()); if (!ai) ai = un([...big.matchAll(/"type":"ai-title","aiTitle":"((?:[^"\\]|\\.)*)"/g)].pop());
   }
   if (!custom && !ai && first == null) first = firstPrompt(file) || (st.size > 64 * 1024 ? '' : null);   // '' = looked for and not there; a file that has just been created is looked at again
+  if (!hit && !asked && cut) asked = typedBefore(file);   // the last order is further back than what the tail read: look once, further back
   const out = { sig, title: custom || ai || first || null, custom, ai, first, lastType, lastTool, lastStop, stops, esc, lastTs, pending: [...pend.values()], bgOut: bgOpen.size };   // a title the person typed wins over the generated one, and both over the first prompt; bgOut: sub-agents still running in the background
-  boardCache.set(file, out); if (boardCache.size > 200) boardCache.delete(boardCache.keys().next().value); return out;
+  out.asked = asked; boardCache.set(file, out); if (boardCache.size > 3 * ROWS_MAX) boardCache.delete(boardCache.keys().next().value); return out;   // more than the list can hold: a full list never pushes its own rows out, which read every row again at each scan
 }
 function firstPrompt(file) {   // the first thing the person typed, read record by record: a pattern over the raw text ran from a user record into the assistant's first answer and took that as the title
   const ONE = (t) => t.replace(/\s+/g, ' ').trim().slice(0, 90);
@@ -219,6 +236,30 @@ function boardRows() {
   if (Date.now() - boardMemo.at < 1200) return boardMemo.rows;   // several windows polling at once share one scan
   const out = boardRows0(); boardMemo = { at: Date.now(), rows: out }; return out;
 }
+// Sessions started in the system's temporary folder: a program running Claude Code there for a moment (a test, a script, a tool that makes a folder per run), not a session someone works in.
+// When the call looks everywhere it leaves them out, unless there is nothing else. They stay in the Sessions view, and a window open on such a folder follows it.
+// macOS: /var/folders/… (/private/… once resolved) and /tmp; Linux: /tmp; Windows: …\AppData\Local\Temp; and wherever TMPDIR points. A key is a folder as Claude Code names it, every other character a "-".
+const TMP_KEYS = [...new Set([os.tmpdir(), (() => { try { return fs.realpathSync(os.tmpdir()); } catch { return ''; } })()].filter((d) => d && d.length > 4).map((d) => d.replace(/[^a-zA-Z0-9]/g, '-')))];
+const tmpKey = (k) => !!k && (/^-(private-)?(tmp|var-folders)(-|$)/.test(k) || /-AppData-Local-Temp(-|$)/i.test(k) || TMP_KEYS.some((t) => k === t || k.startsWith(t + '-')));
+// How many sessions the list keeps, newest first: `most` of them, and whatever the count, the PER_FOLDER newest of each folder, so that sessions written elsewhere never push the ones of a folder out.
+// Sessions started in a temporary folder (see tmpKey) have places of their own, TMP_ROWS at most.
+const PER_FOLDER = 3, TMP_ROWS = 10, ROWS_MAX = 200;
+function capRows(list, most, folderOf) {   // list: newest first
+  const real = list.filter((r) => !tmpKey(folderOf(r))), keep = new Set(real.slice(0, most)), per = new Map();
+  for (const r of real) { if (keep.size >= ROWS_MAX) break; const k = folderOf(r), n = per.get(k) || 0; if (n < PER_FOLDER) { keep.add(r); per.set(k, n + 1); } }
+  return real.filter((r) => keep.has(r)).concat(list.filter((r) => tmpKey(folderOf(r))).slice(0, TMP_ROWS));
+}
+// A project of Claude Code is named after its folder with every character other than a letter or digit made a dash: -w-app-old may be app/old (inside app) or app-old (beside it).
+// Which one is told by the folder its sessions were started in (the cwd of its records), read once per project. Not found (an empty project): counted as before, by its name.
+const projCwds = new Map(), dirKey = (d) => String(d || '').replace(/[^a-zA-Z0-9]/g, '-');
+function projCwd(proj) {
+  if (projCwds.has(proj)) return projCwds.get(proj);
+  let files; try { files = fs.readdirSync(path.join(ROOT, proj)).filter((f) => f.endsWith('.jsonl')); } catch { files = []; }
+  files.sort((a, b) => mtimeOf(path.join(ROOT, proj, b)) - mtimeOf(path.join(ROOT, proj, a)));
+  let cwd = ''; for (const f of files.slice(0, 3)) { try { const m = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(readHead(path.join(ROOT, proj, f), 64 * 1024)); if (m) { cwd = JSON.parse('"' + m[1] + '"'); break; } } catch {} }
+  if (cwd && dirKey(cwd) === proj) projCwds.set(proj, cwd); return cwd && dirKey(cwd) === proj ? cwd : '';   // kept once it is sure: the folder whose name is the project's
+}
+const inFolder = (proj, key) => { if (proj === key) return true; if (!proj.startsWith(key + '-')) return false; const cwd = projCwd(proj); if (!cwd) return true; for (let d = cwd; d;) { if (dirKey(d) === key) return true; const up = path.dirname(d); if (up === d) return false; d = up; } return false; };
 function boardRows0() {
   const now = Date.now(), rows = [];
   if (!fs.existsSync(ROOT)) return rows;
@@ -227,7 +268,7 @@ function boardRows0() {
     for (const f of files) { try { const st = fs.statSync(path.join(dir, f)); if (now - st.mtimeMs < 12 * 3600e3) rows.push({ proj, id: f.slice(0, -6), st }); } catch {} }
   }
   rows.sort((a, b) => b.st.mtimeMs - a.st.mtimeMs);
-  return rows.slice(0, 40).map(({ proj, id, st }) => {
+  return capRows(rows, 40, ({ proj }) => proj).map(({ proj, id, st }) => {   // newest first; a folder keeps its own places however busy the others are
     const file = path.join(ROOT, proj, id + '.jsonl'); let p; try { p = parseTail(file, st); } catch { p = { pending: [] }; }
     const age = now - st.mtimeMs, lp = (p.pending || [])[(p.pending || []).length - 1]; let state = 'idle', tool = '', ageMs = age;
     let subActive = 0, subTotal = 0, subLast = 0;
@@ -240,7 +281,7 @@ function boardRows0() {
         state = (p.bgOut > 0 || (subLast > (p.lastTs || 0) && now - subLast < 90e3)) ? 'waiting' : 'turn';   // the lead's turn is closed but its background agents are still at work: it is on the call, not yours
       else state = age < 10 * 60e3 ? 'working' : 'idle';
     }
-    return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal };
+    return { proj, id, title: p.title || id, mtime: st.mtimeMs, state, tool, ageMs, subActive, subTotal, asked: p.asked || 0, tmp: tmpKey(proj) };
   });
 }
 // Settings live in a file, not only in the page's localStorage: the port changes between VS Code windows and reloads, and localStorage is per origin (port included).
@@ -249,19 +290,34 @@ function readPrefs() { try { const v = JSON.parse(fs.readFileSync(PREFS, 'utf8')
 function writePrefs(v) { fs.mkdirSync(path.dirname(PREFS), { recursive: true }); const tmp = PREFS + '.' + process.pid + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(v, null, 1)); fs.renameSync(tmp, PREFS); }
 // Most recently active session (optionally limited to one project dir) — drives the live feed.
 const STICK_MS = 90000;   // a session written to in the last 90 s keeps the call, so another session writing elsewhere does not steal it mid-line
+const MENU_LIVE_MS = 30 * 60e3;   // a menu left open longer still needs you (board, visitor), but no longer takes the call from where you work
+let boardForced = 0;   // at most every 5 s: force a fresh list when the session you went to by hand is missing from the cached one
 function sessionMtime(proj, id) {
   let m = mtimeOf(path.join(ROOT, proj, id + '.jsonl')); if (!m) return 0; const subs = subFiles(proj, id);
   for (const x of subs) m = Math.max(m, mtimeOf(x.file)); for (const d of subs.dirs) m = Math.max(m, mtimeOf(d)); return m;   // the folders too: a new file in them is activity, as when every file around the transcripts was looked at
 }
-function currentSession(projFilter, idFilter, stick) {
-  const safe = (x) => typeof x === 'string' && /^[\w.\-]+$/.test(x) && x !== '..';
+// The session the live call is in: the one you last touched. Typing in a session, or starting one, takes the call there. So does going to one by hand (pick: the Sessions view, Cmd/Ctrl+K),
+// and that holds until you type somewhere else. What the agents write moves nothing. One exception, so the call is not left on an empty room: when the session you last typed in has finished
+// and been quiet for STICK_MS while another one is at work, the call goes to that one. A session you went to by hand is not left that way.
+function currentSession(projFilter, idFilter, stick, pick, anyTmp) {   // pick: { proj, id, since } the session you went to by hand, and the latest order there was then · stick: the session the call is in · anyTmp: sessions in the temporary folder count too
+  const safe = (x) => typeof x === 'string' && /^[\w.\-]+$/.test(x) && x !== '..', now = Date.now();
   if (idFilter) return safe(idFilter) && safe(projFilter) && fs.existsSync(path.join(ROOT, projFilter, idFilter + '.jsonl')) ? { proj: projFilter, id: idFilter, mtime: Date.now() } : { missing: true };   // pinned: it is that session or nothing
-  if (stick && safe(stick.id) && safe(stick.proj) && (!projFilter || stick.proj === projFilter || stick.proj.startsWith(projFilter + '-')) && Date.now() - sessionMtime(stick.proj, stick.id) < STICK_MS) return { proj: stick.proj, id: stick.id, mtime: sessionMtime(stick.proj, stick.id) };
+  const there = (c) => !!c && safe(c.id) && safe(c.proj) && fs.existsSync(path.join(ROOT, c.proj, c.id + '.jsonl'));
+  const inScope = (c) => !projFilter ? anyTmp || !tmpKey(c.proj) : inFolder(c.proj, projFilter);
+  const same = (a, b) => !!a && !!b && a.proj === b.proj && a.id === b.id; let all = boardRows();
+  if (there(pick) && !all.some((r) => same(r, pick)) && now - boardForced > 5000 && sessionMtime(pick.proj, pick.id) > boardMemo.at - 1500) { boardForced = now; boardMemo.at = 0; all = boardRows(); }   // the session you went to was written after the list shared for 1.2 s was made: without it, its order reads as none, and the next answer drops your pick
+  const rows = all.filter(inScope), mine = there(pick) ? all.find((r) => same(r, pick)) : null;
+  const asked = Math.max(0, (mine && mine.asked) || 0, ...rows.map((r) => r.asked || 0));   // the latest order, in the folder the call follows or in the session you went to
+  if (there(pick) && !(asked > pick.since)) return { proj: pick.proj, id: pick.id, mtime: now, asked, pick: 1, why: 'pick' };   // no "since" on the first question after a pick: the answer gives it (asked), and the page sends it back from then on
+  const live = rows.filter((r) => /^(working|waiting)$/.test(r.state) || (r.state === 'blocked' && !(now - r.mtime > MENU_LIVE_MS)) || r.subActive > 0 || now - r.mtime < STICK_MS), last = Math.max(0, ...live.map((r) => r.asked || 0)), top = live.filter((r) => (r.asked || 0) === last);
+  const to = top.find((r) => same(r, stick)) || top.sort((a, b) => b.mtime - a.mtime)[0];   // two sessions whose last order is not known (or of the same instant): the call stays where it is
+  if (to) return { proj: to.proj, id: to.id, mtime: to.mtime, asked, why: last ? 'typed' : 'busy' };   // why: kept by the page, to say why the call moved
+  if (there(stick) && inScope(stick)) return { proj: stick.proj, id: stick.id, mtime: sessionMtime(stick.proj, stick.id), asked, why: 'stay' };   // nobody is at work: the call stays where it is
   let best = null;
   if (!fs.existsSync(ROOT)) return {};
   const consider = (proj, id, m) => { if (!best || m > best.mtime) best = { proj, id, mtime: m }; };
   for (const proj of fs.readdirSync(ROOT)) {
-    if (projFilter && proj !== projFilter && !proj.startsWith(projFilter + '-')) continue;   // the folder itself, or a folder inside it
+    if (projFilter ? !inFolder(proj, projFilter) : !anyTmp && tmpKey(proj)) continue;   // the folder itself, or a folder inside it · elsewhere: a session in the temporary folder only counts when there is nothing else
     const dir = path.join(ROOT, proj); let files;
     try { files = fs.readdirSync(dir); } catch { continue; }
     for (const f of files) {
@@ -269,8 +325,9 @@ function currentSession(projFilter, idFilter, stick) {
       const m = sessionMtime(proj, f.slice(0, -6)); if (m) consider(proj, f.slice(0, -6), m);   // 0: a link to a transcript that is gone
     }
   }
-  if (!best && projFilter) return currentSession('', '', stick);
-  return best || {};
+  if (!best && projFilter) return { ...currentSession('', '', stick), wide: 1 };   // nothing in that folder (an editor open on another one than the sessions): the latest of anywhere, and the page is told, so its tabs follow the same rule
+  if (!best && !projFilter && !anyTmp) return currentSession('', '', stick, pick, true);   // nothing but sessions in the temporary folder: one of them rather than an empty call
+  return best ? { ...best, asked, why: 'latest' } : {};
 }
 
 // ---- Incremental transcript reader: each .jsonl is parsed once, then only the bytes appended since are read.
@@ -728,7 +785,10 @@ function start(port = PORT) {
     if (url.pathname === '/api/prefs.js') { res.writeHead(200, { 'content-type': 'application/javascript', 'cache-control': 'no-store' }); return res.end('window.SAVED_PREFS = ' + JSON.stringify(readPrefs()).replace(/</g, '\\u003c') + ';'); }
     if (url.pathname === '/api/prefs' && req.method === 'PUT') return readBody((body) => { try { const v = JSON.parse(body); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('prefs must be an object'); writePrefs(v); json({ ok: true }); } catch (e) { json({ error: String(e.message || e) }, 400); } });
     if (url.pathname === '/api/prefs') return json(readPrefs() || {});
-    if (url.pathname === '/api/current') return json(currentSession(url.searchParams.get('proj') || '', url.searchParams.get('id') || '', { proj: url.searchParams.get('sproj') || '', id: url.searchParams.get('sid') || '' }));
+    if (url.pathname === '/api/current') {   // pick: the session the page went to by hand, and the latest order there was known then
+      const pproj = url.searchParams.get('pproj') || '', pid = url.searchParams.get('pid') || '', psince = url.searchParams.get('psince');
+      return json(currentSession(url.searchParams.get('proj') || '', url.searchParams.get('id') || '', { proj: url.searchParams.get('sproj') || '', id: url.searchParams.get('sid') || '' }, pproj && pid ? { proj: pproj, id: pid, since: psince ? +psince : NaN } : null));   // no "since" on the first question after a pick: the answer gives it (asked), and the page sends it back from then on
+    }
     if (url.pathname === '/api/board') return json(boardRows());
     if (url.pathname === '/api/characters') return json(listCharacters(url.searchParams.get('pack') || ''));
     if (url.pathname === '/api/packs') return json(Object.keys(PACKS).map((name) => ({ name, n: listCharacters(name).chars.length })));
